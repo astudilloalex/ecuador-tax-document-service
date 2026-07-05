@@ -110,6 +110,19 @@ Pending Functional Validation items. Validation must confirm that this feature
 stayed within domain/application scope and did not introduce REST, persistence,
 SRI, queue, webhook, database migration, or bootstrap artifacts.
 
+## Validation Evidence
+
+Validation completed on 2026-07-05:
+
+| Check | Command or Scope | Result |
+|-------|------------------|--------|
+| Test execution | `./gradlew test` | Passed: `BUILD SUCCESSFUL`; domain/application unit tests ran without external infrastructure. |
+| Source scope | `find src/main/java/com/alexastudillo/taxdocument -type f` and `find src/test/java/com/alexastudillo/taxdocument -type f` | Passed: feature source is limited to `domain/` and `application/` packages. |
+| Forbidden runtime artifacts | Source tree scan for adapter, bootstrap, REST resource, entity, DTO, and migration paths | Passed: no REST, persistence, SRI, queue, webhook, database migration, or bootstrap artifacts were introduced. |
+| Terminology | `rg` scan for forbidden Spanish legacy names in target domain/application source and tests | Passed: no forbidden target-source matches. |
+| Forbidden imports | Import scan for Quarkus, Hibernate, Panache, JAX-RS, PostgreSQL, Redis, SOAP, HTTP client, adapter, filesystem, and storage imports | Passed: no forbidden imports in domain/application source. |
+| Durable documentation | `rg` checks for state mappings, foundation terms, and PFV records in `docs/architecture/` and `docs/migration/` | Passed: durable documentation covers foundation terminology, SRI code mappings, legacy state mappings, and PFV-ISS-001 through PFV-ISS-005. |
+
 ## Post-Implementation Handoff
 
 After validation, prepare a pull request summary for reviewer handoff. The
