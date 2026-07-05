@@ -11,16 +11,9 @@
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
-  IMPORTANT: User stories should be PRIORITIZED as user journeys ordered by importance.
-  Each user story/journey must be INDEPENDENTLY TESTABLE - meaning if you implement just ONE of them,
-  you should still have a viable MVP (Minimum Viable Product) that delivers value.
-
-  Assign priorities (P1, P2, P3, etc.) to each story, where P1 is the most critical.
-  Think of each story as a standalone slice of functionality that can be:
-  - Developed independently
-  - Tested independently
-  - Deployed independently
-  - Demonstrated to users independently
+  User stories must be prioritized as independently testable user journeys.
+  Assign priorities (P1, P2, P3, etc.), where P1 is the most critical.
+  Each story must describe the business value it can deliver on its own.
 -->
 
 ### User Story 1 - [Brief Title] (Priority: P1)
@@ -29,7 +22,7 @@
 
 **Why this priority**: [Explain the value and why it has this priority level]
 
-**Independent Test**: [Describe how this can be tested independently - e.g., "Can be fully tested by [specific action] and delivers [specific value]"]
+**Independent Test**: [Describe how this can be tested independently]
 
 **Acceptance Scenarios**:
 
@@ -70,62 +63,90 @@
 
 ### Edge Cases
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right edge cases.
--->
-
-- What happens when [boundary condition]?
-- How does system handle [error scenario]?
+- [Boundary condition]
+- [Error scenario]
+- [Duplicate or retry scenario]
+- [SRI unavailability or delayed authorization scenario, if applicable]
 
 ## Requirements *(mandatory)*
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right functional requirements.
--->
-
 ### Functional Requirements
 
-- **FR-001**: System MUST [specific capability, e.g., "allow users to create accounts"]
-- **FR-002**: System MUST [specific capability, e.g., "validate email addresses"]
-- **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
-- **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
-- **FR-005**: System MUST [behavior, e.g., "log all security events"]
+- **FR-001**: System MUST [specific business capability]
+- **FR-002**: System MUST [specific validation or rule]
+- **FR-003**: System MUST [specific persistence or retrieval behavior]
+- **FR-004**: System MUST [specific integration behavior]
+- **FR-005**: System MUST [specific audit or idempotency behavior]
 
 *Example of marking unclear requirements:*
 
-- **FR-006**: System MUST authenticate users via [NEEDS CLARIFICATION: auth method not specified - email/password, SSO, OAuth?]
-- **FR-007**: System MUST retain user data for [NEEDS CLARIFICATION: retention period not specified]
+- **FR-006**: System MUST use [NEEDS CLARIFICATION: unresolved business rule]
+- **FR-007**: System MUST classify [NEEDS CLARIFICATION: legacy concept lacks
+  target classification]
+
+### Architectural Requirements
+
+- **AR-001**: Business behavior MUST be implemented in domain or application
+  use cases, not REST resources, repositories, SRI adapters, or configuration.
+- **AR-002**: External dependencies MUST be accessed through application ports.
+- **AR-003**: SRI XML, SOAP, signing, reception, authorization, response
+  parsing, and official Spanish SRI names MUST remain in `adapter.out.sri`.
+- **AR-004**: REST DTOs, application commands/results, domain objects,
+  persistence entities, and SRI DTOs MUST remain separate.
+- **AR-005**: Domain and application behavior MUST be testable without real
+  PostgreSQL, Redis, SRI, filesystems, or external HTTP services.
+
+### Naming and Migration Requirements
+
+- **NR-001**: Target code, APIs, DTOs, database objects, events, tests, and
+  documentation MUST use English canonical terminology.
+- **NR-002**: Spanish legacy names MUST NOT appear in target domain,
+  application, API, or persistence artifacts.
+- **NR-003**: Official Spanish SRI names MAY appear only in allowed SRI adapter,
+  fixture, legacy compatibility, migration, or mapping artifacts.
+- **NR-004**: Unclear terms MUST be registered as Pending Naming Decisions.
 
 ### Key Entities *(include if feature involves data)*
 
 - **[Entity 1]**: [What it represents, key attributes without implementation]
 - **[Entity 2]**: [What it represents, relationships to other entities]
 
-## Success Criteria *(mandatory)*
+## Migration Classification *(mandatory for migrated concepts)*
 
-<!--
-  ACTION REQUIRED: Define measurable success criteria.
-  These must be technology-agnostic and measurable.
--->
+| Legacy Concept | Target Name | Classification | Decision Status |
+|----------------|-------------|----------------|-----------------|
+| [legacy] | [target] | [classification] | [decided/pending] |
+
+Allowed classifications: Target domain concept, Target API field, Target
+database object, SRI adapter-only concept, Legacy compatibility concept,
+Migration-only concept, Deprecated concept, Pending Naming Decision, Pending
+Functional Validation.
+
+## Idempotency and Audit Requirements *(include if feature is critical)*
+
+**Idempotency Scope**: [Tax document issuance, SRI retry, synchronization,
+webhook delivery, XML generation, sequence assignment, or N/A]
+
+**Audit Events**: [Issuance requested, XML generated, XML signed, SRI reception
+submitted, SRI authorization received, document authorized, document rejected,
+authorization retry requested, webhook delivery attempted, webhook delivery
+failed, synchronization executed, or N/A]
+
+**Sensitive Data Exclusions**: Audit logs MUST NOT contain secrets, private
+keys, credentials, tokens, signing passwords, or sensitive configuration values.
+
+## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: [Measurable metric, e.g., "Users can complete account creation in under 2 minutes"]
-- **SC-002**: [Measurable metric, e.g., "System handles 1000 concurrent users without degradation"]
-- **SC-003**: [User satisfaction metric, e.g., "90% of users successfully complete primary task on first attempt"]
-- **SC-004**: [Business metric, e.g., "Reduce support tickets related to [X] by 50%"]
+- **SC-001**: [Measurable business outcome]
+- **SC-002**: [Measurable correctness outcome]
+- **SC-003**: [Measurable reliability or idempotency outcome]
+- **SC-004**: [Measurable integration or auditability outcome]
 
 ## Assumptions
 
-<!--
-  ACTION REQUIRED: The content in this section represents placeholders.
-  Fill them out with the right assumptions based on reasonable defaults
-  chosen when the feature description did not specify certain details.
--->
-
-- [Assumption about target users, e.g., "Users have stable internet connectivity"]
-- [Assumption about scope boundaries, e.g., "Mobile support is out of scope for v1"]
-- [Assumption about data/environment, e.g., "Existing authentication system will be reused"]
-- [Dependency on existing system/service, e.g., "Requires access to the existing user profile API"]
+- [Assumption about target users or upstream systems]
+- [Assumption about scope boundaries]
+- [Assumption about legacy data or migration input]
+- [Dependency on existing system, SRI behavior, or external service]
