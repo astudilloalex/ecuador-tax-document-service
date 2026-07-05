@@ -69,5 +69,10 @@ This feature must not create:
 ## Traceability
 
 - Spec `AR-001` through `AR-008`, `FR-013`, `FR-014`
-- Constitution Principles I, II, IV, V, VI, VII, IX
-
+- Constitution Principle I: Clean Architecture First
+- Constitution Principle II: Mandatory Layer Responsibilities
+- Constitution Principle IV: Ports and Adapters for External Dependencies
+- Constitution Principle V: SRI Contract Isolation
+- Constitution Principle VI: English Canonical Terminology
+- Constitution Principle VII: DTO and Validation Separation
+- Constitution Principle IX: Layered Testing Requirements

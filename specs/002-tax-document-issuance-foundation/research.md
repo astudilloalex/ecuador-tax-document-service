@@ -74,6 +74,8 @@ state without implying an SRI cancellation workflow.
 
 ## Decision: Keep retry candidates as constrained pending behavior
 
+**PFV**: PFV-ISS-004.
+
 **Rationale**: AS-IS evidence identifies `RETURNED`, `REJECTED`, `PENDING`, and
 `IN_PROGRESS` as retry candidate states and requires a signed XML precondition.
 The foundation should model candidate eligibility but must not implement retry
@@ -131,6 +133,8 @@ they can be traceable.
 
 ## Decision: Defer runtime issuance mode default
 
+**PFV**: PFV-ISS-001.
+
 **Rationale**: AS-IS evidence shows synchronous and asynchronous issuance
 behavior, but this feature excludes queue implementation and document-specific
 issuance flows. `IssuanceMode` is modeled as a common concept; the runtime
@@ -143,3 +147,54 @@ default belongs to a future issuance or queue specification.
 - Choose synchronous-only now: rejected because it would ignore AS-IS evidence
   without a validating feature.
 
+## Decision: Treat post-authorization corrections as future controlled behavior
+
+**PFV**: PFV-ISS-005.
+
+**Rationale**: The foundation requires authorized documents to be immutable by
+default. Any post-authorization correction, metadata update, credit note flow,
+or other controlled operation must be specified by a future feature with its
+own idempotency, audit, and compliance rules.
+
+**Alternatives considered**:
+
+- Allow controlled post-authorization updates in this foundation: rejected
+  because the allowed operations are not validated and document-specific rules
+  are out of scope.
+- Forbid all future post-authorization behavior permanently: rejected because
+  future tax document features may validate legal correction flows that must be
+  modeled explicitly.
+
+## Decision: Defer legacy route compatibility to REST API specification
+
+**PFV**: PFV-ISS-002.
+
+**Rationale**: Legacy route compatibility affects public REST API shape and
+legacy-client support. This feature excludes REST endpoints, REST DTOs, and
+legacy compatibility adapters, so the foundation must not decide or implement
+route compatibility.
+
+**Alternatives considered**:
+
+- Preserve legacy routes in this feature: rejected because REST API contracts
+  are out of scope.
+- Ignore route compatibility permanently: rejected because AS-IS evidence
+  identifies route discrepancies that a future API or compatibility feature
+  must resolve.
+
+## Decision: Defer synchronization scheduling to synchronization specification
+
+**PFV**: PFV-ISS-003.
+
+**Rationale**: Synchronization scheduling determines runtime orchestration,
+operational ownership, and adapter or scheduler behavior. This feature only
+defines common domain/application foundations and must not introduce scheduling
+or queue/runtime behavior.
+
+**Alternatives considered**:
+
+- Model an internal scheduler now: rejected because bootstrap, queue, and
+  production scheduling behavior are out of scope.
+- Assume manual-only synchronization permanently: rejected because the target
+  synchronization feature must validate operational requirements before tasks
+  are generated.

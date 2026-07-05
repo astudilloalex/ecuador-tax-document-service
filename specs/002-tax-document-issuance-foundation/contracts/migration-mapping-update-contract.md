@@ -83,5 +83,4 @@ foundation canonical terms introduced by this feature:
 ## Traceability
 
 - Spec `FR-003`, `FR-005`, `FR-017`, `FR-018`, `NR-005`, `SC-002`, `SC-003`
-- Constitution Principle X
-
+- Constitution Principle X: Specification-Governed Migration

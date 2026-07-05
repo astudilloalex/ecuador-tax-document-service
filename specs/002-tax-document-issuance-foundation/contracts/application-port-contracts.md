@@ -40,5 +40,7 @@ it does not define adapter implementations.
 ## Traceability
 
 - Spec `FR-012`, `FR-013`, `FR-014`, `FR-015`, `FR-016`, `AR-008`
-- Constitution Principles IV, VII, VIII, IX
-
+- Constitution Principle IV: Ports and Adapters for External Dependencies
+- Constitution Principle VII: DTO and Validation Separation
+- Constitution Principle VIII: Idempotency and Auditability
+- Constitution Principle IX: Layered Testing Requirements

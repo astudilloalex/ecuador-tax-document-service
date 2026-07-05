@@ -587,6 +587,21 @@ material, or sensitive configuration values.
 - **SC-010**: The future use case contract covers all 8 named future use cases
   without introducing generic business service names.
 
+### Success Criteria Traceability
+
+| Success Criterion | Requirement Trace |
+|-------------------|-------------------|
+| `SC-001` | `FR-001`, Key Entities, Migration Classification |
+| `SC-002` | `FR-002`, `FR-003`, SRI Document Code Mapping |
+| `SC-003` | `FR-005`, Legacy State Mapping |
+| `SC-004` | `FR-012`, Application Ports |
+| `SC-005` | Scope Boundaries, `AR-004`, `AR-005`, `AR-006` |
+| `SC-006` | `FR-013`, `FR-014`, `AR-001`, `AR-002` |
+| `SC-007` | `FR-017`, Pending Naming Decisions, Pending Functional Validations |
+| `SC-008` | `FR-015`, Idempotency and Audit Requirements |
+| `SC-009` | `FR-016`, Idempotency and Audit Requirements |
+| `SC-010` | `FR-019`, Future Use Case Contract, `AR-007` |
+
 ## Assumptions
 
 - Feature `001-canonical-terminology-boundaries` is the approved governance

@@ -57,6 +57,24 @@ follow when using the issuance foundation.
 - Repeated issuance requests with the same accepted idempotency key must not
   create a second tax document.
 
+## Required Audit Event Names
+
+Future use cases must use these canonical audit event names when the
+corresponding operation is in scope. This contract defines names only; adapter
+logging, webhook delivery, and external observability implementations remain
+out of scope for this feature.
+
+- `TaxDocumentIssuanceRequested`
+- `TaxDocumentQueuedForIssuance`
+- `TaxDocumentXmlGenerated`
+- `TaxDocumentSigned`
+- `TaxDocumentSubmittedToSri`
+- `TaxDocumentReceivedBySri`
+- `TaxDocumentAuthorized`
+- `TaxDocumentRejected`
+- `TaxDocumentAuthorizationRetryRequested`
+- `TaxDocumentVoided`
+
 ## Forbidden Names
 
 Future use cases must not introduce business behavior classes named:
@@ -79,5 +97,7 @@ Future use cases must not introduce business behavior classes named:
 ## Traceability
 
 - Spec `FR-008` through `FR-019`, `AR-003`, `AR-007`, `AR-008`
-- Constitution Principles III, IV, VII, VIII
-
+- Constitution Principle III: Use Case-Centered Design
+- Constitution Principle IV: Ports and Adapters for External Dependencies
+- Constitution Principle VII: DTO and Validation Separation
+- Constitution Principle VIII: Idempotency and Auditability
