@@ -1,32 +1,31 @@
 # Agent Instructions
 
-## Project Architecture
+This project uses Spec Kit.
 
-This backend project must follow Clean Architecture.
-
-Before creating or modifying backend code, always read and follow:
+Before creating specifications, plans, tasks, or implementation code, always follow:
 
 - `.specify/memory/constitution.md`
 
-## Non-Negotiable Rules
+## Mandatory Rule
 
-- Do not put business logic in REST resources.
-- Do not put business logic in persistence adapters.
-- Do not expose persistence entities through REST APIs.
-- Do not make the domain layer depend on Quarkus, Hibernate, Panache, REST, PostgreSQL, Redis, filesystems, SOAP, XML, or external APIs.
-- Use application use cases as the entry point for business operations.
-- Use ports for external dependencies.
-- Use adapters to implement ports.
-- Keep SRI-specific XML, SOAP, and Spanish contract names isolated in the outbound SRI adapter.
-- Use English names for target code, APIs, DTOs, database objects, and documentation.
-- Preserve SRI official names only inside SRI mappers, legacy compatibility adapters, or migration scripts.
+The project constitution is the source of truth for:
 
-## Spec Kit Workflow
+- Clean Architecture
+- Ports and Adapters
+- English canonical terminology
+- SRI contract isolation
+- DTO separation
+- Testing requirements
+- Specification governance
 
-For every feature:
+Do not duplicate or override the constitution unless the user explicitly requests a constitution amendment.
 
-1. Start with the specification.
-2. Generate or update the plan.
-3. Generate tasks.
-4. Implement only what is covered by tasks.
-5. Validate Clean Architecture boundaries before completion.
+## Implementation Rule
+
+Do not implement backend code unless the feature has:
+
+- requirements
+- design
+- tasks
+
+All implementation must comply with the constitution.
