@@ -95,6 +95,34 @@ Expected outcome:
 - Pending Functional Validations from this feature are visible in the durable
   migration mapping document or explicitly deferred by the plan/tasks.
 
+## Validation Steps
+
+Before handoff, complete the validation checks in this quickstart in order:
+
+1. Planning artifact checks.
+2. Scope guard checks.
+3. Terminology checks.
+4. Test execution.
+5. Durable documentation checks.
+
+Validation evidence should identify commands run, results, and any deferred
+Pending Functional Validation items. Validation must confirm that this feature
+stayed within domain/application scope and did not introduce REST, persistence,
+SRI, queue, webhook, database migration, or bootstrap artifacts.
+
+## Post-Implementation Handoff
+
+After validation, prepare a pull request summary for reviewer handoff. The
+summary should include completed task groups, generated or modified files,
+validation results, deferred Pending Functional Validation items, and explicit
+confirmation that the feature stayed within domain/application scope.
+
+If a GitHub pull request is created, use the currently authenticated GitHub
+account. Do not claim or require `codex-bot` as the pull request author unless
+the GitHub CLI or remote environment is authenticated as `codex-bot`. Assign or
+request review from `codex-bot` only when that GitHub user exists and is
+available in the repository.
+
 ## Review Gate
 
 Before running `$speckit-tasks`, confirm:
