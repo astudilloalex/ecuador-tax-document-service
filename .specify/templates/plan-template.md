@@ -15,7 +15,7 @@
 
 **Language/Version**: Java 25
 
-**Primary Dependencies**: Quarkus, Maven, and project-approved Quarkus
+**Primary Dependencies**: Quarkus, Gradle with Kotlin DSL, and project-approved Quarkus
 extensions only
 
 **Storage**: [PostgreSQL, Redis, XML storage, queue, or N/A]

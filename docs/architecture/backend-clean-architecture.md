@@ -13,7 +13,7 @@ Target project identity:
 | Group | `com.alexastudillo` |
 | Artifact | `ecuador-tax-document-service` |
 | Base package | `com.alexastudillo.taxdocument` |
-| Runtime stack | Java 25, Quarkus, Maven |
+| Runtime stack | Java 25, Quarkus, Gradle with Kotlin DSL |
 | Project type | Backend only |
 | Architecture | Clean Architecture with Ports and Adapters |
 | Canonical language | English |

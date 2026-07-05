@@ -67,7 +67,7 @@ implementation and testing of each story.
 
 - [ ] T001 Confirm feature package structure follows the plan under
   `src/main/java/com/alexastudillo/taxdocument/`
-- [ ] T002 Confirm Maven and Quarkus dependencies required by this feature are
+- [ ] T002 Confirm Gradle with Kotlin DSL and Quarkus dependencies required by this feature are
   documented in the plan before build changes
 - [ ] T003 [P] Add or update test package structure under
   `src/test/java/com/alexastudillo/taxdocument/`

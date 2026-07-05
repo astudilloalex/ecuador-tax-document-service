@@ -55,7 +55,7 @@ complete.
 - [X] T005 Add project identity and documentation-only scope to
   `docs/architecture/backend-clean-architecture.md`, including group
   `com.alexastudillo`, artifact `ecuador-tax-document-service`, base package
-  `com.alexastudillo.taxdocument`, Java 25, Maven, Quarkus, backend-only, and no
+  `com.alexastudillo.taxdocument`, Java 25, Gradle with Kotlin DSL, Quarkus, backend-only, and no
   source-code changes for this enabler. (AR-001, Plan `Summary`)
 - [X] T006 Add durable source-of-truth and traceability rules to
   `docs/architecture/backend-clean-architecture.md`, including `FR-###`,

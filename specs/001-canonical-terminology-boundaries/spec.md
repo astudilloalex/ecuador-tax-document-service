@@ -233,7 +233,7 @@ authorization, webhooks, production data migration, and legacy refactoring.
 
 - **AR-001**: Target project identity MUST be recorded as group
   `com.alexastudillo`, artifact `ecuador-tax-document-service`, base package
-  `com.alexastudillo.taxdocument`, backend-only service, Java 25, Maven, and
+  `com.alexastudillo.taxdocument`, backend-only service, Java 25, Gradle with Kotlin DSL, and
   Quarkus.
 - **AR-002**: Target source dependencies MUST follow the direction
   `adapter -> application -> domain`, `bootstrap -> adapter`, and

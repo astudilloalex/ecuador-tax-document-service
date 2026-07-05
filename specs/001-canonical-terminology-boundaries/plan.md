@@ -21,7 +21,7 @@ persistence entities, SRI clients, or runtime behavior.
 **Language/Version**: Java 25 for the target backend; no Java source is created
 by this enabler.
 
-**Primary Dependencies**: Quarkus and Maven are the target stack constraints for
+**Primary Dependencies**: Quarkus and Gradle with Kotlin DSL are the target stack constraints for
 future backend work; this enabler requires only Markdown documentation.
 
 **Storage**: N/A for this enabler. Future persistence rules are documented, but
@@ -45,7 +45,7 @@ source code directly.
 **Constraints**: No implementation code, REST endpoints, database migrations,
 JPA/Panache entities, SRI clients, authentication, webhooks, production data
 migration, or legacy refactoring. Current Gradle scaffold remains unchanged;
-Maven migration is a future setup concern.
+Gradle with Kotlin DSL migration is a future setup concern.
 
 **Scale/Scope**: Initial baseline covers the approved constitution glossary,
 artifact-specific rendering rules, architecture layer boundaries, compatibility

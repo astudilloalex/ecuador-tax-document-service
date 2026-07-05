@@ -94,13 +94,13 @@ kebab-case URL path segments.
 
 ## Decision: Defer build-tool reconciliation
 
-**Rationale**: The constitution and target project require Maven, but the
+**Rationale**: The constitution and target project require Gradle with Kotlin DSL, but the
 current repository scaffold contains Gradle files. This enabler only defines
 governance documentation and must not alter build files.
 
 **Alternatives considered**:
 
-- Convert the project scaffold to Maven in this feature: rejected because build
+- Convert the project scaffold to Gradle with Kotlin DSL in this feature: rejected because build
   migration is outside the specified scope and would require separate planning.
 
 ## Decision: Establish traceability and source-of-truth rules
