@@ -10,6 +10,16 @@
 legacy-to-target mapping rules, and Clean Architecture boundaries for the new
 Quarkus-based Ecuador electronic tax document service."
 
+## Clarifications
+
+### Session 2026-07-05
+
+- Q: Which artifact should become the durable source of truth for terminology and boundary rules produced by this enabler? → A: Split outputs: architecture rules in `docs/architecture`, legacy-to-target mappings in `docs/migration`.
+- Q: What mapping coverage should this enabler require for the first `docs/migration` output? → A: Seed approved glossary terms and register additional discovered legacy terms as Pending Naming Decisions or Pending Functional Validation.
+- Q: What artifact-specific naming convention should the architecture rules require for canonical terms? → A: Define per-artifact rendering: package lowercase, classes PascalCase, fields and methods camelCase, database snake_case, URL paths kebab-case.
+- Q: When must a Pending Naming Decision be resolved? → A: Before task generation, with the decision recorded in the feature plan and `docs/migration`.
+- Q: When must a Pending Functional Validation be resolved? → A: Before task generation for affected work; unresolved behavior must be excluded or deferred.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Establish canonical terminology (Priority: P1)
@@ -34,7 +44,8 @@ decision status before planning any business feature.
    "taxDocument" for target artifacts and records the legacy mapping.
 2. **Given** a future feature references a term without an approved English
    target name, **When** the specification is reviewed, **Then** the term is
-   recorded as a Pending Naming Decision before planning continues.
+   recorded as a Pending Naming Decision for planning and resolved before task
+   generation.
 
 ---
 
@@ -89,7 +100,8 @@ reuse.
    adapter.
 3. **Given** a future feature has unresolved behavior from the legacy system,
    **When** the specification is reviewed, **Then** the behavior is recorded as
-   Pending Functional Validation instead of being guessed into target rules.
+   Pending Functional Validation and resolved before task generation for
+   affected work, or the affected work is excluded or deferred.
 
 ### Edge Cases
 
@@ -123,6 +135,17 @@ This architecture enabler includes:
 - Forbidden legacy terms and generic names for target artifacts.
 - A structure for future specifications to record mapping, pending naming
   decisions, and pending functional validations.
+- Durable target architecture rules under `docs/architecture` and
+  legacy-to-target terminology mappings under `docs/migration`.
+- Initial migration mapping coverage that includes approved glossary terms and
+  registers additional discovered legacy terms as Pending Naming Decisions or
+  Pending Functional Validation.
+- Artifact-specific rendering rules for canonical terms across packages,
+  classes, fields, methods, database objects, URL paths, events, tests, and
+  documentation.
+- Resolution timing for Pending Naming Decisions before task generation.
+- Resolution timing for Pending Functional Validation before affected tasks are
+  generated.
 
 This architecture enabler excludes Quarkus code, REST endpoints, database
 migrations, persistence entities, SRI clients, invoice issuance, authentication,
@@ -163,6 +186,24 @@ authorization, webhooks, production data migration, and legacy refactoring.
 - **FR-012**: The specification MUST state that AS-IS legacy documentation,
   migration mapping, architecture decisions, and target specifications remain
   separate artifact categories.
+- **FR-013**: The specification MUST require architecture boundary and naming
+  rules to be published under `docs/architecture`.
+- **FR-014**: The specification MUST require legacy-to-target terminology
+  mappings to be published under `docs/migration`.
+- **FR-015**: The initial `docs/migration` mapping output MUST include the
+  approved canonical glossary terms and MUST register additional discovered
+  legacy terms as Pending Naming Decisions or Pending Functional Validation
+  until they are explicitly resolved.
+- **FR-016**: The architecture rules MUST define artifact-specific rendering for
+  canonical terms: package segments use lowercase, class names use PascalCase,
+  fields and methods use camelCase, database objects use lowercase snake_case,
+  and URL path segments use kebab-case.
+- **FR-017**: A Pending Naming Decision MAY be recorded during specification or
+  planning, but it MUST be resolved before task generation, with the final
+  decision recorded in the feature plan and `docs/migration`.
+- **FR-018**: A Pending Functional Validation MAY be recorded during
+  specification or planning, but it MUST be resolved before task generation for
+  affected work; unresolved behavior MUST be explicitly excluded or deferred.
 
 ### Architectural Requirements
 
@@ -229,6 +270,10 @@ authorization, webhooks, production data migration, and legacy refactoring.
 - **NR-020**: Generic business behavior names such as `DocumentService`,
   `SriService`, `ProcessService`, `Manager`, `Helper`, and `Util` MUST be
   rejected for target business operations.
+- **NR-021**: Canonical terms MUST be rendered according to artifact type:
+  lowercase for package segments, PascalCase for class names, camelCase for
+  fields and methods, lowercase snake_case for database objects, and kebab-case
+  for URL path segments.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -300,6 +345,20 @@ Functional Validation.
   boundary exceptions.
 - **SC-006**: A reviewer can determine from the specification alone whether a
   proposed target name, database name, API field, or layer assignment is allowed.
+- **SC-007**: Future feature authors can locate architecture rules under
+  `docs/architecture` and legacy-to-target mappings under `docs/migration`
+  without relying on the feature specification as the only source of truth.
+- **SC-008**: The initial migration mapping identifies all approved glossary
+  terms and provides a pending classification path for newly discovered legacy
+  terms without blocking planning on exhaustive legacy vocabulary analysis.
+- **SC-009**: Reviewers can determine the valid package, class, field, method,
+  database, and URL rendering for every approved canonical term without a
+  feature-specific naming decision.
+- **SC-010**: No generated task list contains work for an unresolved Pending
+  Naming Decision unless the affected work is explicitly excluded from scope.
+- **SC-011**: No generated task list contains implementation work for unresolved
+  Pending Functional Validation unless the affected behavior is explicitly
+  excluded or deferred.
 
 ## Assumptions
 
@@ -313,3 +372,5 @@ Functional Validation.
   create runtime behavior.
 - Future business features will expand the mapping table as additional legacy
   concepts are discovered.
+- The first mapping output is a controlled baseline, not an exhaustive inventory
+  of every legacy term in the existing documentation or source code.
