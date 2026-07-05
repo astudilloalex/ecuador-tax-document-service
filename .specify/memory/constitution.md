@@ -26,7 +26,7 @@ Templates requiring updates:
 Runtime guidance reviewed:
 - REVIEWED README.md, docs/README.md, AGENTS.md
 Follow-up TODOs:
-- Future setup work must reconcile the current Gradle scaffold with the target Maven stack.
+- Future setup work must reconcile the current Gradle scaffold with the target Gradle with Kotlin DSL stack.
 - Future documentation work must classify or relocate legacy Spanish docs under docs/legacy.
 -->
 
@@ -267,7 +267,7 @@ copying legacy architecture, naming, modules, coupling, or database design.
 
 ## Target Stack, Naming, and API Constraints
 
-The target backend stack is Java 25, Quarkus, Maven, backend only, Clean
+The target backend stack is Java 25, Quarkus, Gradle with Kotlin DSL, backend only, Clean
 Architecture, and Ports and Adapters. Target Java code MUST live under
 `com.alexastudillo.taxdocument`.
 
