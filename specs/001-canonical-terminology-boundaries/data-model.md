@@ -12,6 +12,8 @@ persistence entities.
 - `targetTerm`: canonical English term, rendered per artifact type.
 - `definition`: concise business meaning.
 - `allowedArtifactTypes`: target artifact categories where the term may appear.
+- `artifactFormats`: package, class, DTO class, field, method, database, URL,
+  event, test, and documentation file representations.
 - `status`: `approved`, `pending`, `deprecated`.
 - `source`: constitution, architecture document, migration mapping, or feature
   plan.
@@ -22,6 +24,14 @@ persistence entities.
 - `targetTerm` uses business-oriented English.
 - `targetTerm` is not a literal translation when a better business term exists.
 - Approved terms must include artifact-specific renderings.
+- Artifact formats must include lowercase package segments, PascalCase class
+  and DTO class names, camelCase fields and methods, lowercase snake_case
+  database objects, kebab-case URL path segments, PascalCase event type names,
+  PascalCase test class names with a `Test` suffix, and lowercase kebab-case
+  documentation file names.
+
+**Traceability**: Constrained by Spec `FR-001`, `FR-004`, `FR-016`, `NR-001`,
+`NR-021`, and `TR-003`.
 
 ## LegacyTermMapping
 
@@ -48,6 +58,9 @@ language model.
 - Spanish legacy names are not allowed in target domain, application, API, or
   persistence artifacts.
 
+**Traceability**: Constrained by Spec `FR-002`, `FR-003`, `FR-014`, `FR-015`,
+`FR-017`, `FR-018`, `NR-002` through `NR-019`, and `TR-003`.
+
 ## ArchitectureBoundaryRule
 
 **Purpose**: Defines a Clean Architecture responsibility or dependency rule.
@@ -69,6 +82,9 @@ language model.
 - Adapter rules cannot assign business logic to adapters.
 - Bootstrap rules cannot assign business logic to configuration or wiring.
 
+**Traceability**: Constrained by Spec `FR-009`, `AR-002` through `AR-008`, and
+`TR-003`.
+
 ## SRIContractTerm
 
 **Purpose**: Official SRI XML or SOAP term that may remain Spanish only inside
@@ -89,6 +105,8 @@ contract-specific artifacts.
 - Official names remain exact in SRI contract artifacts.
 - Official Spanish names cannot appear in domain models, application commands,
   target APIs, persistence entities, or target database objects.
+
+**Traceability**: Constrained by Spec `FR-005`, `AR-010`, and `TR-003`.
 
 ## PendingNamingDecision
 
@@ -116,6 +134,9 @@ deferred -> resolved
 - A generated task list cannot include affected implementation work while the
   decision is unresolved.
 - Final decisions must be recorded in the feature plan and `docs/migration`.
+
+**Traceability**: Constrained by Spec `FR-007`, `FR-017`, `SC-010`, and
+`TR-003`.
 
 ## PendingFunctionalValidation
 
@@ -147,6 +168,9 @@ deferred -> validated
   behavior is unresolved.
 - Excluded or deferred behavior must be visible in the plan.
 
+**Traceability**: Constrained by Spec `FR-008`, `FR-018`, `SC-011`, and
+`TR-003`.
+
 ## CompatibilityException
 
 **Purpose**: Documents a bounded exception for legacy or SRI-specific names.
@@ -166,6 +190,9 @@ deferred -> validated
 - Exceptions must be documented before affected tasks are generated.
 - Exceptions cannot authorize Spanish legacy names in normal target domain,
   application, API, or persistence code.
+
+**Traceability**: Constrained by Spec `FR-005`, `FR-006`, `AR-010`, and
+`TR-003`.
 
 ## Relationships
 

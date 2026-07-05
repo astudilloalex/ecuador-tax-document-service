@@ -56,16 +56,27 @@ rg -n "Pending Naming Decision|Pending Functional Validation|before task generat
 Expected outcome: the mapping document states how unresolved naming and
 functional behavior block, exclude, or defer affected task generation.
 
-### 5. Verify target naming renderings
+### 5. Verify target naming formats
 
 ```bash
-rg -n "PascalCase|camelCase|snake_case|kebab-case|lowercase" docs/architecture
+rg -n "PascalCase|camelCase|snake_case|kebab-case|lowercase|Test suffix" docs/architecture
 ```
 
-Expected outcome: artifact-specific rendering rules are documented for packages,
-classes, fields, methods, database objects, and URL path segments.
+Expected outcome: artifact-specific format rules are documented for packages,
+classes, DTO classes, fields, methods, database objects, URL path segments,
+events, tests, and documentation file names.
 
-### 6. Verify no runtime artifacts were created for this enabler
+### 6. Verify traceability and source-of-truth rules
+
+```bash
+rg -n "FR-###|AR-###|NR-###|TR-###|SC-###|T###|durable source of truth" docs/architecture docs/migration
+```
+
+Expected outcome: the generated documents state the requirement and task ID
+scheme and identify `docs/architecture` and `docs/migration` as durable source
+of truth after implementation.
+
+### 7. Verify no runtime artifacts were created for this enabler
 
 ```bash
 find src/main/java src/test/java -type f 2>/dev/null | rg "taxdocument" || true
@@ -83,3 +94,4 @@ Expected outcome: no new Java source or test files are required by this feature.
 - SRI contract terms are isolated to allowed artifacts.
 - Pending Naming Decisions and Pending Functional Validations cannot proceed
   into affected tasks unresolved.
+- Future tasks must cite requirement identifiers or contract sections.

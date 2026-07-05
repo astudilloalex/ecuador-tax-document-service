@@ -4,6 +4,8 @@
 
 `docs/architecture/backend-clean-architecture.md`
 
+Related terminology artifact: `docs/architecture/canonical-terminology.md`.
+
 ## Purpose
 
 Define mandatory Clean Architecture boundaries and naming rules for all future
@@ -38,13 +40,18 @@ backend specifications, plans, tasks, and code.
   `SriService`, `ProcessService`, `Manager`, `Helper`, and `Util`.
 - Define artifact-specific rendering:
   - package segments: lowercase
-  - class names: PascalCase
+  - class names and DTO class names: PascalCase
   - fields and methods: camelCase
   - database objects: lowercase snake_case
   - URL path segments: kebab-case
+  - event type names: PascalCase
+  - test class names: PascalCase with a `Test` suffix
+  - documentation file names: lowercase kebab-case
 - Include the required DTO mapping flow.
 - Include a compliance checklist usable during spec, plan, task, and
   implementation review.
+- Include a traceability rule requiring future tasks to cite governing
+  requirement identifiers or contract sections.
 
 ## Acceptance Checks
 

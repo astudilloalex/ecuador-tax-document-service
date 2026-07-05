@@ -102,3 +102,17 @@ governance documentation and must not alter build files.
 
 - Convert the project scaffold to Maven in this feature: rejected because build
   migration is outside the specified scope and would require separate planning.
+
+## Decision: Establish traceability and source-of-truth rules
+
+**Rationale**: The feature creates durable governance documents while retaining
+Spec Kit artifacts as the planning record. Future task generation needs a stable
+ID scheme so tasks can cite the requirements and contracts they implement.
+
+**Alternatives considered**:
+
+- Rely on section headings only: rejected because headings are less stable than
+  requirement and task identifiers.
+- Treat feature artifacts as the permanent source of truth: rejected because the
+  clarification session selected durable outputs under `docs/architecture` and
+  `docs/migration`.

@@ -94,6 +94,7 @@ specs/001-canonical-terminology-boundaries/
 ├── quickstart.md
 ├── contracts/
 │   ├── architecture-rules-document.md
+│   ├── canonical-terminology-document.md
 │   ├── legacy-mapping-document.md
 │   └── future-spec-governance.md
 └── tasks.md
@@ -222,12 +223,33 @@ Phase 1 artifacts:
 
 - [data-model.md](./data-model.md)
 - [contracts/architecture-rules-document.md](./contracts/architecture-rules-document.md)
+- [contracts/canonical-terminology-document.md](./contracts/canonical-terminology-document.md)
 - [contracts/legacy-mapping-document.md](./contracts/legacy-mapping-document.md)
 - [contracts/future-spec-governance.md](./contracts/future-spec-governance.md)
 - [quickstart.md](./quickstart.md)
 
 Agent context update: no agent context update script is present in this Spec Kit
 installation, so no generated agent context update was run.
+
+## Traceability and Source of Truth
+
+Feature specifications use `FR-###`, `AR-###`, `NR-###`, `TR-###`, and `SC-###`
+identifiers. Future task lists must use `T###` identifiers and cite the
+governing requirement ID or contract section for each task.
+
+The durable source of truth after this enabler is implemented is:
+
+- `docs/architecture/backend-clean-architecture.md` for layer boundaries and
+  Clean Architecture rules.
+- `docs/architecture/canonical-terminology.md` for approved canonical English
+  terms and artifact-specific formats.
+- `docs/migration/legacy-to-target-terminology.md` for legacy-to-target
+  mappings, pending naming decisions, pending functional validations, SRI
+  adapter-only terms, and compatibility exceptions.
+
+The feature artifacts under `specs/001-canonical-terminology-boundaries/`
+remain the planning, contract, and review record. They do not supersede the
+durable `docs/architecture` and `docs/migration` outputs after implementation.
 
 ## Complexity Tracking
 

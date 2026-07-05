@@ -17,6 +17,8 @@ task generation and implementation.
 - SRI contract-only names isolated to allowed artifacts.
 - Explicit out-of-scope legacy behaviors.
 - Pending Naming Decisions and Pending Functional Validations, if any.
+- Stable requirement identifiers using `FR-###`, `AR-###`, `NR-###`,
+  `TR-###`, and `SC-###` as applicable.
 
 ## Required Future Plan Content
 
@@ -31,6 +33,8 @@ task generation and implementation.
 - Resolution of Pending Naming Decisions before task generation.
 - Resolution, exclusion, or deferral of Pending Functional Validation before
   affected task generation.
+- Traceability from planned artifacts to requirement identifiers and contract
+  sections.
 
 ## Required Future Task List Checks
 
@@ -42,6 +46,16 @@ task generation and implementation.
 - No task reuses DTOs across layer boundaries.
 - No task places official SRI Spanish names outside allowed SRI, fixture,
   compatibility, migration, or mapping artifacts.
+- Every task uses a `T###` identifier and cites at least one governing
+  requirement identifier or contract section.
+
+## Source Of Truth Rule
+
+- After this enabler is implemented, `docs/architecture` and `docs/migration`
+  are the durable source of truth for architecture rules, canonical
+  terminology, and legacy-to-target mappings.
+- Feature artifacts under `specs/` remain planning, contract, and review
+  records and must not contradict the durable documentation outputs.
 
 ## Acceptance Checks
 
@@ -50,3 +64,5 @@ task generation and implementation.
 - A future reviewer can trace every migrated concept to a classification.
 - A future reviewer can identify whether a Spanish term is target-forbidden,
   SRI adapter-only, compatibility-only, migration-only, deprecated, or pending.
+- A future reviewer can trace every generated task to a requirement identifier
+  or contract section.

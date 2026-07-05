@@ -194,10 +194,12 @@ authorization, webhooks, production data migration, and legacy refactoring.
   approved canonical glossary terms and MUST register additional discovered
   legacy terms as Pending Naming Decisions or Pending Functional Validation
   until they are explicitly resolved.
-- **FR-016**: The architecture rules MUST define artifact-specific rendering for
-  canonical terms: package segments use lowercase, class names use PascalCase,
-  fields and methods use camelCase, database objects use lowercase snake_case,
-  and URL path segments use kebab-case.
+- **FR-016**: The architecture rules MUST define artifact-specific format rules
+  for canonical terms: package segments use lowercase, class names and DTO class
+  names use PascalCase, fields and methods use camelCase, database objects use
+  lowercase snake_case, URL path segments use kebab-case, event type names use
+  PascalCase, test class names use PascalCase with a `Test` suffix, and
+  documentation file names use lowercase kebab-case.
 - **FR-017**: A Pending Naming Decision MAY be recorded during specification or
   planning, but it MUST be resolved before task generation, with the final
   decision recorded in the feature plan and `docs/migration`.
@@ -271,9 +273,31 @@ authorization, webhooks, production data migration, and legacy refactoring.
   `SriService`, `ProcessService`, `Manager`, `Helper`, and `Util` MUST be
   rejected for target business operations.
 - **NR-021**: Canonical terms MUST be rendered according to artifact type:
-  lowercase for package segments, PascalCase for class names, camelCase for
-  fields and methods, lowercase snake_case for database objects, and kebab-case
-  for URL path segments.
+  lowercase for package segments, PascalCase for class and DTO class names,
+  camelCase for fields and methods, lowercase snake_case for database objects,
+  kebab-case for URL path segments, PascalCase for event type names, PascalCase
+  with a `Test` suffix for test class names, and lowercase kebab-case for
+  documentation file names.
+
+### Traceability Requirements
+
+- **TR-001**: Future specifications MUST use stable requirement identifiers:
+  `FR-###` for functional requirements, `AR-###` for architecture requirements,
+  `NR-###` for naming and migration requirements, `TR-###` for traceability
+  requirements, and `SC-###` for success criteria.
+- **TR-002**: Future plans MUST cite the governing requirement identifiers and
+  contract sections for each planned documentation or implementation artifact.
+- **TR-003**: Data model entries MUST be referenced by entity name and section
+  heading, and each entity that constrains future work MUST map back to at
+  least one `FR`, `AR`, `NR`, or `TR` requirement.
+- **TR-004**: Contract artifacts MUST declare the target artifact path, required
+  sections, required content, and acceptance checks so future tasks can cite the
+  contract unambiguously.
+- **TR-005**: Future task lists MUST use `T###` task identifiers and cite the
+  governing `FR`, `AR`, `NR`, `TR`, `SC`, or contract section for each task.
+- **TR-006**: After implementation of this enabler, `docs/architecture` and
+  `docs/migration` are the durable source of truth; this feature's `specs/`
+  artifacts remain the planning and traceability record.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -359,6 +383,8 @@ Functional Validation.
 - **SC-011**: No generated task list contains implementation work for unresolved
   Pending Functional Validation unless the affected behavior is explicitly
   excluded or deferred.
+- **SC-012**: 100% of future generated tasks cite at least one governing
+  requirement identifier or contract section.
 
 ## Assumptions
 
