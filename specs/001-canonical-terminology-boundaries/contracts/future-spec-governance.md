@@ -51,9 +51,23 @@ task generation and implementation.
 
 ## Source Of Truth Rule
 
+- Constitution-governed durable locations:
+
+  | Artifact Category | Required Location | Purpose |
+  |-------------------|-------------------|---------|
+  | AS-IS legacy documentation | `docs/legacy/` | Store evidence-based documentation of the legacy system without mixing it with target specifications. |
+  | Migration mappings and canonical terminology | `docs/migration/` | Store canonical language, legacy-to-target mappings, forbidden legacy terms, pending naming decisions, and migration classifications. |
+  | Architecture rules and decisions | `docs/architecture/` or `docs/adr/` | Store Clean Architecture rules, architectural decisions, and backend governance documentation. |
+  | Target specifications | `.specify/specs/` | Store active Spec Kit target specifications, plans, tasks, contracts, and feature artifacts. |
+
 - After this enabler is implemented, `docs/architecture` and `docs/migration`
   are the durable source of truth for architecture rules, canonical
   terminology, and legacy-to-target mappings.
+- AS-IS legacy documentation must remain under `docs/legacy/` and must not be
+  stored as target specification artifacts.
+- Architecture rules and decisions must remain under `docs/architecture/` or
+  `docs/adr/` and must not compete with the constitution as a second source of
+  truth.
 - Feature artifacts under `specs/` remain planning, contract, and review
   records and must not contradict the durable documentation outputs.
 

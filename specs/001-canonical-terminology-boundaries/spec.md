@@ -1,6 +1,6 @@
 # Feature Specification: Canonical Terminology and Architecture Boundaries
 
-**Feature Branch**: `1-ft-1`
+**Feature Branch**: `001-canonical-terminology-boundaries`
 
 **Created**: 2026-07-05
 
@@ -135,8 +135,10 @@ This architecture enabler includes:
 - Forbidden legacy terms and generic names for target artifacts.
 - A structure for future specifications to record mapping, pending naming
   decisions, and pending functional validations.
-- Durable target architecture rules under `docs/architecture` and
-  legacy-to-target terminology mappings under `docs/migration`.
+- Durable target architecture rules under `docs/architecture`, architecture
+  decisions under `docs/architecture` or `docs/adr`, legacy-to-target
+  terminology mappings under `docs/migration`, AS-IS legacy documentation under
+  `docs/legacy`, and active target specifications under `.specify/specs`.
 - Initial migration mapping coverage that includes approved glossary terms and
   registers additional discovered legacy terms as Pending Naming Decisions or
   Pending Functional Validation.
@@ -183,9 +185,29 @@ authorization, webhooks, production data migration, and legacy refactoring.
 - **FR-011**: The specification MUST require separation of REST DTOs,
   application commands and results, domain objects, persistence entities, and
   SRI XML/SOAP DTOs.
-- **FR-012**: The specification MUST state that AS-IS legacy documentation,
-  migration mapping, architecture decisions, and target specifications remain
-  separate artifact categories.
+- **FR-012: Documentation Governance and Durable Output Locations**: The
+  specification SHALL define and enforce durable documentation locations aligned
+  with the project constitution.
+
+  Required locations:
+
+  | Artifact Category | Required Location | Purpose |
+  |-------------------|-------------------|---------|
+  | AS-IS legacy documentation | `docs/legacy/` | Store evidence-based documentation of the legacy system without mixing it with target specifications. |
+  | Migration mappings and canonical terminology | `docs/migration/` | Store canonical language, legacy-to-target mappings, forbidden legacy terms, pending naming decisions, and migration classifications. |
+  | Architecture rules and decisions | `docs/architecture/` or `docs/adr/` | Store Clean Architecture rules, architectural decisions, and backend governance documentation. |
+  | Target specifications | `.specify/specs/` | Store active Spec Kit target specifications, plans, tasks, contracts, and feature artifacts. |
+
+  Acceptance criteria:
+
+  1. AS-IS legacy documentation SHALL NOT be stored as target specification
+     artifacts.
+  2. Migration mappings SHALL NOT be stored only inside temporary feature files.
+  3. Architecture rules SHALL NOT compete with the constitution as a second
+     source of truth.
+  4. Target specs SHALL remain under the active Spec Kit specs folder.
+  5. Future features SHALL reference these durable locations when consuming
+     governance outputs.
 - **FR-013**: The specification MUST require architecture boundary and naming
   rules to be published under `docs/architecture`.
 - **FR-014**: The specification MUST require legacy-to-target terminology

@@ -111,6 +111,22 @@ docs/
     └── legacy-to-target-terminology.md
 ```
 
+### Constitution-Governed Durable Locations
+
+This enabler creates the target governance documents listed above and documents
+the full constitution-governed location policy for future work:
+
+| Artifact Category | Required Location | Purpose |
+|-------------------|-------------------|---------|
+| AS-IS legacy documentation | `docs/legacy/` | Evidence-based documentation of the legacy system without mixing it with target specifications. |
+| Migration mappings and canonical terminology | `docs/migration/` | Canonical language, legacy-to-target mappings, forbidden legacy terms, pending naming decisions, and migration classifications. |
+| Architecture rules and decisions | `docs/architecture/` or `docs/adr/` | Clean Architecture rules, architectural decisions, and backend governance documentation. |
+| Target specifications | `.specify/specs/` | Active Spec Kit target specifications, plans, tasks, contracts, and feature artifacts. |
+
+No AS-IS legacy documentation, ADR, or target runtime artifact is created by this
+feature unless it is part of the documentation deliverables explicitly listed in
+this plan.
+
 ### Source Code (repository root)
 
 ```text
@@ -246,6 +262,11 @@ The durable source of truth after this enabler is implemented is:
 - `docs/migration/legacy-to-target-terminology.md` for legacy-to-target
   mappings, pending naming decisions, pending functional validations, SRI
   adapter-only terms, and compatibility exceptions.
+- `docs/legacy/` for AS-IS legacy documentation produced by future legacy
+  documentation work.
+- `docs/architecture/` or `docs/adr/` for architecture rules and decisions.
+- `.specify/specs/` for active target specifications, plans, tasks, contracts,
+  and feature artifacts.
 
 The feature artifacts under `specs/001-canonical-terminology-boundaries/`
 remain the planning, contract, and review record. They do not supersede the

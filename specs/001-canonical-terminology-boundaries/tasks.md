@@ -70,11 +70,12 @@ complete.
   `docs/migration/legacy-to-target-terminology.md`, including how future
   feature plans extend the mapping without changing its structure. (FR-014,
   TR-006, Contract `Legacy-To-Target Mapping Document`)
-- [ ] T009 Add artifact category separation rules to
+- [ ] T009 Add documentation governance and durable location rules to
   `docs/architecture/backend-clean-architecture.md`, distinguishing AS-IS
-  legacy documentation, migration mapping, architecture decisions, target
-  specifications, plans, tasks, and durable architecture documents. (FR-012,
-  Contract `Future Specification Governance`)
+  legacy documentation in `docs/legacy/`, migration mappings and canonical
+  terminology in `docs/migration/`, architecture rules and decisions in
+  `docs/architecture/` or `docs/adr/`, and target specifications in
+  `.specify/specs/`. (FR-012, Contract `Future Specification Governance`)
 
 **Checkpoint**: Target documents exist, identify their authority, and preserve
 the documentation-only scope.
