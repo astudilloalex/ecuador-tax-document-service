@@ -1,0 +1,419 @@
+# Feature Specification: Tax Document Persistence Foundation
+
+**Feature Branch**: `5-ft-3`
+
+**Created**: 2026-07-05
+
+**Status**: Draft
+
+**Input**: User description: "Establish the persistence foundation for the
+common tax document issuance model using PostgreSQL, Flyway, and Clean
+Architecture outbound adapters, without creating REST endpoints, SRI adapters,
+XML generation, queue adapters, webhook delivery, or document-specific issuance
+flows."
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Persist and Load Tax Documents (Priority: P1)
+
+As a backend developer building future issuance use cases, I need the common
+tax document model to be saved and loaded through the existing application
+repository port so that document-specific features can reuse one persistence
+foundation without depending on database details.
+
+**Why this priority**: Future invoice, credit note, debit note, withholding,
+waybill, retry, synchronization, and webhook features cannot store issuance
+state until the common tax document aggregate can be persisted and rehydrated
+through Clean Architecture boundaries.
+
+**Independent Test**: Create a tax document with the common issuance fields,
+save it through the application repository contract, load it by access key, and
+verify that the loaded model preserves the same domain identity, state, and
+authorization information without exposing persistence entities.
+
+**Acceptance Scenarios**:
+
+1. **Given** a valid common tax document exists in memory, **When** it is saved
+   through `TaxDocumentRepository`, **Then** it is persisted using English
+   target database objects and can be loaded back by `AccessKey`.
+2. **Given** a persisted authorized tax document exists, **When** it is loaded
+   through `TaxDocumentRepository`, **Then** the resulting domain object
+   preserves `accessKey`, `documentState`, `authorizationState`,
+   `authorizationNumber`, and `authorizedAt`.
+3. **Given** application code calls repository methods, **When** method
+   signatures are reviewed, **Then** they expose only domain or application
+   models and never persistence entities or database-specific types.
+
+---
+
+### User Story 2 - Protect Issuance Identity and Access Key Uniqueness (Priority: P2)
+
+As a backend developer building issuance workflows, I need duplicate access
+keys and duplicate issuance identities to be detected consistently so that
+future features do not issue or store conflicting tax documents.
+
+**Why this priority**: Access key and issuance identity uniqueness are core
+idempotency and audit requirements for electronic tax documents. They prevent
+duplicate legal document numbers and make retries predictable.
+
+**Independent Test**: Persist one tax document, attempt to save another with
+the same access key, and attempt to save another with the same issuer,
+document type, establishment, issuing point, and sequence number. Verify that
+the persistence foundation rejects or reports each duplicate according to the
+repository contract.
+
+**Acceptance Scenarios**:
+
+1. **Given** a tax document already exists for an `accessKey`, **When** another
+   tax document with the same `accessKey` is saved, **Then** the persistence
+   foundation rejects or reports the duplicate.
+2. **Given** a tax document already exists for an issuer, document type,
+   establishment, issuing point, and sequence number, **When** another tax
+   document with the same issuance identity is saved, **Then** the persistence
+   foundation rejects or reports the duplicate.
+3. **Given** duplicate checks are performed before a save, **When** the
+   application asks whether an access key or issuance identity exists, **Then**
+   the result is accurate for persisted documents.
+
+---
+
+### User Story 3 - Reserve Sequence Numbers Safely (Priority: P3)
+
+As a backend developer building future issuance flows, I need sequence numbers
+to be reserved through the application sequence port so that document numbers
+remain unique per issuer, establishment, issuing point, and document type.
+
+**Why this priority**: Sequence reservation controls document numbering. It
+must be safe before future issuance use cases rely on it for legal document
+identity.
+
+**Independent Test**: Reserve a requested sequence value for an issuer context,
+verify that the same value cannot be reserved twice as a conflicting document
+number, and verify that availability checks reflect reservations.
+
+**Acceptance Scenarios**:
+
+1. **Given** a sequence number has not been reserved for an issuer context,
+   **When** it is reserved through `SequenceNumberPort`, **Then** the
+   reservation is recorded and returned as a domain `SequenceNumber`.
+2. **Given** a sequence number is already reserved for the same issuer,
+   establishment, issuing point, and document type, **When** the same value is
+   requested again, **Then** the adapter behaves idempotently for the same
+   reservation intent or rejects the duplicate according to the defined
+   contract.
+3. **Given** application code checks sequence availability, **When** the value
+   is already reserved, **Then** the port reports that the value is not
+   available for a conflicting reservation.
+
+---
+
+### User Story 4 - Preserve Architecture and Migration Traceability (Priority: P4)
+
+As a software architect or migration reviewer, I need persistence artifacts,
+table names, column names, and mappings to remain traceable to the approved
+English canonical terminology so that the target system does not copy legacy
+database naming or architecture.
+
+**Why this priority**: Persistence is the first outward adapter boundary for
+the issuance model. If database entities or names leak inward, future features
+will inherit legacy coupling and violate the project constitution.
+
+**Independent Test**: Review the persistence specification and future source
+layout to verify that persistence-specific artifacts are limited to the
+approved outbound adapter and configuration locations, target database objects
+use English lowercase snake_case names, and legacy-to-target mapping
+documentation is updated.
+
+**Acceptance Scenarios**:
+
+1. **Given** persistence source files are created, **When** their paths are
+   reviewed, **Then** persistence-specific code exists only under the outbound
+   persistence adapter or approved configuration locations.
+2. **Given** target schema artifacts are reviewed, **When** table and column
+   names are inspected, **Then** they use English lowercase snake_case and do
+   not copy Spanish legacy names.
+3. **Given** a migrated persistence concept is introduced, **When** migration
+   documentation is reviewed, **Then** the concept has a target name,
+   classification, and decision status in durable documentation.
+
+### Edge Cases
+
+- A persisted authorized document must be rehydrated without running the
+  new-document constructor path that always starts in `PENDING`.
+- A persisted document has `authorizationNumber` without an authorized document
+  state or authorization state.
+- A persisted document has `authorizedAt` without an authorization number.
+- A duplicate access key is detected during save after an earlier existence
+  check returned false.
+- A duplicate issuance identity is detected during save after an earlier
+  existence check returned false.
+- Two sequence reservations request the same issuer, establishment, issuing
+  point, document type, and sequence number.
+- A future task attempts to place persistence entities in the domain or
+  application layer.
+- A future task attempts to create REST, SRI, XML generation, queue, webhook,
+  or document-specific issuance behavior in this feature.
+- A legacy table or column name is proposed for the target schema.
+- XML path or audit-event storage is requested before its persistence ownership
+  is validated.
+
+## Requirements *(mandatory)*
+
+### Scope Boundaries
+
+This architecture and infrastructure enabler includes:
+
+- Target persistence schema requirements for the common tax document issuance
+  foundation.
+- Versioned schema migration requirements for approved target tables.
+- Outbound persistence adapter requirements for `TaxDocumentRepository`,
+  `SequenceNumberPort`, and `TransactionPort`.
+- Mapping requirements between persistence records and domain objects.
+- Domain-safe rehydration requirements for persisted `TaxDocument` instances.
+- Uniqueness and idempotency requirements for `accessKey`, issuance identity,
+  and sequence reservation.
+- Persistence adapter test requirements for mapping, repository behavior,
+  duplicate constraints, sequence reservation, and transaction boundaries.
+- Durable migration documentation requirements for target table and column
+  mappings.
+
+This architecture and infrastructure enabler excludes:
+
+- REST endpoints, REST DTOs, public API contracts, and legacy route
+  compatibility endpoints.
+- SRI SOAP/XML adapters, SRI request or response DTOs, XML generation, XML
+  signing, XML parsing, SRI fixture files, and SRI authorization behavior.
+- XML storage adapter implementation and historical XML path persistence unless
+  a later plan explicitly validates and scopes it.
+- Queue adapters, webhook adapters, webhook delivery behavior, authentication,
+  authorization, PDF/RIDE generation, production scheduling, production data
+  migration, and legacy system refactoring.
+- Invoice-specific, credit-note-specific, debit-note-specific,
+  withholding-specific, and waybill-specific line, tax, total, or business
+  calculation rules.
+
+### Functional Requirements
+
+- **FR-001**: The feature MUST define a target persistence schema for the
+  common tax document issuance foundation using English lowercase snake_case
+  table and column names.
+- **FR-002**: The feature MUST manage target persistence schema changes through
+  versioned migration artifacts.
+- **FR-003**: The target persistence schema MUST include, at minimum, the
+  tables `issuers`, `establishments`, `issuing_points`,
+  `issuance_sequences`, and `tax_documents`.
+- **FR-004**: The feature MUST keep persistence entities, repository
+  implementation details, mapping details, database constraints, and
+  database-specific errors inside the outbound persistence adapter or approved
+  configuration locations.
+- **FR-005**: The feature MUST implement the application-facing
+  `TaxDocumentRepository` contract so future use cases can save a
+  `TaxDocument`, load by `AccessKey`, load by issuance identity, check
+  existence by `AccessKey`, and check existence by issuance identity.
+- **FR-006**: The feature MUST support rehydrating a persisted `TaxDocument`
+  with persisted `DocumentState`, `AuthorizationState`, optional
+  `AuthorizationNumber`, optional `AuthorizedAt`, `IssueDate`,
+  `IssuanceMode`, and optional `externalRequestId`.
+- **FR-007**: The rehydration mechanism MUST preserve domain invariants, MUST
+  allow persisted states other than `PENDING`, MUST NOT expose persistence
+  entities to the domain, and MUST NOT add framework annotations to domain
+  classes.
+- **FR-008**: The persistence foundation MUST enforce uniqueness for
+  `accessKey`.
+- **FR-009**: The persistence foundation MUST enforce uniqueness for the
+  issuance identity composed of issuer, document type, establishment, issuing
+  point, and sequence number.
+- **FR-010**: The persistence foundation MUST implement sequence reservation
+  through `SequenceNumberPort` for the issuer, establishment, issuing point,
+  document type, and requested sequence value.
+- **FR-011**: Sequence reservation MUST prevent conflicting duplicate
+  reservations and MUST define whether an exact repeated reservation is
+  idempotent or rejected before task generation.
+- **FR-012**: The persistence foundation MUST implement transaction boundaries
+  through `TransactionPort` or an equivalent application-facing transaction
+  abstraction without exposing persistence transaction types to domain or
+  application code.
+- **FR-013**: The persistence foundation MUST update durable migration
+  documentation with legacy-to-target table and column mappings for all
+  database objects introduced by this feature.
+- **FR-014**: Domain and application layers MUST NOT depend on JPA, Hibernate,
+  Panache, PostgreSQL, Flyway, JDBC, SQL, Quarkus persistence APIs, or
+  persistence annotations.
+- **FR-015**: Repository methods and sequence methods MUST expose only
+  domain/application models or primitive values already accepted by the
+  application port contracts, never persistence entities or database-specific
+  result types.
+- **FR-016**: Persistence adapter tests MUST verify tax document mapping,
+  rehydration, duplicate access key handling, duplicate issuance identity
+  handling, sequence reservation behavior, sequence availability behavior, and
+  transaction behavior.
+- **FR-017**: The feature MUST NOT create REST resources, REST DTOs, public API
+  endpoints, SRI adapters, SRI XML/SOAP DTOs, XML generation, XML signing, XML
+  storage adapters, queue adapters, webhook adapters, or document-specific
+  issuance flows.
+- **FR-018**: The optional `tax_document_audit_events` table MUST NOT be added
+  unless the plan explicitly justifies why audit persistence belongs in this
+  foundation instead of a future audit adapter specification.
+
+### Architectural Requirements
+
+- **AR-001**: Persistence-specific source artifacts MUST be limited to
+  `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/` and
+  approved persistence configuration locations.
+- **AR-002**: Persistence tests MUST be limited to persistence adapter test
+  locations and MUST NOT require domain or application tests to start the
+  runtime framework or external infrastructure.
+- **AR-003**: Source dependencies MUST preserve Clean Architecture direction:
+  persistence adapters may depend on application ports and domain models;
+  domain and application code MUST NOT depend on persistence adapters.
+- **AR-004**: Business rules MUST remain in the domain or application layers.
+  Persistence adapters MUST NOT decide issuance policy, authorization policy,
+  document-specific calculations, retry eligibility, or SRI behavior.
+- **AR-005**: Persistence mappers MUST translate between domain objects and
+  persistence entities without reusing either model across the boundary.
+- **AR-006**: Persistence errors MUST be translated to application-facing
+  outcomes or exceptions that do not expose database-specific types beyond the
+  adapter boundary.
+- **AR-007**: Transaction handling MUST be available to application
+  orchestration through `TransactionPort` and MUST NOT require use cases to
+  import persistence transaction objects.
+- **AR-008**: SRI document codes MAY be stored only as external contract values
+  when explicitly mapped from canonical `DocumentType`; they MUST NOT drive
+  table names, column names, class names, or internal model names.
+- **AR-009**: The feature MUST preserve DTO separation: persistence entities
+  belong only to the persistence adapter, domain objects remain persistence
+  ignorant, and application ports return domain/application models only.
+- **AR-010**: The feature MUST remain a persistence foundation and MUST NOT
+  introduce inbound REST, outbound SRI, outbound storage, outbound queue,
+  outbound webhook, or bootstrap runtime behavior beyond approved persistence
+  configuration.
+
+### Naming and Migration Requirements
+
+- **NR-001**: Target database tables and columns MUST use approved English
+  canonical terminology and lowercase snake_case.
+- **NR-002**: Spanish legacy names MUST NOT appear in target persistence
+  entities, target table names, target column names, target constraints, target
+  indexes, application code, domain code, or tests except inside migration
+  mapping documentation or explicitly approved compatibility artifacts.
+- **NR-003**: Required target table names are `issuers`, `establishments`,
+  `issuing_points`, `issuance_sequences`, and `tax_documents`.
+- **NR-004**: Required target persistence field names include, as applicable,
+  `issuer_id`, `establishment_id`, `issuing_point_id`, `document_type`,
+  `sequence_number`, `access_key`, `issue_date`, `document_state`,
+  `authorization_state`, `authorization_number`, `authorized_at`,
+  `issuance_mode`, and `external_request_id`.
+- **NR-005**: Every database object introduced by this feature MUST be
+  classified as a Target database object in `docs/migration/`.
+- **NR-006**: Unclear table names, column names, relationship names, or
+  constraint semantics MUST be registered as Pending Naming Decision or Pending
+  Functional Validation before affected task generation.
+- **NR-007**: Legacy compatibility views for Spanish table names are out of
+  scope for this feature unless a later compatibility specification approves a
+  bounded exception.
+
+### Key Entities *(include if feature involves data)*
+
+- **Issuer persistence record**: Target database representation of the issuer
+  needed for common issuance identity and relationship ownership. It maps to
+  the domain `Issuer` concept without making `Issuer` a persistence entity.
+- **Establishment persistence record**: Target database representation of an
+  issuer establishment. It maps to the domain `Establishment` concept and must
+  relate to one issuer.
+- **IssuingPoint persistence record**: Target database representation of an
+  issuing point within an establishment. It maps to the domain `IssuingPoint`
+  concept and must relate to one establishment.
+- **IssuanceSequence persistence record**: Target database representation of a
+  sequence reservation for one issuer, establishment, issuing point, document
+  type, and sequence number.
+- **TaxDocument persistence record**: Target database representation of the
+  common tax document lifecycle state, authorization state, access key, issue
+  date, issuance mode, optional external request identifier, optional
+  authorization number, and optional authorization timestamp.
+- **TaxDocumentAuditEvent persistence record**: Optional target database
+  representation of audit events. It is deferred unless the plan explicitly
+  justifies including audit persistence in this foundation.
+
+## Migration Classification *(mandatory for migrated concepts)*
+
+| Legacy Concept | Target Name | Classification | Decision Status |
+|----------------|-------------|----------------|-----------------|
+| legacy issuer table or fields | `issuers`, `issuer_id`, `legal_identifier`, `legal_name`, `trade_name` | Target database object | Decided for target names; exact legacy source columns require mapping evidence |
+| legacy establishment table or fields | `establishments`, `establishment_id`, `establishment_code` | Target database object | Decided for target names; exact legacy source columns require mapping evidence |
+| legacy issuing point table or fields | `issuing_points`, `issuing_point_id`, `issuing_point_code` | Target database object | Decided for target names; exact legacy source columns require mapping evidence |
+| legacy sequence table or fields | `issuance_sequences`, `sequence_number` | Target database object | Decided for target names; reservation behavior tracked by PFV-PER-001 |
+| legacy tax document table or fields | `tax_documents`, `access_key`, `document_type`, `document_state`, `authorization_state`, `authorization_number`, `authorized_at`, `issue_date`, `issuance_mode`, `external_request_id` | Target database object | Decided |
+| legacy Spanish table compatibility | compatibility views for legacy table names | Legacy compatibility concept | Deferred by PFV-PER-002 |
+| historical XML path columns | XML storage metadata | Pending Functional Validation | Deferred by PFV-PER-003 |
+| persisted audit events | `tax_document_audit_events` | Pending Functional Validation | Deferred by PFV-PER-004 unless justified by plan |
+
+Allowed classifications: Target domain concept, Target API field, Target
+database object, SRI adapter-only concept, Legacy compatibility concept,
+Migration-only concept, Deprecated concept, Pending Naming Decision, Pending
+Functional Validation.
+
+## Pending Functional Validations
+
+| ID | Area | Question | Resolution for This Feature |
+|----|------|----------|-----------------------------|
+| PFV-PER-001 | Sequence reservation | Should sequence reservation increment automatically or reserve a requested value supplied by the caller? | This feature uses the existing `SequenceNumberPort` contract that reserves a requested value. Automatic increment behavior is deferred to future issuance use cases unless the plan validates and updates the port contract before tasks. |
+| PFV-PER-002 | Legacy table compatibility | Should the target schema support compatibility views for legacy table names? | Deferred to a migration or compatibility specification. This feature must not create compatibility views. |
+| PFV-PER-003 | Historical XML paths | Should XML path fields be stored in `tax_documents` or a separate XML storage table? | Deferred to an XML storage specification. This feature must not persist XML paths unless the plan proves they are required for repository identity. |
+| PFV-PER-004 | Audit persistence | Should audit events be stored in this foundation or deferred to an audit adapter specification? | Deferred by default. `tax_document_audit_events` may be included only if the plan justifies audit persistence as necessary for this foundation and keeps it inside persistence scope. |
+
+## Idempotency and Audit Requirements *(include if feature is critical)*
+
+**Idempotency Scope**: This feature covers persistence-level idempotency for
+tax document storage, duplicate access key detection, duplicate issuance
+identity detection, and sequence assignment. Future issuance, retry,
+synchronization, webhook, XML generation, and SRI idempotency remain governed by
+their dedicated specifications.
+
+**Audit Events**: This feature must preserve the audit event names defined by
+the issuance foundation when storing or rehydrating tax document state, but it
+does not create SRI, XML, queue, webhook, or document-specific audit flows.
+Audit persistence is deferred unless explicitly justified by the plan.
+
+**Sensitive Data Exclusions**: Audit logs and persistence diagnostics MUST NOT
+contain secrets, private keys, credentials, tokens, signing passwords, database
+passwords, or sensitive configuration values.
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: A reviewer can trace 100% of required persistence concepts in
+  this feature to an approved canonical English term, a target database object,
+  or a documented Pending Functional Validation.
+- **SC-002**: Persistence adapter validation proves that saving and loading a
+  common tax document preserves all required common fields, including access
+  key, issuance identity, document state, authorization state, authorization
+  number, and authorization timestamp.
+- **SC-003**: Duplicate access key and duplicate issuance identity scenarios
+  are detected in all required validation cases before the feature is accepted.
+- **SC-004**: Sequence reservation validation proves that conflicting duplicate
+  sequence reservations cannot create two valid reservations for the same
+  issuer, establishment, issuing point, document type, and sequence number.
+- **SC-005**: Architecture review finds zero persistence framework imports,
+  persistence annotations, database-specific types, or persistence adapter
+  dependencies in domain and application source.
+- **SC-006**: Scope review finds zero REST resources, REST DTOs, SRI adapters,
+  XML generation artifacts, queue adapters, webhook adapters, or
+  document-specific issuance flows introduced by this feature.
+- **SC-007**: Durable migration documentation contains target table and column
+  mappings for 100% of database objects introduced by this feature.
+
+## Assumptions
+
+- Feature `002-tax-document-issuance-foundation` is the source foundation for
+  domain concepts and application port contracts.
+- The existing `SequenceNumberPort` requested-value reservation contract remains
+  valid for this foundation; automatic sequence increment behavior is deferred
+  unless planning validates a contract change.
+- The target persistence foundation may use framework-specific persistence
+  details only inside the outbound persistence adapter or approved
+  configuration locations.
+- Production data migration and legacy compatibility views are separate future
+  concerns and are not required for this foundation.
+- XML storage paths and audit-event persistence are not required for repository
+  identity unless planning documents an explicit justification.
