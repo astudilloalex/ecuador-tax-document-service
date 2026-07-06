@@ -54,6 +54,12 @@ annotations. Target database names are English lowercase snake_case.
 `tax_documents`. `tax_document_audit_events`, XML path columns, compatibility
 views, and production data migration are deferred.
 
+**Temporal Rules**: `issue_date` persists the domain `IssueDate` as a database
+`date` without timezone conversion. `authorized_at` persists the domain
+`AuthorizedAt` as a UTC-normalized database timestamp. Rehydration validation
+compares `authorized_at` at microsecond precision or the selected database
+precision, whichever is lower.
+
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
@@ -207,19 +213,31 @@ are out of scope.
 | PFV-PER-002 | Legacy compatibility views are deferred to a migration or compatibility specification. |
 | PFV-PER-003 | Historical XML paths are deferred to an XML storage specification. |
 | PFV-PER-004 | Audit persistence is deferred; `tax_document_audit_events` is not included in this foundation. |
+| PFV-PER-005 | Auto-numbering policy is deferred to a future numbering policy or document-specific issuance specification. |
 
 ## Idempotency, Audit, and Error Handling
 
 **Idempotency Rules**:
 
+- `TaxDocumentRepository.save` may create a new persisted document when no
+  matching record exists.
+- `TaxDocumentRepository.save` may update the same persisted aggregate when the
+  same tax document identity already exists.
+- `TaxDocumentRepository.save` must never silently overwrite a different tax
+  document with duplicate `accessKey` or duplicate issuance identity.
 - `TaxDocumentRepository.save` rejects duplicate `accessKey` with an
   application-facing duplicate conflict error.
 - `TaxDocumentRepository.save` rejects duplicate issuance identity with an
   application-facing duplicate conflict error.
+- Missing `findByAccessKey` and `findByIssuanceIdentity` operations return
+  empty results; missing `existsByAccessKey` and `existsByIssuanceIdentity`
+  operations return `false`.
 - `SequenceNumberPort.reserve` returns the existing domain `SequenceNumber`
   when the exact reservation identity already exists.
 - `SequenceNumberPort.isAvailable` returns false for already reserved
   sequences that would conflict.
+- Conflicting duplicate sequence reservations fail with an
+  application-facing sequence reservation conflict error.
 
 **Audit Events**: No audit event persistence table is created. Persistence
 diagnostics must not include secrets, credentials, tokens, signing passwords,
@@ -229,11 +247,37 @@ private keys, database passwords, or sensitive configuration values.
 
 - Database uniqueness violations map to application-facing duplicate conflict
   errors.
+- Duplicate or unavailable sequence reservations map to application-facing
+  sequence reservation conflict errors.
 - Invalid persisted authorization combinations map to application-facing data
   integrity errors during rehydration.
+- Unknown canonical document type, document state, authorization state, or
+  issuance mode values map to application-facing data integrity errors.
+- Missing or inconsistent issuer, establishment, or issuing point relationships
+  map to application-facing data integrity errors.
 - Transaction failures map to application-facing persistence/transaction
   failures without exposing SQL, Hibernate, JPA, or PostgreSQL types beyond the
   adapter.
+- Generic persistence failures map to application-facing persistence failure
+  errors without exposing SQL, Hibernate, JPA, Panache, Flyway, or
+  PostgreSQL-specific types.
+
+## Schema Relationship and Constraint Design
+
+The target schema must define primary keys, foreign keys, unique constraints,
+important indexes, relationship rules, and delete/update restrictions for all
+required tables.
+
+| Table | Primary Key | Foreign Keys | Unique Constraints | Important Indexes | Delete/Update Restrictions |
+|-------|-------------|--------------|--------------------|-------------------|----------------------------|
+| `issuers` | `issuer_id` | None | `issuer_id` | `legal_identifier` lookup if required by adapter tests | Deleting or updating an issuer referenced by establishments, sequences, or tax documents is restricted. |
+| `establishments` | `establishment_id` | `issuer_id -> issuers.issuer_id` | `(issuer_id, establishment_code)` | `issuer_id` | Deleting or updating an establishment referenced by issuing points, sequences, or tax documents is restricted. |
+| `issuing_points` | `issuing_point_id` | `establishment_id -> establishments.establishment_id` | `(establishment_id, issuing_point_code)` | `establishment_id` | Deleting or updating an issuing point referenced by sequences or tax documents is restricted. |
+| `issuance_sequences` | `issuance_sequence_id` | `issuer_id`, `establishment_id`, `issuing_point_id` references | `(issuer_id, establishment_id, issuing_point_id, document_type, sequence_number)` | unique reservation identity | Deleting or updating a referenced issuer, establishment, or issuing point is restricted. |
+| `tax_documents` | `tax_document_id` | `issuer_id`, `establishment_id`, `issuing_point_id` references | `access_key`; `(issuer_id, document_type, establishment_id, issuing_point_id, sequence_number)` | `access_key`; issuance identity | Deleting or updating a referenced issuer, establishment, or issuing point is restricted. |
+
+Cascade deletes are not part of this feature. Any future archival, purge, or
+production data correction behavior requires a separate specification.
 
 ## Complexity Tracking
 

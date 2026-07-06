@@ -28,7 +28,12 @@ Excluded ports:
 
 Required behavior:
 
-- Persists a new or updated common `TaxDocument` using target English schema.
+- Persists a common `TaxDocument` using target English schema.
+- Creates a new persisted document when no matching persisted record exists.
+- Updates the same persisted aggregate when the same tax document identity
+  already exists.
+- Never silently overwrites another persisted tax document with a duplicate
+  `accessKey` or duplicate issuance identity.
 - Enforces unique `accessKey`.
 - Enforces unique issuance identity:
   `issuer + documentType + establishment + issuingPoint + sequenceNumber`.
@@ -69,6 +74,10 @@ Required behavior:
 
 - `existsByAccessKey` reflects persisted `access_key`.
 - `existsByIssuanceIdentity` reflects persisted issuance identity.
+- `existsByAccessKey` returns `false` when no persisted tax document exists for
+  the access key.
+- `existsByIssuanceIdentity` returns `false` when no persisted tax document
+  exists for the issuance identity.
 - Existence checks are not the only duplicate protection; database constraints
   remain authoritative.
 
@@ -83,7 +92,12 @@ Required behavior:
 - Returns a domain `SequenceNumber`.
 - Exact repeated reservation for the same identity returns the existing
   `SequenceNumber` idempotently.
-- Conflicting duplicate reservation must not create a second valid reservation.
+- Conflicting duplicate reservation must fail with an application-facing
+  sequence reservation conflict error and must not create a second valid
+  reservation.
+- Database uniqueness and transaction behavior are required reliability
+  guarantees; application-only checks are insufficient.
+- Automatic next-number allocation is out of scope.
 
 ### `isAvailable(...)`
 

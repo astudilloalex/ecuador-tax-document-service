@@ -59,8 +59,9 @@ and prevent SRI leakage into the target database model.
 ## Decision: Enforce Uniqueness With Database Constraints and Adapter Translation
 
 **Decision**: Enforce uniqueness for `access_key`, issuance identity, and
-sequence reservation using target database constraints. Translate resulting
-constraint violations to application-facing duplicate conflict errors.
+sequence reservation using target database constraints and transaction
+boundaries. Translate resulting constraint violations to application-facing
+duplicate or sequence reservation conflict errors.
 
 **Rationale**: Pre-save existence checks alone are race-prone. Database
 constraints are the reliable enforcement point, while adapter translation keeps
@@ -75,11 +76,51 @@ SQL/framework details from leaking inward.
 - Exposing database exceptions directly: rejected because application/domain
   layers must not depend on persistence error types.
 
+## Decision: Repository `save` Creates or Updates Only the Same Aggregate
+
+**Decision**: `TaxDocumentRepository.save(TaxDocument)` may create a new
+persisted document when no matching record exists and may update the same
+persisted aggregate when the same tax document identity already exists. It must
+never silently overwrite another persisted tax document with a duplicate
+`accessKey` or duplicate issuance identity.
+
+**Rationale**: Future use cases need one simple repository save contract for
+initial persistence and lifecycle state updates, while duplicate legal document
+identity must remain protected. This keeps the port stable and relies on
+database uniqueness plus adapter translation for race-safe duplicate handling.
+
+**Alternatives considered**:
+
+- Create-only save: rejected because future lifecycle transitions need to
+  persist updates to the same aggregate.
+- Upsert-by-any-unique-key: rejected because it could silently overwrite a
+  different document when duplicate `accessKey` or issuance identity appears.
+- Persist-or-replace: rejected because replacement semantics are unsafe for
+  auditable tax document state.
+
+## Decision: Missing Repository Lookups Return Empty Results
+
+**Decision**: `findByAccessKey` and `findByIssuanceIdentity` return empty
+optional/results when no persisted document exists. `existsByAccessKey` and
+`existsByIssuanceIdentity` return `false` when no persisted document exists.
+
+**Rationale**: Missing lookup is a normal query result, not a persistence
+failure. This keeps absence handling explicit and avoids using exceptions for
+ordinary control flow.
+
+**Alternatives considered**:
+
+- Throw not-found exceptions for repository lookups: rejected because the
+  existing port returns `Optional`.
+- Return placeholder domain objects: rejected because it would create invalid
+  domain state.
+
 ## Decision: Exact Repeated Sequence Reservation Is Idempotent
 
 **Decision**: `SequenceNumberPort.reserve` returns the existing
 `SequenceNumber` when the exact same issuer, establishment, issuing point,
-document type, and sequence value reservation already exists.
+document type, and sequence value reservation already exists. A conflicting
+duplicate sequence reservation fails with an application-facing conflict error.
 
 **Rationale**: Sequence reservation is a repeatable critical operation. The
 existing port returns a `SequenceNumber` rather than a result status, so
@@ -91,6 +132,8 @@ idempotent return keeps the contract stable and supports retries.
   harder to distinguish from conflicts.
 - Change the port to return a reservation status: deferred because it expands
   the application contract beyond this foundation's clarified need.
+- Automatic next-number allocation: deferred to a future numbering policy or
+  document-specific issuance specification.
 
 ## Decision: Add Domain-Safe Rehydration to `TaxDocument`
 
@@ -116,7 +159,12 @@ keeps invariant checks in the domain.
 
 **Decision**: During rehydration, invalid combinations of document state,
 authorization state, authorization number, and authorized timestamp are rejected
-with application-facing data integrity errors.
+with application-facing data integrity errors. Invalid combinations include
+authorization number present when authorization state is not `AUTHORIZED`,
+authorized timestamp present without authorization number, authorized state
+without authorization number, authorized state without authorized timestamp,
+unknown canonical document type, unknown document state, and unknown
+authorization state.
 
 **Rationale**: Tax document authorization state is legally sensitive. Silent
 normalization would hide bad persisted data and make audits unreliable.
@@ -127,6 +175,47 @@ normalization would hide bad persisted data and make audits unreliable.
   evidence.
 - Load invalid records and mark them as repair-needed: deferred because repair
   workflows are not part of this persistence foundation.
+
+## Decision: Use Restrictive Relationships and No Cascading Deletes
+
+**Decision**: Required tables define explicit primary keys, foreign keys,
+unique constraints, and important lookup indexes. Delete/update operations on
+issuer, establishment, and issuing point rows referenced by sequences or tax
+documents are restricted. Cascade deletes are not part of this foundation.
+
+**Rationale**: Tax document persistence is auditable. Cascading deletes or
+implicit relationship mutation would risk losing or altering legally relevant
+state. Restrictive relationships keep accidental data loss out of this
+foundation.
+
+**Alternatives considered**:
+
+- Cascading deletes from issuer hierarchy: rejected because tax documents and
+  sequence reservations must remain stable audit evidence.
+- Soft-delete policy now: deferred because lifecycle/archive behavior is not in
+  scope.
+- Mutable issuer hierarchy updates cascading into documents: rejected because
+  persisted tax document identity must remain stable.
+
+## Decision: Persist Temporal Values With Measurable Precision
+
+**Decision**: Persist `issue_date` as the domain `IssueDate` calendar date in a
+database `date` column without timezone conversion. Persist `authorized_at` as
+the domain `AuthorizedAt` instant/timestamp normalized to UTC in a database
+timestamp column. Rehydration tests compare `authorized_at` at microsecond
+precision or the selected database precision, whichever is lower.
+
+**Rationale**: `issue_date` is a document date, while `authorized_at` is an
+authorization timestamp. Distinguishing date and instant semantics keeps
+timezone handling testable without overengineering.
+
+**Alternatives considered**:
+
+- Persist both as strings: rejected because it weakens temporal validation.
+- Persist `issue_date` as a timestamp: rejected because it introduces timezone
+  concerns for a date-only concept.
+- Require nanosecond precision for `authorized_at`: rejected because common
+  relational databases may truncate timestamp precision.
 
 ## Decision: Defer Audit Event Table
 

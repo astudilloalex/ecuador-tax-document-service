@@ -8,81 +8,86 @@
 
 ## Requirement Completeness
 
-- [ ] CHK001 Are all required target tables documented with purpose, relationships, and validation rules? [Completeness, Spec §FR-001, Spec §FR-003, Data Model §Target Tables]
-- [ ] CHK002 Are required table and column naming rules complete for every database object introduced by this feature? [Completeness, Spec §NR-001, Spec §NR-004, Contract §Persistence Schema]
-- [ ] CHK003 Are repository capabilities fully specified for save, lookup by access key, lookup by issuance identity, and existence checks? [Completeness, Spec §FR-005, Contract §TaxDocumentRepository]
-- [ ] CHK004 Are sequence reservation requirements complete for reservation, availability, uniqueness, and exact repeated reservation behavior? [Completeness, Spec §FR-011, Spec §FR-012, Contract §SequenceNumberPort]
-- [ ] CHK005 Are transaction boundary requirements complete for both return-value and void application operations? [Completeness, Spec §FR-014, Contract §TransactionPort]
-- [ ] CHK006 Are persistence test requirement categories complete for mapping, rehydration, duplicates, sequence behavior, transaction behavior, and boundary rules? [Completeness, Spec §FR-018, Plan §Testing]
+- [x] CHK001 Are all required target tables documented with purpose, relationships, and validation rules? [Completeness, Spec §FR-001, Spec §FR-003, Data Model §Target Tables]
+- [x] CHK002 Are required table and column naming rules complete for every database object introduced by this feature? [Completeness, Spec §NR-001, Spec §NR-004, Contract §Persistence Schema]
+- [x] CHK003 Are repository capabilities fully specified for save, lookup by access key, lookup by issuance identity, and existence checks? [Completeness, Spec §FR-005, Contract §TaxDocumentRepository]
+- [x] CHK004 Are sequence reservation requirements complete for reservation, availability, uniqueness, and exact repeated reservation behavior? [Completeness, Spec §FR-011, Spec §FR-012, Contract §SequenceNumberPort]
+- [x] CHK005 Are transaction boundary requirements complete for both return-value and void application operations? [Completeness, Spec §FR-014, Contract §TransactionPort]
+- [x] CHK006 Are persistence test requirement categories complete for mapping, rehydration, duplicates, sequence behavior, transaction behavior, and boundary rules? [Completeness, Spec §FR-018, Plan §Testing]
 
 ## Requirement Clarity
 
-- [ ] CHK007 Is the expected behavior for duplicate `accessKey` saves unambiguous and stated as an application-facing duplicate conflict error? [Clarity, Spec §Clarifications, Spec §FR-009]
-- [ ] CHK008 Is the expected behavior for duplicate issuance identity saves unambiguous and stated as an application-facing duplicate conflict error? [Clarity, Spec §Clarifications, Spec §FR-010]
-- [ ] CHK009 Is exact repeated sequence reservation clearly distinguished from conflicting duplicate sequence reservation? [Clarity, Spec §Clarifications, Spec §FR-012, Research §Exact Repeated Sequence Reservation]
-- [ ] CHK010 Is `document_type` storage clearly defined as canonical `DocumentType` values rather than SRI numeric codes? [Clarity, Spec §FR-013, Data Model §IssuanceSequence, Data Model §TaxDocument]
-- [ ] CHK011 Is the domain rehydration requirement clear about preserved fields, allowed persisted states, and framework-free domain constraints? [Clarity, Spec §FR-006, Spec §FR-007, Research §Domain-Safe Rehydration]
-- [ ] CHK012 Is the invalid authorization combination rule clear enough to identify which persisted combinations must be rejected? [Clarity, Spec §FR-008, Contract §Persistence Error Translation]
+- [x] CHK007 Is the expected behavior for duplicate `accessKey` saves unambiguous and stated as an application-facing duplicate conflict error? [Clarity, Spec §Clarifications, Spec §FR-009]
+- [x] CHK008 Is the expected behavior for duplicate issuance identity saves unambiguous and stated as an application-facing duplicate conflict error? [Clarity, Spec §Clarifications, Spec §FR-010]
+- [x] CHK009 Is exact repeated sequence reservation clearly distinguished from conflicting duplicate sequence reservation? [Clarity, Spec §Clarifications, Spec §FR-012, Research §Exact Repeated Sequence Reservation]
+- [x] CHK010 Is `document_type` storage clearly defined as canonical `DocumentType` values rather than SRI numeric codes? [Clarity, Spec §FR-013, Data Model §IssuanceSequence, Data Model §TaxDocument]
+- [x] CHK011 Is the domain rehydration requirement clear about preserved fields, allowed persisted states, and framework-free domain constraints? [Clarity, Spec §FR-006, Spec §FR-007, Research §Domain-Safe Rehydration]
+- [x] CHK012 Is the invalid authorization combination rule clear enough to identify which persisted combinations must be rejected? [Clarity, Spec §FR-008, Contract §Persistence Error Translation]
 
 ## Requirement Consistency
 
-- [ ] CHK013 Are the spec, plan, data model, and schema contract consistent on the minimum table set and deferred `tax_document_audit_events` table? [Consistency, Spec §FR-003, Spec §FR-020, Plan §Scale/Scope, Data Model §Deferred Data]
-- [ ] CHK014 Are source layout requirements consistent between the spec scope boundaries and the plan project structure? [Consistency, Spec §AR-001, Plan §Project Structure]
-- [ ] CHK015 Are port responsibilities consistent with the existing 002 application port contracts and the 003 persistence port contract? [Consistency, Spec §FR-005, Spec §FR-011, Contract §Persistence Port Implementations]
-- [ ] CHK016 Are Clean Architecture boundary requirements consistent across the constitution check, layer design, and DTO mapping flow? [Consistency, Plan §Constitution Check, Plan §Layer and Boundary Design, Spec §AR-003]
-- [ ] CHK017 Are SRI isolation requirements consistent across the spec, research decisions, and schema contract? [Consistency, Spec §AR-008, Research §Store Canonical Document Type Values, Contract §Persistence Schema]
-- [ ] CHK018 Are deferred PFV decisions consistently represented in spec, plan, research, data model, and contracts? [Consistency, Spec §Pending Functional Validations, Plan §Pending Functional Validations, Data Model §Deferred Data]
+- [x] CHK013 Are the spec, plan, data model, and schema contract consistent on the minimum table set and deferred `tax_document_audit_events` table? [Consistency, Spec §FR-003, Spec §FR-020, Plan §Scale/Scope, Data Model §Deferred Data]
+- [x] CHK014 Are source layout requirements consistent between the spec scope boundaries and the plan project structure? [Consistency, Spec §AR-001, Plan §Project Structure]
+- [x] CHK015 Are port responsibilities consistent with the existing 002 application port contracts and the 003 persistence port contract? [Consistency, Spec §FR-005, Spec §FR-011, Contract §Persistence Port Implementations]
+- [x] CHK016 Are Clean Architecture boundary requirements consistent across the constitution check, layer design, and DTO mapping flow? [Consistency, Plan §Constitution Check, Plan §Layer and Boundary Design, Spec §AR-003]
+- [x] CHK017 Are SRI isolation requirements consistent across the spec, research decisions, and schema contract? [Consistency, Spec §AR-008, Research §Store Canonical Document Type Values, Contract §Persistence Schema]
+- [x] CHK018 Are deferred PFV decisions consistently represented in spec, plan, research, data model, and contracts? [Consistency, Spec §Pending Functional Validations, Plan §Pending Functional Validations, Data Model §Deferred Data]
 
 ## Acceptance Criteria Quality
 
-- [ ] CHK019 Are success criteria measurable for persistence preservation of access key, issuance identity, state, authorization number, and authorization timestamp? [Measurability, Spec §SC-002]
-- [ ] CHK020 Are success criteria measurable for invalid authorization data rejection? [Measurability, Spec §SC-003]
-- [ ] CHK021 Are success criteria measurable for duplicate access key and duplicate issuance identity conflict behavior? [Measurability, Spec §SC-004]
-- [ ] CHK022 Are success criteria measurable for sequence reservation idempotency and conflicting duplicate prevention? [Measurability, Spec §SC-005]
-- [ ] CHK023 Are architecture success criteria objective enough to evaluate domain/application independence from persistence frameworks? [Measurability, Spec §SC-006, Plan §Post-Design Constitution Check]
-- [ ] CHK024 Are scope exclusion success criteria objective enough to evaluate absence of REST, SRI, XML, queue, webhook, and document-specific issuance work? [Measurability, Spec §SC-007]
+- [x] CHK019 Are success criteria measurable for persistence preservation of access key, issuance identity, state, authorization number, and authorization timestamp? [Measurability, Spec §SC-002]
+- [x] CHK020 Are success criteria measurable for invalid authorization data rejection? [Measurability, Spec §SC-003]
+- [x] CHK021 Are success criteria measurable for duplicate access key and duplicate issuance identity conflict behavior? [Measurability, Spec §SC-004]
+- [x] CHK022 Are success criteria measurable for sequence reservation idempotency and conflicting duplicate prevention? [Measurability, Spec §SC-005]
+- [x] CHK023 Are architecture success criteria objective enough to evaluate domain/application independence from persistence frameworks? [Measurability, Spec §SC-006, Plan §Post-Design Constitution Check]
+- [x] CHK024 Are scope exclusion success criteria objective enough to evaluate absence of REST, SRI, XML, queue, webhook, and document-specific issuance work? [Measurability, Spec §SC-007]
 
 ## Scenario Coverage
 
-- [ ] CHK025 Are primary persistence scenarios covered for saving, loading by access key, and loading by issuance identity? [Coverage, Spec §User Story 1, Contract §TaxDocumentRepository]
-- [ ] CHK026 Are alternate lookup scenarios covered for missing records and empty optional results? [Coverage, Contract §TaxDocumentRepository, Gap]
-- [ ] CHK027 Are duplicate conflict scenarios covered for both pre-save checks and database-enforced races after earlier checks? [Coverage, Spec §Edge Cases, Contract §Persistence Error Translation]
-- [ ] CHK028 Are sequence reservation scenarios covered for first reservation, exact repeated reservation, and unavailable conflicting reservations? [Coverage, Spec §User Story 3, Contract §SequenceNumberPort]
-- [ ] CHK029 Are transaction scenarios covered for application-facing operation boundaries and failure translation? [Coverage, Spec §FR-014, Contract §TransactionPort, Contract §Persistence Error Translation]
-- [ ] CHK030 Are migration documentation scenarios covered for target tables, columns, constraints, and PFV references? [Coverage, Spec §FR-015, Contract §Migration Documentation Updates]
+- [x] CHK025 Are primary persistence scenarios covered for saving, loading by access key, and loading by issuance identity? [Coverage, Spec §User Story 1, Contract §TaxDocumentRepository]
+- [x] CHK026 Are alternate lookup scenarios covered for missing records and empty optional results? [Coverage, Spec §Clarifications, Spec §SC-010, Contract §TaxDocumentRepository]
+- [x] CHK027 Are duplicate conflict scenarios covered for both pre-save checks and database-enforced races after earlier checks? [Coverage, Spec §Edge Cases, Contract §Persistence Error Translation]
+- [x] CHK028 Are sequence reservation scenarios covered for first reservation, exact repeated reservation, and unavailable conflicting reservations? [Coverage, Spec §User Story 3, Contract §SequenceNumberPort]
+- [x] CHK029 Are transaction scenarios covered for application-facing operation boundaries and failure translation? [Coverage, Spec §FR-014, Contract §TransactionPort, Contract §Persistence Error Translation]
+- [x] CHK030 Are migration documentation scenarios covered for target tables, columns, constraints, and PFV references? [Coverage, Spec §FR-015, Contract §Migration Documentation Updates]
 
 ## Edge Case Coverage
 
-- [ ] CHK031 Are edge case requirements defined for persisted authorized documents that must not use the new-document `PENDING` constructor path? [Edge Case, Spec §Edge Cases, Spec §FR-006]
-- [ ] CHK032 Are edge case requirements defined for authorization number without authorized state and authorized timestamp without authorization number? [Edge Case, Spec §Edge Cases, Spec §FR-008]
-- [ ] CHK033 Are edge case requirements defined for unknown or invalid canonical enum values stored in persistence? [Edge Case, Contract §Persistence Error Translation, Data Model §Persistence Entity Mapping]
-- [ ] CHK034 Are edge case requirements defined for missing or inconsistent issuer, establishment, and issuing point relationships? [Edge Case, Data Model §Relationships, Contract §Persistence Error Translation]
-- [ ] CHK035 Are edge case requirements defined for Spanish legacy table or column proposals in target schema work? [Edge Case, Spec §Edge Cases, Spec §NR-002]
-- [ ] CHK036 Are edge case requirements defined for requests to include XML paths, audit tables, or legacy compatibility views before PFV resolution? [Edge Case, Spec §PFV-PER-002, Spec §PFV-PER-003, Spec §PFV-PER-004]
+- [x] CHK031 Are edge case requirements defined for persisted authorized documents that must not use the new-document `PENDING` constructor path? [Edge Case, Spec §Edge Cases, Spec §FR-006]
+- [x] CHK032 Are edge case requirements defined for authorization number without authorized state and authorized timestamp without authorization number? [Edge Case, Spec §Edge Cases, Spec §FR-008]
+- [x] CHK033 Are edge case requirements defined for unknown or invalid canonical enum values stored in persistence? [Edge Case, Contract §Persistence Error Translation, Data Model §Persistence Entity Mapping]
+- [x] CHK034 Are edge case requirements defined for missing or inconsistent issuer, establishment, and issuing point relationships? [Edge Case, Data Model §Relationships, Contract §Persistence Error Translation]
+- [x] CHK035 Are edge case requirements defined for Spanish legacy table or column proposals in target schema work? [Edge Case, Spec §Edge Cases, Spec §NR-002]
+- [x] CHK036 Are edge case requirements defined for requests to include XML paths, audit tables, or legacy compatibility views before PFV resolution? [Edge Case, Spec §PFV-PER-002, Spec §PFV-PER-003, Spec §PFV-PER-004]
 
 ## Non-Functional Requirements
 
-- [ ] CHK037 Are performance-related requirements specified for indexed access key and issuance identity lookups without overreaching into tuning details? [Non-Functional, Plan §Performance Goals, Contract §Persistence Schema]
-- [ ] CHK038 Are concurrency and reliability requirements specified for duplicate prevention and sequence reservation beyond application-only checks? [Non-Functional, Research §Enforce Uniqueness, Spec §SC-005]
-- [ ] CHK039 Are security and sensitive data exclusions specified for persistence diagnostics and error handling? [Non-Functional, Spec §Sensitive Data Exclusions, Contract §Persistence Error Translation]
-- [ ] CHK040 Are testability requirements specified separately for infrastructure-free domain/application tests and infrastructure-backed persistence adapter tests? [Non-Functional, Spec §AR-002, Plan §Testing]
+- [x] CHK037 Are performance-related requirements specified for indexed access key and issuance identity lookups without overreaching into tuning details? [Non-Functional, Plan §Performance Goals, Contract §Persistence Schema]
+- [x] CHK038 Are concurrency and reliability requirements specified for duplicate prevention and sequence reservation beyond application-only checks? [Non-Functional, Research §Enforce Uniqueness, Spec §SC-005]
+- [x] CHK039 Are security and sensitive data exclusions specified for persistence diagnostics and error handling? [Non-Functional, Spec §Sensitive Data Exclusions, Contract §Persistence Error Translation]
+- [x] CHK040 Are testability requirements specified separately for infrastructure-free domain/application tests and infrastructure-backed persistence adapter tests? [Non-Functional, Spec §AR-002, Plan §Testing]
 
 ## Dependencies & Assumptions
 
-- [ ] CHK041 Are approved persistence dependencies documented without implying domain/application dependency on persistence frameworks? [Dependency, Plan §Technical Context, Spec §FR-016]
-- [ ] CHK042 Are assumptions about feature 002 port contracts and requested-value sequence reservation explicitly documented? [Assumption, Spec §Assumptions, Plan §Pending Functional Validations]
-- [ ] CHK043 Are deferred production data migration and compatibility concerns explicitly bounded outside this feature? [Assumption, Spec §Scope Boundaries, Research §Defer XML Paths and Legacy Compatibility Views]
-- [ ] CHK044 Are durable documentation dependencies on `docs/migration/` clear and traceable to the constitution? [Dependency, Spec §FR-015, Contract §Migration Documentation Updates, Constitution §Specification-Governed Migration]
+- [x] CHK041 Are approved persistence dependencies documented without implying domain/application dependency on persistence frameworks? [Dependency, Plan §Technical Context, Spec §FR-016]
+- [x] CHK042 Are assumptions about feature 002 port contracts and requested-value sequence reservation explicitly documented? [Assumption, Spec §Assumptions, Plan §Pending Functional Validations]
+- [x] CHK043 Are deferred production data migration and compatibility concerns explicitly bounded outside this feature? [Assumption, Spec §Scope Boundaries, Research §Defer XML Paths and Legacy Compatibility Views]
+- [x] CHK044 Are durable documentation dependencies on `docs/migration/` clear and traceable to the constitution? [Dependency, Spec §FR-015, Contract §Migration Documentation Updates, Constitution §Specification-Governed Migration]
 
 ## Ambiguities & Conflicts
 
-- [ ] CHK045 Are any remaining PFVs clearly marked as deferred and excluded from task generation unless explicitly resolved later? [Ambiguity, Spec §Pending Functional Validations, Plan §Pending Functional Validations]
-- [ ] CHK046 Are there any conflicts between allowing persistence configuration updates and forbidding bootstrap runtime behavior? [Conflict, Spec §AR-010, Plan §Project Structure]
-- [ ] CHK047 Are application-facing duplicate conflict and data integrity error categories defined consistently enough for future tasks to name errors without exposing database types? [Ambiguity, Contract §Persistence Error Translation, Spec §AR-006]
-- [ ] CHK048 Are the plan's approved source locations specific enough to prevent tasks from creating out-of-scope adapters? [Clarity, Plan §Project Structure, Spec §FR-019]
+- [x] CHK045 Are any remaining PFVs clearly marked as deferred and excluded from task generation unless explicitly resolved later? [Ambiguity, Spec §Pending Functional Validations, Plan §Pending Functional Validations]
+- [x] CHK046 Are there any conflicts between allowing persistence configuration updates and forbidding bootstrap runtime behavior? [Conflict, Spec §AR-010, Plan §Project Structure]
+- [x] CHK047 Are application-facing duplicate conflict and data integrity error categories defined consistently enough for future tasks to name errors without exposing database types? [Ambiguity, Contract §Persistence Error Translation, Spec §AR-006]
+- [x] CHK048 Are the plan's approved source locations specific enough to prevent tasks from creating out-of-scope adapters? [Clarity, Plan §Project Structure, Spec §FR-019]
+- [x] CHK049 Are repository save semantics explicitly defined for create, update, duplicate, and same-aggregate persistence behavior? [Clarity, Spec §FR-005, Plan §Idempotency, Contract §TaxDocumentRepository, Research §Repository `save` Creates or Updates Only the Same Aggregate]
+- [x] CHK050 Are temporal persistence rules defined for `issue_date` and `authorized_at`, including domain type, database type, timezone handling, and rehydration precision? [Completeness, Spec §FR-021, Plan §Temporal Rules, Data Model §TaxDocument Persistence Record, Contract §Temporal Columns]
+- [x] CHK051 Are primary key, foreign key, cascade, and delete/update restrictions defined for the persistence tables? [Completeness, Spec §FR-022, Plan §Schema Relationship and Constraint Design, Data Model §Schema Rules, Contract §Persistence Schema]
 
 ## Notes
 
 - Items are requirement-quality checks, not implementation verification steps.
 - Check items off as completed: `[x]`.
-- Add comments or findings inline during checklist review.
+- All checklist items are satisfied by explicit, traceable SPEC 003
+  documentation as of 2026-07-05.
+- No unresolved checklist findings remain.

@@ -20,6 +20,9 @@ flows."
 - Q: How should an exact repeated sequence reservation behave? → A: Exact repeated sequence reservation is idempotent and returns the existing `SequenceNumber`.
 - Q: What value should `tax_documents.document_type` store? → A: Store canonical document type values such as `INVOICE`, `CREDIT_NOTE`, and `WITHHOLDING`.
 - Q: How should invalid persisted authorization combinations be handled during rehydration? → A: Reject invalid persisted authorization combinations with an application-facing data integrity error.
+- Q: What does repository `save(TaxDocument)` mean? → A: `save` may create a new persisted document or update the same persisted aggregate, but must never silently overwrite another document with duplicate `accessKey` or duplicate issuance identity.
+- Q: What must missing repository lookups return? → A: `findByAccessKey` and `findByIssuanceIdentity` return empty results, while `existsByAccessKey` and `existsByIssuanceIdentity` return `false`.
+- Q: What temporal persistence rules apply? → A: `issue_date` uses the domain issue date as a calendar date, and `authorized_at` uses an instant/timestamp normalized to UTC with microsecond-level rehydration precision.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -52,6 +55,10 @@ authorization information without exposing persistence entities.
 3. **Given** application code calls repository methods, **When** method
    signatures are reviewed, **Then** they expose only domain or application
    models and never persistence entities or database-specific types.
+4. **Given** no persisted tax document exists for an access key or issuance
+   identity, **When** repository lookup or existence operations are used,
+   **Then** find operations return an empty result and existence operations
+   return `false`.
 
 ---
 
@@ -161,6 +168,14 @@ documentation is updated.
   existence check returned false.
 - Two sequence reservations request the same issuer, establishment, issuing
   point, document type, and sequence number.
+- An exact repeated sequence reservation is requested for an already reserved
+  issuer, document type, establishment, issuing point, and sequence value.
+- A sequence reservation collides with an existing reservation that does not
+  represent the same reservation identity.
+- A persisted document contains an unknown canonical document type, document
+  state, authorization state, or issuance mode value.
+- A persisted document has missing or inconsistent issuer, establishment, or
+  issuing point relationships.
 - A future task attempts to place persistence entities in the domain or
   application layer.
 - A future task attempts to create REST, SRI, XML generation, queue, webhook,
@@ -221,11 +236,24 @@ This architecture and infrastructure enabler excludes:
 - **FR-005**: The feature MUST implement the application-facing
   `TaxDocumentRepository` contract so future use cases can save a
   `TaxDocument`, load by `AccessKey`, load by issuance identity, check
-  existence by `AccessKey`, and check existence by issuance identity.
+  existence by `AccessKey`, and check existence by issuance identity. `save`
+  MAY create a new persisted document when no matching record exists and MAY
+  update the same persisted aggregate when the same tax document identity
+  already exists. `save` MUST NOT silently overwrite a different persisted tax
+  document with a duplicate `accessKey` or duplicate issuance identity.
+  Duplicate `accessKey` and duplicate issuance identity conditions MUST be
+  translated into application-facing duplicate conflict errors. Repository
+  missing-record behavior MUST be explicit:
+  `findByAccessKey(accessKey)` and `findByIssuanceIdentity(identity)` MUST
+  return an empty optional/result when no persisted tax document exists, and
+  `existsByAccessKey(accessKey)` and `existsByIssuanceIdentity(identity)` MUST
+  return `false` when no persisted tax document exists.
 - **FR-006**: The feature MUST support rehydrating a persisted `TaxDocument`
   with persisted `DocumentState`, `AuthorizationState`, optional
   `AuthorizationNumber`, optional `AuthorizedAt`, `IssueDate`,
-  `IssuanceMode`, and optional `externalRequestId`.
+  `IssuanceMode`, and optional `externalRequestId`, while preserving
+  `AccessKey`, `DocumentType`, `Issuer`, `Establishment`, `IssuingPoint`, and
+  `SequenceNumber`.
 - **FR-007**: The rehydration mechanism MUST preserve domain invariants, MUST
   allow persisted states other than `PENDING`, MUST NOT expose persistence
   entities to the domain, and MUST NOT add framework annotations to domain
@@ -234,7 +262,11 @@ This architecture and infrastructure enabler excludes:
   authorization combinations with an application-facing data integrity error,
   including authorization number or authorization timestamp combinations that
   are inconsistent with `DocumentState.AUTHORIZED` and
-  `AuthorizationState.AUTHORIZED`.
+  `AuthorizationState.AUTHORIZED`. It MUST reject: authorization number present
+  when authorization state is not `AUTHORIZED`, authorized timestamp present
+  without authorization number, authorized state without authorization number,
+  authorized state without authorized timestamp, unknown canonical document
+  type, unknown document state, and unknown authorization state.
 - **FR-009**: The persistence foundation MUST enforce uniqueness for
   `accessKey` and MUST reject duplicate `accessKey` saves with an
   application-facing duplicate conflict error.
@@ -248,7 +280,10 @@ This architecture and infrastructure enabler excludes:
 - **FR-012**: Sequence reservation MUST prevent conflicting duplicate
   reservations. An exact repeated reservation for the same issuer,
   establishment, issuing point, document type, and sequence value MUST be
-  idempotent and return the existing domain `SequenceNumber`.
+  idempotent and return the existing domain `SequenceNumber`. A conflicting
+  duplicate sequence reservation MUST fail with an application-facing conflict
+  error. Database uniqueness and transaction behavior MUST be part of the
+  reliability guarantee; application-only checks are insufficient.
 - **FR-013**: `tax_documents.document_type` and `issuance_sequences.document_type`
   MUST store canonical `DocumentType` values such as `INVOICE`, `CREDIT_NOTE`,
   `DEBIT_NOTE`, `WAYBILL`, and `WITHHOLDING`. Target persistence tables MUST
@@ -256,7 +291,15 @@ This architecture and infrastructure enabler excludes:
 - **FR-014**: The persistence foundation MUST implement transaction boundaries
   through `TransactionPort` or an equivalent application-facing transaction
   abstraction without exposing persistence transaction types to domain or
-  application code.
+  application code. Persistence adapters MUST translate database and framework
+  failures into stable application-facing error categories, including duplicate
+  access key conflict, duplicate issuance identity conflict, duplicate or
+  unavailable sequence reservation conflict, invalid persisted tax document
+  state, invalid persistence relationship, generic persistence failure, and
+  transaction failure. Contracts outside `adapter.out.persistence` MUST NOT
+  expose `SQLException`, `PersistenceException`, `ConstraintViolationException`,
+  Hibernate exceptions, Panache exceptions, PostgreSQL-specific exceptions, or
+  equivalent persistence-specific types.
 - **FR-015**: The persistence foundation MUST update durable migration
   documentation with legacy-to-target table and column mappings for all
   database objects introduced by this feature.
@@ -278,6 +321,17 @@ This architecture and infrastructure enabler excludes:
 - **FR-020**: The optional `tax_document_audit_events` table MUST NOT be added
   unless the plan explicitly justifies why audit persistence belongs in this
   foundation instead of a future audit adapter specification.
+- **FR-021**: Temporal persistence rules MUST be explicit and measurable:
+  `issue_date` represents the existing domain `IssueDate` as a database
+  `date` without timezone conversion, while `authorized_at` represents the
+  existing domain `AuthorizedAt` as a database timestamp normalized to UTC.
+  Rehydration tests MUST compare `authorized_at` values at microsecond
+  precision or the database-supported precision selected by the plan, whichever
+  is lower.
+- **FR-022**: Target schema documentation MUST define primary keys, foreign
+  keys, unique constraints, important indexes, relationship rules, and
+  delete/update restrictions for `issuers`, `establishments`,
+  `issuing_points`, `issuance_sequences`, and `tax_documents`.
 
 ### Architectural Requirements
 
@@ -337,6 +391,9 @@ This architecture and infrastructure enabler excludes:
 - **NR-007**: Legacy compatibility views for Spanish table names are out of
   scope for this feature unless a later compatibility specification approves a
   bounded exception.
+- **NR-008**: Target temporal columns MUST use English canonical names:
+  `issue_date` for the persisted issue date and `authorized_at` for the
+  persisted authorization timestamp.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -387,6 +444,7 @@ Functional Validation.
 | PFV-PER-002 | Legacy table compatibility | Should the target schema support compatibility views for legacy table names? | Deferred to a migration or compatibility specification. This feature must not create compatibility views. |
 | PFV-PER-003 | Historical XML paths | Should XML path fields be stored in `tax_documents` or a separate XML storage table? | Deferred to an XML storage specification. This feature must not persist XML paths unless the plan proves they are required for repository identity. |
 | PFV-PER-004 | Audit persistence | Should audit events be stored in this foundation or deferred to an audit adapter specification? | Deferred by default. `tax_document_audit_events` may be included only if the plan justifies audit persistence as necessary for this foundation and keeps it inside persistence scope. |
+| PFV-PER-005 | Auto-numbering policy | Should future issuance use cases auto-generate the next sequence number when none is requested? | Deferred to a future numbering policy or document-specific issuance specification. This feature must not generate automatic numbering tasks. |
 
 ## Idempotency and Audit Requirements *(include if feature is critical)*
 
@@ -437,6 +495,11 @@ passwords, or sensitive configuration values.
   internal document type value.
 - **SC-009**: Durable migration documentation contains target table and column
   mappings for 100% of database objects introduced by this feature.
+- **SC-010**: Repository contract validation proves missing `find` operations
+  return empty results and missing `exists` operations return `false`.
+- **SC-011**: Temporal persistence validation proves `issue_date` rehydrates as
+  the same calendar date and `authorized_at` rehydrates as the same UTC instant
+  at the documented precision.
 
 ## Assumptions
 

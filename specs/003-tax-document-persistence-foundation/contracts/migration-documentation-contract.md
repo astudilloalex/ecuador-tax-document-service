@@ -22,8 +22,13 @@ The documentation must include:
 - All target columns introduced by the migration
 - Uniqueness constraints that define `access_key`, issuance identity, and
   sequence reservation behavior
+- Primary key, foreign key, important index, relationship, and delete/update
+  restriction summaries for each target table
+- Temporal mappings for `issue_date` and `authorized_at`, including database
+  type and timezone/precision rules
 - PFV references for deferred compatibility views, XML paths, and audit
   persistence
+- PFV reference for deferred auto-numbering policy
 
 ## Classification Rules
 
@@ -34,6 +39,7 @@ The documentation must include:
 | Legacy compatibility views | Legacy compatibility concept, deferred |
 | XML path persistence | Pending Functional Validation |
 | Audit table | Pending Functional Validation unless plan later includes it |
+| Auto-numbering policy | Pending Functional Validation / future specification |
 
 ## Forbidden Documentation Outcomes
 
@@ -44,6 +50,6 @@ The documentation must include:
 
 ## Traceability
 
-- Spec: `FR-015`, `NR-005`, `SC-009`
+- Spec: `FR-015`, `FR-021`, `FR-022`, `NR-005`, `SC-009`, `SC-011`
 - Constitution: Specification-Governed Migration
 - Architecture: Durable documentation locations

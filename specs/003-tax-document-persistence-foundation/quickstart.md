@@ -77,6 +77,10 @@ Expected result:
   - `tax_documents`
 - Table and column names use English lowercase snake_case.
 - `document_type` stores canonical target values, not SRI numeric codes.
+- Primary keys, foreign keys, unique constraints, important indexes, and
+  delete/update restrictions are present for required tables.
+- `issue_date` is represented as a date and `authorized_at` is represented as a
+  UTC-normalized timestamp.
 
 ### 5. Verify Forbidden Scope
 
@@ -95,14 +99,29 @@ Expected persistence adapter test coverage:
 
 - Save and load `TaxDocument` by `AccessKey`.
 - Load by issuance identity.
+- Missing `findByAccessKey` and `findByIssuanceIdentity` return empty results.
+- Missing `existsByAccessKey` and `existsByIssuanceIdentity` return `false`.
+- `save` creates a new persisted document when no matching record exists.
+- `save` updates the same persisted aggregate when the same tax document
+  identity already exists.
+- `save` never silently overwrites another document with a duplicate
+  `accessKey` or duplicate issuance identity.
 - Rehydrate authorized documents preserving `authorizationNumber` and
   `authorizedAt`.
 - Reject invalid persisted authorization combinations with data integrity
   errors.
+- Reject unknown canonical document type, document state, authorization state,
+  and issuance mode values with data integrity errors.
+- Reject missing or inconsistent issuer, establishment, and issuing point
+  relationships with data integrity errors.
+- Rehydrate `issue_date` as the same calendar date and `authorized_at` at the
+  documented UTC precision.
 - Reject duplicate `accessKey` saves with duplicate conflict errors.
 - Reject duplicate issuance identity saves with duplicate conflict errors.
 - Return existing `SequenceNumber` for exact repeated sequence reservation.
-- Return unavailable for reserved sequence values.
+- Fail conflicting duplicate sequence reservations with application-facing
+  sequence reservation conflict errors.
+- Return unavailable for reserved sequence values through availability checks.
 - Execute repository operations inside `TransactionPort` boundaries.
 
 ### 7. Verify Migration Documentation
@@ -117,17 +136,18 @@ Expected result:
 - All introduced target tables and key columns are documented in
   `docs/migration/legacy-to-target-terminology.md`.
 - Each introduced database object is classified as a Target database object.
-- Deferred compatibility, XML path, and audit persistence decisions reference
-  the active PFV IDs.
+- Deferred compatibility, XML path, audit persistence, production data
+  migration, and auto-numbering policy decisions reference the active PFV IDs or
+  explicit out-of-scope sections.
 
 ## Handoff
 
 Before task generation, verify that:
 
-- [ ] `plan.md`, `research.md`, `data-model.md`, contracts, and `quickstart.md`
+- [x] `plan.md`, `research.md`, `data-model.md`, contracts, and `quickstart.md`
   exist.
-- [ ] No `NEEDS CLARIFICATION` markers remain.
-- [ ] No task will create REST, SRI, XML storage, queue, webhook, or bootstrap
+- [x] No unresolved clarification markers remain.
+- [x] No task will create REST, SRI, XML storage, queue, webhook, or bootstrap
   runtime behavior.
-- [ ] Deferred PFVs remain deferred unless a later plan explicitly resolves
+- [x] Deferred PFVs remain deferred unless a later plan explicitly resolves
   them.
