@@ -12,6 +12,15 @@ Architecture outbound adapters, without creating REST endpoints, SRI adapters,
 XML generation, queue adapters, webhook delivery, or document-specific issuance
 flows."
 
+## Clarifications
+
+### Session 2026-07-05
+
+- Q: How should duplicate `accessKey` or duplicate issuance identity saves behave? → A: Reject duplicate `accessKey` or issuance identity saves with an application-facing duplicate conflict error.
+- Q: How should an exact repeated sequence reservation behave? → A: Exact repeated sequence reservation is idempotent and returns the existing `SequenceNumber`.
+- Q: What value should `tax_documents.document_type` store? → A: Store canonical document type values such as `INVOICE`, `CREDIT_NOTE`, and `WITHHOLDING`.
+- Q: How should invalid persisted authorization combinations be handled during rehydration? → A: Reject invalid persisted authorization combinations with an application-facing data integrity error.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Persist and Load Tax Documents (Priority: P1)
@@ -59,18 +68,20 @@ duplicate legal document numbers and make retries predictable.
 **Independent Test**: Persist one tax document, attempt to save another with
 the same access key, and attempt to save another with the same issuer,
 document type, establishment, issuing point, and sequence number. Verify that
-the persistence foundation rejects or reports each duplicate according to the
-repository contract.
+the persistence foundation rejects each duplicate with an application-facing
+duplicate conflict error.
 
 **Acceptance Scenarios**:
 
 1. **Given** a tax document already exists for an `accessKey`, **When** another
    tax document with the same `accessKey` is saved, **Then** the persistence
-   foundation rejects or reports the duplicate.
+   foundation rejects the duplicate with an application-facing duplicate
+   conflict error.
 2. **Given** a tax document already exists for an issuer, document type,
    establishment, issuing point, and sequence number, **When** another tax
    document with the same issuance identity is saved, **Then** the persistence
-   foundation rejects or reports the duplicate.
+   foundation rejects the duplicate with an application-facing duplicate
+   conflict error.
 3. **Given** duplicate checks are performed before a save, **When** the
    application asks whether an access key or issuance identity exists, **Then**
    the result is accurate for persisted documents.
@@ -97,10 +108,9 @@ number, and verify that availability checks reflect reservations.
    **When** it is reserved through `SequenceNumberPort`, **Then** the
    reservation is recorded and returned as a domain `SequenceNumber`.
 2. **Given** a sequence number is already reserved for the same issuer,
-   establishment, issuing point, and document type, **When** the same value is
-   requested again, **Then** the adapter behaves idempotently for the same
-   reservation intent or rejects the duplicate according to the defined
-   contract.
+   establishment, issuing point, document type, and sequence value, **When**
+   the same value is requested again for the same reservation identity, **Then**
+   the adapter returns the existing domain `SequenceNumber` idempotently.
 3. **Given** application code checks sequence availability, **When** the value
    is already reserved, **Then** the port reports that the value is not
    available for a conflicting reservation.
@@ -141,8 +151,10 @@ documentation is updated.
 - A persisted authorized document must be rehydrated without running the
   new-document constructor path that always starts in `PENDING`.
 - A persisted document has `authorizationNumber` without an authorized document
-  state or authorization state.
-- A persisted document has `authorizedAt` without an authorization number.
+  state or authorization state; rehydration must reject it with an
+  application-facing data integrity error.
+- A persisted document has `authorizedAt` without an authorization number;
+  rehydration must reject it with an application-facing data integrity error.
 - A duplicate access key is detected during save after an earlier existence
   check returned false.
 - A duplicate issuance identity is detected during save after an earlier
@@ -218,40 +230,52 @@ This architecture and infrastructure enabler excludes:
   allow persisted states other than `PENDING`, MUST NOT expose persistence
   entities to the domain, and MUST NOT add framework annotations to domain
   classes.
-- **FR-008**: The persistence foundation MUST enforce uniqueness for
-  `accessKey`.
-- **FR-009**: The persistence foundation MUST enforce uniqueness for the
+- **FR-008**: The rehydration mechanism MUST reject invalid persisted
+  authorization combinations with an application-facing data integrity error,
+  including authorization number or authorization timestamp combinations that
+  are inconsistent with `DocumentState.AUTHORIZED` and
+  `AuthorizationState.AUTHORIZED`.
+- **FR-009**: The persistence foundation MUST enforce uniqueness for
+  `accessKey` and MUST reject duplicate `accessKey` saves with an
+  application-facing duplicate conflict error.
+- **FR-010**: The persistence foundation MUST enforce uniqueness for the
   issuance identity composed of issuer, document type, establishment, issuing
-  point, and sequence number.
-- **FR-010**: The persistence foundation MUST implement sequence reservation
+  point, and sequence number, and MUST reject duplicate issuance identity saves
+  with an application-facing duplicate conflict error.
+- **FR-011**: The persistence foundation MUST implement sequence reservation
   through `SequenceNumberPort` for the issuer, establishment, issuing point,
   document type, and requested sequence value.
-- **FR-011**: Sequence reservation MUST prevent conflicting duplicate
-  reservations and MUST define whether an exact repeated reservation is
-  idempotent or rejected before task generation.
-- **FR-012**: The persistence foundation MUST implement transaction boundaries
+- **FR-012**: Sequence reservation MUST prevent conflicting duplicate
+  reservations. An exact repeated reservation for the same issuer,
+  establishment, issuing point, document type, and sequence value MUST be
+  idempotent and return the existing domain `SequenceNumber`.
+- **FR-013**: `tax_documents.document_type` and `issuance_sequences.document_type`
+  MUST store canonical `DocumentType` values such as `INVOICE`, `CREDIT_NOTE`,
+  `DEBIT_NOTE`, `WAYBILL`, and `WITHHOLDING`. Target persistence tables MUST
+  NOT store SRI numeric document codes as the internal document type value.
+- **FR-014**: The persistence foundation MUST implement transaction boundaries
   through `TransactionPort` or an equivalent application-facing transaction
   abstraction without exposing persistence transaction types to domain or
   application code.
-- **FR-013**: The persistence foundation MUST update durable migration
+- **FR-015**: The persistence foundation MUST update durable migration
   documentation with legacy-to-target table and column mappings for all
   database objects introduced by this feature.
-- **FR-014**: Domain and application layers MUST NOT depend on JPA, Hibernate,
+- **FR-016**: Domain and application layers MUST NOT depend on JPA, Hibernate,
   Panache, PostgreSQL, Flyway, JDBC, SQL, Quarkus persistence APIs, or
   persistence annotations.
-- **FR-015**: Repository methods and sequence methods MUST expose only
+- **FR-017**: Repository methods and sequence methods MUST expose only
   domain/application models or primitive values already accepted by the
   application port contracts, never persistence entities or database-specific
   result types.
-- **FR-016**: Persistence adapter tests MUST verify tax document mapping,
+- **FR-018**: Persistence adapter tests MUST verify tax document mapping,
   rehydration, duplicate access key handling, duplicate issuance identity
-  handling, sequence reservation behavior, sequence availability behavior, and
-  transaction behavior.
-- **FR-017**: The feature MUST NOT create REST resources, REST DTOs, public API
+  handling, invalid persisted authorization data handling, sequence reservation
+  behavior, sequence availability behavior, and transaction behavior.
+- **FR-019**: The feature MUST NOT create REST resources, REST DTOs, public API
   endpoints, SRI adapters, SRI XML/SOAP DTOs, XML generation, XML signing, XML
   storage adapters, queue adapters, webhook adapters, or document-specific
   issuance flows.
-- **FR-018**: The optional `tax_document_audit_events` table MUST NOT be added
+- **FR-020**: The optional `tax_document_audit_events` table MUST NOT be added
   unless the plan explicitly justifies why audit persistence belongs in this
   foundation instead of a future audit adapter specification.
 
@@ -277,9 +301,10 @@ This architecture and infrastructure enabler excludes:
 - **AR-007**: Transaction handling MUST be available to application
   orchestration through `TransactionPort` and MUST NOT require use cases to
   import persistence transaction objects.
-- **AR-008**: SRI document codes MAY be stored only as external contract values
-  when explicitly mapped from canonical `DocumentType`; they MUST NOT drive
-  table names, column names, class names, or internal model names.
+- **AR-008**: SRI document codes MUST remain external contract values mapped
+  from canonical `DocumentType`; they MUST NOT be stored as the internal value
+  in target persistence tables and MUST NOT drive table names, column names,
+  class names, or internal model names.
 - **AR-009**: The feature MUST preserve DTO separation: persistence entities
   belong only to the persistence adapter, domain objects remain persistence
   ignorant, and application ports return domain/application models only.
@@ -302,7 +327,8 @@ This architecture and infrastructure enabler excludes:
   `issuer_id`, `establishment_id`, `issuing_point_id`, `document_type`,
   `sequence_number`, `access_key`, `issue_date`, `document_state`,
   `authorization_state`, `authorization_number`, `authorized_at`,
-  `issuance_mode`, and `external_request_id`.
+  `issuance_mode`, and `external_request_id`. `document_type` stores canonical
+  document type values, not SRI numeric codes.
 - **NR-005**: Every database object introduced by this feature MUST be
   classified as a Target database object in `docs/migration/`.
 - **NR-006**: Unclear table names, column names, relationship names, or
@@ -324,12 +350,13 @@ This architecture and infrastructure enabler excludes:
   issuing point within an establishment. It maps to the domain `IssuingPoint`
   concept and must relate to one establishment.
 - **IssuanceSequence persistence record**: Target database representation of a
-  sequence reservation for one issuer, establishment, issuing point, document
-  type, and sequence number.
+  sequence reservation for one issuer, establishment, issuing point, canonical
+  document type, and sequence number.
 - **TaxDocument persistence record**: Target database representation of the
-  common tax document lifecycle state, authorization state, access key, issue
-  date, issuance mode, optional external request identifier, optional
-  authorization number, and optional authorization timestamp.
+  common tax document lifecycle state, canonical document type, authorization
+  state, access key, issue date, issuance mode, optional external request
+  identifier, optional authorization number, and optional authorization
+  timestamp.
 - **TaxDocumentAuditEvent persistence record**: Optional target database
   representation of audit events. It is deferred unless the plan explicitly
   justifies including audit persistence in this foundation.
@@ -356,7 +383,7 @@ Functional Validation.
 
 | ID | Area | Question | Resolution for This Feature |
 |----|------|----------|-----------------------------|
-| PFV-PER-001 | Sequence reservation | Should sequence reservation increment automatically or reserve a requested value supplied by the caller? | This feature uses the existing `SequenceNumberPort` contract that reserves a requested value. Automatic increment behavior is deferred to future issuance use cases unless the plan validates and updates the port contract before tasks. |
+| PFV-PER-001 | Sequence reservation | Should sequence reservation increment automatically or reserve a requested value supplied by the caller? | This feature uses the existing `SequenceNumberPort` contract that reserves a requested value. Exact repeated reservation for the same reservation identity is idempotent and returns the existing `SequenceNumber`. Automatic increment behavior is deferred to future issuance use cases unless the plan validates and updates the port contract before tasks. |
 | PFV-PER-002 | Legacy table compatibility | Should the target schema support compatibility views for legacy table names? | Deferred to a migration or compatibility specification. This feature must not create compatibility views. |
 | PFV-PER-003 | Historical XML paths | Should XML path fields be stored in `tax_documents` or a separate XML storage table? | Deferred to an XML storage specification. This feature must not persist XML paths unless the plan proves they are required for repository identity. |
 | PFV-PER-004 | Audit persistence | Should audit events be stored in this foundation or deferred to an audit adapter specification? | Deferred by default. `tax_document_audit_events` may be included only if the plan justifies audit persistence as necessary for this foundation and keeps it inside persistence scope. |
@@ -389,18 +416,26 @@ passwords, or sensitive configuration values.
   common tax document preserves all required common fields, including access
   key, issuance identity, document state, authorization state, authorization
   number, and authorization timestamp.
-- **SC-003**: Duplicate access key and duplicate issuance identity scenarios
-  are detected in all required validation cases before the feature is accepted.
-- **SC-004**: Sequence reservation validation proves that conflicting duplicate
+- **SC-003**: Rehydration validation proves that invalid persisted
+  authorization combinations are rejected with application-facing data
+  integrity errors.
+- **SC-004**: Duplicate access key and duplicate issuance identity scenarios
+  are rejected with application-facing duplicate conflict errors in all required
+  validation cases before the feature is accepted.
+- **SC-005**: Sequence reservation validation proves that exact repeated
+  reservations return the existing `SequenceNumber` and conflicting duplicate
   sequence reservations cannot create two valid reservations for the same
   issuer, establishment, issuing point, document type, and sequence number.
-- **SC-005**: Architecture review finds zero persistence framework imports,
+- **SC-006**: Architecture review finds zero persistence framework imports,
   persistence annotations, database-specific types, or persistence adapter
   dependencies in domain and application source.
-- **SC-006**: Scope review finds zero REST resources, REST DTOs, SRI adapters,
+- **SC-007**: Scope review finds zero REST resources, REST DTOs, SRI adapters,
   XML generation artifacts, queue adapters, webhook adapters, or
   document-specific issuance flows introduced by this feature.
-- **SC-007**: Durable migration documentation contains target table and column
+- **SC-008**: Persistence adapter validation proves that target document type
+  storage uses canonical values and does not persist SRI numeric codes as the
+  internal document type value.
+- **SC-009**: Durable migration documentation contains target table and column
   mappings for 100% of database objects introduced by this feature.
 
 ## Assumptions
