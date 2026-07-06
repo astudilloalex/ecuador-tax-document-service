@@ -2,8 +2,9 @@
 
 This model defines target persistence records and their mapping to the existing
 domain/application model. It does not define REST DTOs, SRI XML/SOAP DTOs,
-queue models, webhook payloads, XML storage records, or production data
-migration.
+queue models, webhook payloads, XML storage records, production data
+migration, migration rollback/repair workflows, archive workflows, purge
+workflows, delete operations, or production correction workflows.
 
 ## Target Tables
 
@@ -311,15 +312,26 @@ Mapping rules:
 - The restore path must preserve access key, document type, issuer,
   establishment, issuing point, sequence number, issue date, document state,
   authorization state, authorization number, and authorized timestamp.
+- The restore path is limited to common persisted tax document state and must
+  not introduce document-specific issuance, SRI, XML, queue, webhook, archive,
+  purge, delete, or production correction behavior.
 - The restore path must not use the new-document constructor path that forces
   `PENDING` state for persisted historical documents.
 - Mappers translate canonical enum values by name and reject unknown values.
 - Mappers do not translate SRI XML/SOAP DTOs or SRI numeric codes.
 
-## Deferred Data
+## Deferred Data and Behavior
 
+- Automatic increment behavior for sequence assignment is deferred by
+  PFV-PER-001; this model stores requested-value reservations only.
+- Legacy compatibility views are deferred by PFV-PER-002.
 - XML paths and XML storage metadata are deferred by PFV-PER-003.
 - Audit event persistence is deferred by PFV-PER-004.
-- Legacy compatibility views are deferred by PFV-PER-002.
+- Auto-numbering policy is deferred by PFV-PER-005.
+- Migration failure handling, rollback playbooks, and persisted data repair
+  workflows are deferred by PFV-PER-006.
+- Archive, purge, delete, production data correction, and lifecycle correction
+  workflows are deferred by PFV-PER-007.
+- Production data migration is deferred by PFV-PER-008.
 - Invoice, credit note, debit note, withholding, and waybill line/tax details
   are out of scope for this foundation.

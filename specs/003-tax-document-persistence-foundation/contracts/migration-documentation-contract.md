@@ -26,8 +26,11 @@ The documentation must include:
   restriction summaries for each target table
 - Temporal mappings for `issue_date` and `authorized_at`, including database
   type and timezone/precision rules
-- PFV references for deferred compatibility views, XML paths, and audit
-  persistence
+- Legacy-to-target naming notes that explain approved English target names and
+  keep Spanish legacy names limited to migration documentation
+- PFV references for deferred compatibility views, XML paths, audit
+  persistence, production data migration, rollback/repair workflows, and
+  lifecycle correction behavior
 - PFV reference for deferred auto-numbering policy
 
 ## Classification Rules
@@ -40,6 +43,25 @@ The documentation must include:
 | XML path persistence | Pending Functional Validation |
 | Audit table | Pending Functional Validation unless plan later includes it |
 | Auto-numbering policy | Pending Functional Validation / future specification |
+| Production data migration | Pending Functional Validation / future data migration specification |
+| Migration rollback and repair workflows | Pending Functional Validation / future operations or migration specification |
+| Archive, purge, delete, and production correction workflows | Pending Functional Validation / future lifecycle, retention, or operations specification |
+
+## Deferred PFV References
+
+Migration documentation must reference the following deferred PFVs when
+describing excluded persistence or migration behavior:
+
+| PFV | Deferred Topic |
+|-----|----------------|
+| PFV-PER-001 | Automatic sequence increment behavior beyond requested-value reservation. |
+| PFV-PER-002 | Legacy compatibility views. |
+| PFV-PER-003 | Historical XML path storage. |
+| PFV-PER-004 | Audit persistence. |
+| PFV-PER-005 | Auto-numbering policy. |
+| PFV-PER-006 | Migration failure handling, rollback playbooks, and persisted data repair workflows. |
+| PFV-PER-007 | Archive, purge, delete, production correction, and lifecycle correction workflows. |
+| PFV-PER-008 | Production data migration. |
 
 ## Forbidden Documentation Outcomes
 

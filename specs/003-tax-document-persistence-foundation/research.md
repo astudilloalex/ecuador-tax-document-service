@@ -35,8 +35,30 @@ and separate from runtime adapter code.
   reviewable.
 - Manual database setup outside the repo: rejected because it would not satisfy
   Spec Kit traceability or reproducible validation.
-- Data migration scripts: deferred because production data migration is out of
-  scope.
+- Data migration scripts: deferred by PFV-PER-008 because production data
+  migration is out of scope.
+
+## Decision: Limit Persistence Dependencies to Adapter and Test Surfaces
+
+**Decision**: Persistence dependencies and configuration may support only the
+outbound persistence adapter, Flyway migrations, and persistence adapter tests.
+They must not introduce persistence framework imports, annotations, or runtime
+dependencies into the domain or application layers.
+
+**Rationale**: SPEC 003 introduces the first persistence boundary. Keeping
+dependencies at the adapter edge preserves Clean Architecture and prevents
+future task generation from treating persistence frameworks as application or
+domain dependencies.
+
+**Alternatives considered**:
+
+- Allow application ports to import persistence error or transaction types:
+  rejected because it would leak infrastructure inward.
+- Annotate domain objects for ORM mapping convenience: rejected by the
+  constitution and DTO separation rules.
+- Add bootstrap runtime wiring now: rejected because runtime bootstrap behavior
+  is outside this feature and configuration files are sufficient for the
+  persistence foundation.
 
 ## Decision: Store Canonical Document Type Values
 
@@ -139,7 +161,10 @@ idempotent return keeps the contract stable and supports retries.
 
 **Decision**: Add a framework-free rehydration mechanism, such as
 `TaxDocument.restore(...)`, that accepts persisted state and validates domain
-invariants without exposing persistence entities to domain code.
+invariants without exposing persistence entities to domain code. The restore
+path is limited to rehydrating common tax document state and does not add
+invoice, credit note, debit note, withholding, waybill, SRI, XML, queue,
+webhook, archive, purge, delete, or production correction behavior.
 
 **Rationale**: The existing constructor creates new documents in `PENDING`.
 Repository loading must preserve historical states, authorization state,
@@ -248,3 +273,56 @@ beyond common issuance identity and lifecycle state.
   storage specification.
 - Create Spanish legacy compatibility views now: rejected because compatibility
   exceptions require separate scope, owner, and expiration conditions.
+
+## Decision: Defer Migration Rollback and Repair Workflows
+
+**Decision**: Do not define migration failure handling, rollback playbooks, or
+persisted data repair workflows in SPEC 003. The feature requires versioned
+schema artifacts and validation documentation only.
+
+**Rationale**: Operational rollback and repair behavior depends on deployment,
+backup, release, and production data policies that are not part of this
+persistence foundation. Deferring this prevents task generation from inventing
+operations work without governance.
+
+**Alternatives considered**:
+
+- Define rollback scripts now: rejected because production deployment and
+  recovery policy is not established in this feature.
+- Add repair tooling now: rejected because persisted data repair workflows
+  require a dedicated operations or migration specification.
+- Ignore the topic: rejected because task generation needs an explicit
+  deferral to avoid guessing.
+
+## Decision: Defer Archive, Purge, Delete, and Production Correction Workflows
+
+**Decision**: Do not implement archive, purge, delete, production data
+correction, or lifecycle correction workflows in SPEC 003. The schema defines
+restrictive relationships and required persistence operations only.
+
+**Rationale**: Tax document records are auditable. Retention, deletion,
+correction, and lifecycle repair behavior require explicit policy, ownership,
+and legal review beyond the common persistence foundation.
+
+**Alternatives considered**:
+
+- Add hard deletes or cascade deletes now: rejected because they risk
+  accidental loss of auditable tax document state.
+- Add soft-delete columns now: rejected because retention and archive policy is
+  out of scope.
+- Allow repository lifecycle updates beyond required save semantics: rejected
+  because future document lifecycle features must define their own business
+  rules.
+
+## PFV Traceability Summary
+
+| PFV | Research Status |
+|-----|-----------------|
+| PFV-PER-001 | Requested-value sequence reservation is in scope; automatic increment behavior is deferred. |
+| PFV-PER-002 | Legacy compatibility views are deferred. |
+| PFV-PER-003 | Historical XML path storage is deferred. |
+| PFV-PER-004 | Audit event table implementation is deferred. |
+| PFV-PER-005 | Auto-numbering policy is deferred. |
+| PFV-PER-006 | Migration failure handling, rollback playbooks, and persisted data repair workflows are deferred. |
+| PFV-PER-007 | Archive, purge, delete, production correction, and lifecycle correction workflows are deferred. |
+| PFV-PER-008 | Production data migration is deferred. |

@@ -102,6 +102,10 @@ database migration file.
   restricted while dependent sequence or tax document rows exist.
 - Future archival, purge, or production correction behavior requires a
   separate specification.
+- Delete operations for tax documents, sequence reservations, issuers,
+  establishments, and issuing points are not repository behavior in SPEC 003.
+- Migration failure handling, rollback playbooks, and persisted data repair
+  workflows are deferred to a future operations or migration specification.
 
 ## Temporal Columns
 
@@ -119,6 +123,8 @@ database migration file.
 - Legacy compatibility views.
 - Document-specific line, tax, total, withholding, waybill, or PDF/RIDE tables.
 - Automatic next-number allocation policy.
+- Archive, purge, delete, production correction, rollback, or repair workflow
+  tables or columns.
 
 ## Traceability
 

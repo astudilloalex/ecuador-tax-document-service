@@ -24,6 +24,11 @@ Arc, JUnit, Quarkus JUnit, Testcontainers for PostgreSQL-backed adapter tests.
 Panache active-record style is not used for domain objects and is not needed
 for this foundation.
 
+Persistence dependencies and configuration are allowed only for the outbound
+persistence adapter, Flyway migrations, and persistence adapter tests. They do
+not authorize JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus
+persistence APIs, or framework annotations in the domain or application layers.
+
 **Storage**: PostgreSQL target schema managed by Flyway migrations under
 `src/main/resources/db/migration/`.
 
@@ -52,7 +57,9 @@ annotations. Target database names are English lowercase snake_case.
 **Scale/Scope**: Initial common issuance tables only:
 `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and
 `tax_documents`. `tax_document_audit_events`, XML path columns, compatibility
-views, and production data migration are deferred.
+views, production data migration, migration rollback/repair workflows,
+archive, purge, delete, production correction, and automatic numbering policy
+are deferred.
 
 **Temporal Rules**: `issue_date` persists the domain `IssueDate` as a database
 `date` without timezone conversion. `authorized_at` persists the domain
@@ -113,29 +120,21 @@ specs/003-tax-document-persistence-foundation/
 ### Source Code (repository root)
 
 ```text
-src/main/java/com/alexastudillo/taxdocument/
-├── domain/
-│   └── taxdocument/
-│       └── TaxDocument.java              # add restore path only
-├── application/
-│   └── port/out/
-│       └── existing ports                # signatures preserved unless task proves a minimal error type is needed
-└── adapter/
-    └── out/
-        └── persistence/
-            ├── entity/
-            ├── mapper/
-            ├── repository/
-            └── transaction/
+src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/
+├── entity/
+├── mapper/
+├── repository/
+└── transaction/
+
+src/main/java/com/alexastudillo/taxdocument/domain/taxdocument/
+└── TaxDocument.java                      # framework-free restore path only
 
 src/main/resources/
-├── application.properties                # persistence config only if required
+├── application.properties                # persistence configuration only if required
 └── db/migration/
     └── V1__create_tax_document_persistence_foundation.sql
 
 src/test/java/com/alexastudillo/taxdocument/
-├── domain/
-│   └── taxdocument/                      # restore invariant tests
 └── adapter/
     └── out/
         └── persistence/                  # adapter integration tests
@@ -143,11 +142,14 @@ src/test/java/com/alexastudillo/taxdocument/
 
 **Structure Decision**: The only domain change is the required
 `TaxDocument` rehydration mechanism from `FR-006` and `FR-007`. It must remain
-framework-free and must not import persistence entities. All persistence
-entities, mappers, query details, duplicate translation, and transaction
-integration belong to `adapter.out.persistence`. No inbound REST, outbound SRI,
-outbound storage, outbound queue, outbound webhook, or bootstrap package is
-created by this feature.
+framework-free, must not import persistence entities, and must not introduce
+document-specific issuance behavior. All persistence entities, mappers, query
+details, duplicate translation, and transaction integration belong to
+`adapter.out.persistence`. Allowed configuration changes are limited to
+`build.gradle.kts` and `src/main/resources/application.properties` when needed
+for persistence dependencies or tests. No inbound REST, outbound SRI, outbound
+storage, outbound queue, outbound webhook, or bootstrap package is created by
+this feature.
 
 ## Layer and Boundary Design
 
@@ -157,11 +159,13 @@ created by this feature.
 `IssuanceMode`. Add a domain-safe restore path that validates persisted
 authorization combinations and preserves existing invariants.
 
-**Application Use Cases**: None created. Existing output ports are implemented:
-`TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`. Any
-application-facing error type introduced for duplicate conflict or data
-integrity must live in the application layer and must not expose SQL,
-Hibernate, JPA, Flyway, or PostgreSQL types.
+**Application Use Cases**: None created. Existing output ports from
+`002-tax-document-issuance-foundation` are implemented:
+`TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`. SPEC 003
+clarifies persistence behavior for these ports but does not rename, redesign,
+or broaden them. Application-facing error categories are contract terms for
+adapter translation and must not expose SQL, Hibernate, JPA, Flyway,
+PostgreSQL, or other persistence-specific types inward.
 
 **Inbound REST Adapter**: Not applicable. No REST resources, request DTOs,
 response DTOs, transport validation, or HTTP error mapping are created.
@@ -214,6 +218,9 @@ are out of scope.
 | PFV-PER-003 | Historical XML paths are deferred to an XML storage specification. |
 | PFV-PER-004 | Audit persistence is deferred; `tax_document_audit_events` is not included in this foundation. |
 | PFV-PER-005 | Auto-numbering policy is deferred to a future numbering policy or document-specific issuance specification. |
+| PFV-PER-006 | Migration failure handling, rollback playbooks, and persisted data repair workflows are deferred to a future operations or migration specification. |
+| PFV-PER-007 | Archive, purge, delete, production data correction, and lifecycle correction workflows are deferred to a future lifecycle, retention, or operations specification. |
+| PFV-PER-008 | Production data migration is deferred to a future data migration specification. |
 
 ## Idempotency, Audit, and Error Handling
 
@@ -278,6 +285,12 @@ required tables.
 
 Cascade deletes are not part of this feature. Any future archival, purge, or
 production data correction behavior requires a separate specification.
+
+Migration failure handling, rollback playbooks, and persisted data repair
+workflows are not part of SPEC 003 task generation. This feature may require
+versioned migration artifacts and validation documentation only; operational
+rollback, repair tooling, and recovery procedures require a future operations
+or migration specification.
 
 ## Complexity Tracking
 

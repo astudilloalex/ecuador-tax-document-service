@@ -5,6 +5,10 @@
 Define the adapter obligations for implementing existing application output
 ports through the outbound persistence adapter.
 
+This contract clarifies behavior for the ports approved by
+`002-tax-document-issuance-foundation`; it does not rename, redesign, or
+broaden those ports.
+
 ## Scope
 
 Included ports:
@@ -21,6 +25,8 @@ Excluded ports:
 - `WebhookPublisherPort`
 - `AuditLogPort`
 - Inbound REST input ports
+- Application port redesign
+- Archive, purge, delete, production correction, and migration repair workflows
 
 ## `TaxDocumentRepository`
 
@@ -47,7 +53,8 @@ Forbidden behavior:
 
 - Returning persistence entities.
 - Leaking JPA, Hibernate, JDBC, SQL, PostgreSQL, or Flyway exceptions.
-- Creating REST, SRI, XML, queue, or webhook behavior.
+- Creating REST, SRI, XML, storage, queue, webhook, bootstrap, archive, purge,
+  delete, production correction, or migration repair behavior.
 
 ### `findByAccessKey(AccessKey accessKey)`
 

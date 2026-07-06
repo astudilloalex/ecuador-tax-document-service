@@ -58,7 +58,7 @@
 - [x] CHK033 Are edge case requirements defined for unknown or invalid canonical enum values stored in persistence? [Edge Case, Contract §Persistence Error Translation, Data Model §Persistence Entity Mapping]
 - [x] CHK034 Are edge case requirements defined for missing or inconsistent issuer, establishment, and issuing point relationships? [Edge Case, Data Model §Relationships, Contract §Persistence Error Translation]
 - [x] CHK035 Are edge case requirements defined for Spanish legacy table or column proposals in target schema work? [Edge Case, Spec §Edge Cases, Spec §NR-002]
-- [x] CHK036 Are edge case requirements defined for requests to include XML paths, audit tables, or legacy compatibility views before PFV resolution? [Edge Case, Spec §PFV-PER-002, Spec §PFV-PER-003, Spec §PFV-PER-004]
+- [x] CHK036 Are edge case requirements defined for requests to include XML paths, audit tables, legacy compatibility views, migration rollback/repair, or lifecycle correction before PFV resolution? [Edge Case, Spec §PFV-PER-002, Spec §PFV-PER-003, Spec §PFV-PER-004, Spec §PFV-PER-006, Spec §PFV-PER-007]
 
 ## Non-Functional Requirements
 
@@ -71,12 +71,12 @@
 
 - [x] CHK041 Are approved persistence dependencies documented without implying domain/application dependency on persistence frameworks? [Dependency, Plan §Technical Context, Spec §FR-016]
 - [x] CHK042 Are assumptions about feature 002 port contracts and requested-value sequence reservation explicitly documented? [Assumption, Spec §Assumptions, Plan §Pending Functional Validations]
-- [x] CHK043 Are deferred production data migration and compatibility concerns explicitly bounded outside this feature? [Assumption, Spec §Scope Boundaries, Research §Defer XML Paths and Legacy Compatibility Views]
+- [x] CHK043 Are deferred production data migration and compatibility concerns explicitly bounded outside this feature? [Assumption, Spec §Scope Boundaries, Spec §PFV-PER-008, Research §Defer XML Paths and Legacy Compatibility Views]
 - [x] CHK044 Are durable documentation dependencies on `docs/migration/` clear and traceable to the constitution? [Dependency, Spec §FR-015, Contract §Migration Documentation Updates, Constitution §Specification-Governed Migration]
 
 ## Ambiguities & Conflicts
 
-- [x] CHK045 Are any remaining PFVs clearly marked as deferred and excluded from task generation unless explicitly resolved later? [Ambiguity, Spec §Pending Functional Validations, Plan §Pending Functional Validations]
+- [x] CHK045 Are any remaining PFVs clearly marked as deferred and excluded from task generation unless explicitly resolved later? [Ambiguity, Spec §Pending Functional Validations, Plan §Pending Functional Validations, Research §PFV Traceability Summary, Data Model §Deferred Data and Behavior]
 - [x] CHK046 Are there any conflicts between allowing persistence configuration updates and forbidding bootstrap runtime behavior? [Conflict, Spec §AR-010, Plan §Project Structure]
 - [x] CHK047 Are application-facing duplicate conflict and data integrity error categories defined consistently enough for future tasks to name errors without exposing database types? [Ambiguity, Contract §Persistence Error Translation, Spec §AR-006]
 - [x] CHK048 Are the plan's approved source locations specific enough to prevent tasks from creating out-of-scope adapters? [Clarity, Plan §Project Structure, Spec §FR-019]

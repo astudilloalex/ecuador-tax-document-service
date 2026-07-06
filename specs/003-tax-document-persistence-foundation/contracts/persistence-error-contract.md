@@ -7,19 +7,19 @@ to the application layer.
 
 ## Error Categories
 
-| Adapter Condition | Application-Facing Category | Notes |
-|-------------------|-----------------------------|-------|
-| Duplicate `access_key` | Duplicate conflict | Required by clarification and `FR-009`. |
-| Duplicate issuance identity | Duplicate conflict | Required by clarification and `FR-010`. |
-| Duplicate or unavailable sequence reservation | Sequence reservation conflict | Required by `FR-012`; exact repeated reservation remains idempotent. |
-| Invalid persisted authorization combination | Data integrity | Required by `FR-008`. |
-| Unknown canonical document type | Data integrity | Prevents invalid document type rehydration. |
-| Unknown document state | Data integrity | Prevents invalid state rehydration. |
-| Unknown authorization state | Data integrity | Prevents invalid authorization state rehydration. |
-| Unknown issuance mode | Data integrity | Prevents invalid issuance mode rehydration. |
-| Transaction failure | Persistence transaction failure | Must not expose framework transaction type. |
-| Foreign key, missing relationship, or inconsistent issuer/establishment/issuing point relationship | Data integrity | Adapter must not silently create partial domain objects. |
-| Any uncategorized persistence framework/database failure | Generic persistence failure | Stable fallback category without leaking framework type. |
+| Adapter Condition | Stable Application-Facing Category | Notes |
+|-------------------|------------------------------------|-------|
+| Duplicate `access_key` | `DuplicateAccessKeyConflict` | Required by clarification and `FR-009`. |
+| Duplicate issuance identity | `DuplicateIssuanceIdentityConflict` | Required by clarification and `FR-010`. |
+| Duplicate or unavailable sequence reservation | `UnavailableSequenceReservationConflict` | Required by `FR-012`; exact repeated reservation remains idempotent. |
+| Invalid persisted authorization combination | `InvalidPersistedTaxDocumentState` | Required by `FR-008`. |
+| Unknown canonical document type | `InvalidPersistedTaxDocumentState` | Prevents invalid document type rehydration. |
+| Unknown document state | `InvalidPersistedTaxDocumentState` | Prevents invalid state rehydration. |
+| Unknown authorization state | `InvalidPersistedTaxDocumentState` | Prevents invalid authorization state rehydration. |
+| Unknown issuance mode | `InvalidPersistedTaxDocumentState` | Prevents invalid issuance mode rehydration. |
+| Transaction failure | `PersistenceTransactionFailure` | Must not expose framework transaction type. |
+| Foreign key, missing relationship, or inconsistent issuer/establishment/issuing point relationship | `InvalidPersistenceRelationship` | Adapter must not silently create partial domain objects. |
+| Any uncategorized persistence framework/database failure | `GenericPersistenceFailure` | Stable fallback category without leaking framework type. |
 
 ## Boundary Rules
 
