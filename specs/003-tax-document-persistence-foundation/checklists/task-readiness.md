@@ -17,14 +17,16 @@ based on feature context and requirements.
   Spec §SC-001-SC-011, Spec §FR-023, Plan §Phase 1 Design Summary]
 - [x] CHK002 Are all allowed implementation surfaces documented with enough
   specificity to prevent task generation outside the persistence adapter,
-  narrow application error contract, migration, configuration, domain restore,
-  framework-free domain restore test, and persistence adapter test locations?
+  narrow application error contract, existing application output port
+  signature updates, application port boundary test, migration, configuration,
+  domain restore, framework-free domain restore test, and persistence adapter
+  test locations?
   [Completeness, Spec §AR-001, Spec §AR-010, Plan §Project Structure,
   Quickstart §Prerequisites]
 - [x] CHK003 Are persistence dependency and configuration requirements bounded
-  to persistence support and adapter testing without implying domain or
-  application dependencies on persistence frameworks? [Completeness,
-  Spec §FR-016, Spec §AR-011, Plan §Technical Context]
+  to reactive persistence support and adapter testing without implying domain
+  or application dependencies on persistence frameworks? [Completeness,
+  Spec §FR-016, Spec §FR-024, Spec §AR-011, Plan §Technical Context]
 - [x] CHK004 Are durable migration documentation updates specified with the
   required target tables, columns, constraints, temporal mappings, and PFV
   references before tasks are generated? [Completeness, Spec §FR-015,
@@ -74,7 +76,7 @@ based on feature context and requirements.
 
 - [x] CHK013 Can each success criterion be objectively evaluated by future
   tasks without requiring REST, SRI, XML storage, queue, webhook, or
-  document-specific artifacts? [Measurability, Spec §SC-001-SC-011,
+  document-specific artifacts? [Measurability, Spec §SC-001-SC-013,
   Spec §FR-019]
 - [x] CHK014 Are persistence preservation requirements measurable for all
   required fields, including access key, issuance identity, issue date,
@@ -131,7 +133,8 @@ based on feature context and requirements.
 
 - [x] CHK024 Are assumptions about feature `002-tax-document-issuance-foundation`
   and its existing application port contracts explicit enough to prevent
-  unnecessary port redesign tasks? [Assumption, Spec §Assumptions, Plan
+  unnecessary port redesign tasks while allowing the narrow Mutiny `Uni`
+  signature update required by SPEC 003? [Assumption, Spec §Assumptions, Plan
   §Layer and Boundary Design, Spec §AR-012, Contract §Persistence Port
   Implementations]
 - [x] CHK025 Are deferred dependencies on legacy compatibility, XML storage,
@@ -150,6 +153,18 @@ based on feature context and requirements.
   forbidden bootstrap runtime behavior so future tasks do not create a
   bootstrap package? [Conflict, Spec §AR-001, Spec §AR-010, Plan §Project
   Structure, Quickstart §Verify Forbidden Scope]
+- [x] CHK028 Are Mutiny `Uni` application output port signature updates backed
+  by explicit allowed source/test surfaces and explicit tasks, without
+  broadening application-layer design? [Coverage, Spec §FR-004, Spec §AR-001,
+  Spec §AR-012, Tasks §Phase 2a]
+- [x] CHK029 Are `TaxDocumentRepository`, `SequenceNumberPort`, and
+  `TransactionPort` signature verification requirements explicit enough for
+  task generation? [Coverage, Contract §Persistence Port Implementations,
+  Tasks §T046-T047, Quickstart §Verify Reactive Port Boundary]
+- [x] CHK030 Are reactive PostgreSQL runtime connection requirements explicit
+  enough to prevent JDBC/blocking ORM task generation for repository, sequence,
+  and transaction adapters? [Conflict, Spec §FR-024, Plan §Technical Context,
+  Tasks §T048, Quickstart §Verify Reactive Database Boundary]
 
 ## Notes
 

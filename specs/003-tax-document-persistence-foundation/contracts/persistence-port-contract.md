@@ -12,6 +12,17 @@ broaden those ports.
 All implemented port operations return Mutiny `Uni` results according to the
 constitution target stack. `Uni` is the application-layer reactive boundary
 contract; payloads inside `Uni` remain domain/application models only.
+The existing application output ports remain application-layer abstractions:
+they may import Mutiny `Uni`, but they must not import adapter-local types,
+persistence entities, JDBC, Hibernate ORM, JPA transaction objects, reactive
+PostgreSQL client types, REST, SRI, XML, queue, storage, webhook, or bootstrap
+types.
+
+The outbound persistence adapter implementation must use a reactive PostgreSQL
+connection path for runtime repository, sequence, and transaction operations.
+Blocking JDBC datasource access, blocking Hibernate ORM sessions, and blocking
+JPA `EntityManager` are not valid runtime database access mechanisms for this
+feature. Flyway migration artifacts remain schema-management artifacts only.
 
 Application-facing persistence errors referenced by this contract are defined
 only in the framework-free application error contract under
@@ -63,9 +74,12 @@ Required behavior:
 Forbidden behavior:
 
 - Returning persistence entities.
-- Leaking JPA, Hibernate, JDBC, SQL, PostgreSQL, or Flyway exceptions.
+- Leaking JPA, Hibernate, JDBC, SQL, PostgreSQL, reactive PostgreSQL client, or
+  Flyway exceptions.
 - Leaking `adapter.out.persistence` exception or diagnostic types to
   application callers.
+- Implementing runtime repository operations through blocking JDBC, blocking
+  Hibernate ORM sessions, or blocking JPA `EntityManager`.
 - Creating REST, SRI, XML, storage, queue, webhook, bootstrap, archive, purge,
   delete, production correction, or migration repair behavior.
 
@@ -140,6 +154,6 @@ Required behavior:
 ## Traceability
 
 - Spec: `FR-005`, `FR-009`, `FR-010`, `FR-011`, `FR-012`, `FR-014`,
-  `FR-017`, `FR-018`
+  `FR-017`, `FR-018`, `FR-024`
 - Plan: Ports and Adapters, Error Mapping
 - Constitution: Principles IV, VII, IX

@@ -18,31 +18,37 @@ bootstrap behavior, or document-specific issuance flows.
 
 **Language/Version**: Java 25
 
-**Primary Dependencies**: Quarkus with Mutiny, Gradle with Kotlin DSL, Quarkus
-Hibernate ORM with plain JPA entities, Quarkus JDBC PostgreSQL, Quarkus
-Flyway, Quarkus Arc, JUnit, Quarkus JUnit, Testcontainers for
-PostgreSQL-backed adapter tests.
-Panache active-record style is not used for domain objects and is not needed
-for this foundation.
+**Primary Dependencies**: Quarkus with Mutiny, Gradle with Kotlin DSL,
+Quarkus Reactive PostgreSQL Client or Hibernate Reactive over the reactive
+PostgreSQL client, Quarkus Flyway for versioned schema migration artifacts,
+Quarkus Arc, JUnit, Quarkus JUnit, and Testcontainers for PostgreSQL-backed
+adapter tests. Panache active-record style is not used for domain objects and
+is not needed for this foundation.
 
 Persistence dependencies and configuration are allowed only for the outbound
-persistence adapter, Flyway migrations, and persistence adapter tests. They do
-not authorize JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus
-persistence APIs, or framework annotations in the domain or application layers.
-The existing application output ports return Mutiny `Uni` wrappers per the
-constitution's reactive target stack. `Uni` is allowed only as an
-application-boundary contract; domain models, value objects, and persistence
-entities must not use `Uni` as state. The only approved new application-layer
-addition is a narrow framework-free `application.error` contract for
-persistence failure categories.
+persistence adapter, Flyway migration artifacts, and persistence adapter tests.
+Runtime repository, sequence, and transaction adapter access to PostgreSQL must
+use a reactive PostgreSQL connection path and must not use blocking JDBC
+datasource access, blocking Hibernate ORM sessions, or blocking JPA
+`EntityManager`. These dependencies do not authorize JPA, Hibernate ORM,
+Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus persistence APIs, or framework
+annotations in the domain or application layers. The existing application
+output ports return Mutiny `Uni` wrappers per the constitution's reactive
+target stack. `Uni` is allowed only as an application-boundary contract; domain
+models, value objects, and persistence records must not use `Uni` as state.
+The approved application-layer changes are limited to existing output port
+`Uni` return signatures and a narrow framework-free `application.error`
+contract for persistence failure categories.
 
 **Storage**: PostgreSQL target schema managed by Flyway migrations under
 `src/main/resources/db/migration/`.
 
-**Testing**: Domain/application tests remain plain JUnit without Quarkus.
-Persistence adapter tests may use Quarkus test support and Testcontainers. Test
-coverage must include mapping, rehydration, uniqueness, sequence reservation,
-transaction behavior, and architecture boundary checks.
+**Testing**: Domain tests and application port boundary tests remain plain
+JUnit without Quarkus. Application port boundary tests verify Mutiny `Uni`
+signatures and absence of persistence or adapter leakage. Persistence adapter
+tests may use Quarkus test support and Testcontainers. Test coverage must
+include mapping, rehydration, uniqueness, sequence reservation, transaction
+behavior, reactive database boundary checks, and architecture boundary checks.
 
 **Target Platform**: Backend service
 
@@ -57,12 +63,13 @@ transactional behavior instead of application-only duplicate checks.
 
 **Constraints**: Persistence-specific code is limited to
 `adapter.out.persistence` plus approved configuration and Flyway locations.
-The only application source addition is the framework-free
-`application.error` persistence error contract, plus constitution-aligned
-Mutiny `Uni` return types on application output ports. Domain and application
-layers must remain free of JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC,
-SQL, Quarkus persistence APIs, persistence annotations, and adapter-local
-exception types. Target database names are English lowercase snake_case.
+Application source changes are limited to the framework-free
+`application.error` persistence error contract and existing output port return
+signatures under `application.port.out`. Domain and application layers must
+remain free of JPA, Hibernate ORM, Panache, PostgreSQL, Flyway, JDBC, SQL,
+Quarkus persistence APIs, persistence annotations, and adapter-local exception
+types, except Mutiny `Uni` as the application output port boundary type.
+Target database names are English lowercase snake_case.
 
 **Scale/Scope**: Initial common issuance tables only:
 `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and
@@ -139,6 +146,9 @@ src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/
 src/main/java/com/alexastudillo/taxdocument/application/error/
 └── *.java                                # framework-free persistence error contract only
 
+src/main/java/com/alexastudillo/taxdocument/application/port/out/
+└── *.java                                # existing output port Uni return signatures only
+
 src/main/java/com/alexastudillo/taxdocument/domain/taxdocument/
 └── TaxDocument.java                      # framework-free restore path only
 
@@ -148,6 +158,9 @@ src/main/resources/
     └── V1__create_tax_document_persistence_foundation.sql
 
 src/test/java/com/alexastudillo/taxdocument/
+├── application/
+│   └── port/
+│       └── out/                          # ApplicationPortBoundaryTest only
 ├── domain/
 │   └── taxdocument/                      # framework-free restore tests only
 └── adapter/
@@ -160,16 +173,20 @@ src/test/java/com/alexastudillo/taxdocument/
 framework-free, must not import persistence entities, and must not introduce
 document-specific issuance behavior. Framework-free domain tests under
 `src/test/java/com/alexastudillo/taxdocument/domain/` are allowed only for
-`TaxDocument.restore(...)` validation. The only application-layer addition is
-the framework-free persistence error contract in `application.error`; it must
-not import adapter or persistence framework types. All persistence entities,
-mappers, query details, database exception translation, adapter-local
-diagnostics, and transaction integration belong to `adapter.out.persistence`.
-Allowed configuration changes are limited to `build.gradle.kts` and
-`src/main/resources/application.properties` when needed for persistence
-dependencies or tests. No inbound REST, outbound SRI, outbound storage,
-outbound queue, outbound webhook, or bootstrap package is created by this
-feature.
+`TaxDocument.restore(...)` validation. Application port boundary tests under
+`src/test/java/com/alexastudillo/taxdocument/application/port/out/` are allowed
+only for validating `Uni` signatures and absence of persistence or adapter
+leakage. Application-layer changes are limited to existing output port
+signature updates in `application.port.out` and the framework-free persistence
+error contract in `application.error`; neither may import adapter or
+persistence framework types. All reactive persistence records, mappers, query
+details, database exception translation, adapter-local diagnostics, and
+transaction integration belong to `adapter.out.persistence`. Allowed
+configuration changes are limited to `build.gradle.kts` and
+`src/main/resources/application.properties` when needed for reactive
+persistence dependencies or tests. No inbound REST, outbound SRI, outbound
+storage, outbound queue, outbound webhook, or bootstrap package is created by
+this feature.
 
 ## Layer and Boundary Design
 
@@ -182,9 +199,11 @@ authorization combinations and preserves existing invariants.
 **Application Use Cases**: None created. Existing output ports from
 `002-tax-document-issuance-foundation` are implemented:
 `TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`. SPEC 003
-clarifies persistence behavior for these ports but does not rename, redesign,
-or broaden them. The ports expose Mutiny `Uni` results to satisfy the
-constitution's reactive stack while carrying only domain/application payloads.
+clarifies persistence behavior for these ports and owns the narrow update of
+existing output port return types to Mutiny `Uni`; it does not rename,
+redesign, or broaden the ports. The ports expose Mutiny `Uni` results to
+satisfy the constitution's reactive stack while carrying only
+domain/application payloads.
 Application-facing persistence error categories are defined in the narrow
 `com.alexastudillo.taxdocument.application.error` contract. Adapter code maps
 database/framework failures into those application-layer errors and must not
@@ -194,10 +213,13 @@ other persistence-specific types inward.
 **Inbound REST Adapter**: Not applicable. No REST resources, request DTOs,
 response DTOs, transport validation, or HTTP error mapping are created.
 
-**Outbound Adapters**: Create only `adapter.out.persistence`. It owns JPA
-entities, persistence repositories/helpers, mappers, transaction adapter,
-database/framework exception translation, adapter-local diagnostics, and
-PostgreSQL-backed implementations of the specified application ports.
+**Outbound Adapters**: Create only `adapter.out.persistence`. It owns reactive
+persistence records/entities, persistence repositories/helpers, mappers,
+transaction adapter, database/framework exception translation, adapter-local
+diagnostics, and reactive PostgreSQL-backed implementations of the specified
+application ports. Runtime database access must use a reactive PostgreSQL
+connection path and must not use JDBC, blocking Hibernate ORM sessions, or
+blocking JPA `EntityManager`.
 
 **DTO Mapping Flow**: This feature implements only:
 
@@ -290,8 +312,8 @@ private keys, database passwords, or sensitive configuration values.
   failures without exposing SQL, Hibernate, JPA, or PostgreSQL types beyond the
   adapter.
 - Generic persistence failures map to application-facing persistence failure
-  errors without exposing SQL, Hibernate, JPA, Panache, Flyway, or
-  PostgreSQL-specific types.
+  errors without exposing SQL, Hibernate, JPA, Panache, Flyway, reactive
+  PostgreSQL client, or PostgreSQL-specific types.
 - Application-facing persistence errors are defined only in the framework-free
   application error contract. Adapter-local exception or diagnostic types may
   exist only inside `adapter.out.persistence` and are never imported by

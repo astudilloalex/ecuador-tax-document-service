@@ -14,8 +14,12 @@ database migration contents.
   - `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/`
   - `src/main/java/com/alexastudillo/taxdocument/application/error/` for the
     framework-free persistence error contract only
+  - `src/main/java/com/alexastudillo/taxdocument/application/port/out/` only
+    for existing output port return signatures using Mutiny `Uni`
   - `src/main/resources/db/migration/`
   - `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`
+  - `src/test/java/com/alexastudillo/taxdocument/application/port/out/` only
+    for `ApplicationPortBoundaryTest`
   - `src/test/java/com/alexastudillo/taxdocument/domain/` for
     framework-free `TaxDocument.restore(...)` validation only
   - `build.gradle.kts` and `src/main/resources/application.properties` for
@@ -52,6 +56,10 @@ Expected result:
 - Application-layer persistence error files exist only under
   `src/main/java/com/alexastudillo/taxdocument/application/error/` and do not
   import adapter or persistence framework types.
+- Existing application output port files may be updated only under
+  `src/main/java/com/alexastudillo/taxdocument/application/port/out/` to expose
+  Mutiny `Uni` return types and must not import persistence-framework,
+  adapter-local, REST, SRI, XML, queue, storage, webhook, or bootstrap types.
 - Application output port operations may return Mutiny `Uni` as the approved
   reactive boundary contract; `Uni` must not appear in domain models or
   persistence entity state.
@@ -93,6 +101,30 @@ Expected result:
 - Every application output port operation returns `Uni`.
 - `Uni` wraps only domain/application payload types.
 - Domain source files do not import `io.smallrye.mutiny`.
+- `TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`
+  signatures match the SPEC 003 persistence port contract.
+
+### 3b. Verify Reactive Database Boundary
+
+```bash
+rg -n "quarkus-jdbc|EntityManager|javax\\.sql|java\\.sql|hibernate-orm" \
+  build.gradle.kts \
+  src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence \
+  src/main/resources/application.properties
+```
+
+Expected result:
+
+- No runtime persistence dependency or adapter code uses JDBC, blocking JPA
+  `EntityManager`, or blocking Hibernate ORM for repository, sequence, or
+  transaction adapter operations.
+- Any JDBC-related dependency or property needed only for Flyway migration
+  execution is documented as migration-only and is not used by repository,
+  sequence, or transaction adapter code.
+- Runtime persistence access uses reactive PostgreSQL APIs isolated inside
+  `adapter.out.persistence`.
+- Flyway migration artifacts remain versioned schema-management artifacts and
+  do not become the runtime database access path.
 
 ### 4. Verify Target Schema Naming
 

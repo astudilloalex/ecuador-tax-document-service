@@ -1,14 +1,18 @@
 # Research: Tax Document Persistence Foundation
 
-## Decision: Use Plain JPA Entities Inside the Persistence Adapter
+## Decision: Use Reactive Persistence Records Inside the Persistence Adapter
 
-**Decision**: Implement persistence records as plain JPA entities located under
-`adapter.out.persistence`, separate from domain objects.
+**Decision**: Implement persistence records or reactive persistence entities
+inside `adapter.out.persistence`, separate from domain objects, and access
+PostgreSQL through a reactive connection path such as Quarkus Reactive
+PostgreSQL Client or Hibernate Reactive over the reactive PostgreSQL client.
 
 **Rationale**: The constitution forbids annotating domain classes as persistence
 entities and forbids leaking persistence entities into application/domain
-layers. Plain JPA entities give the adapter enough mapping control without
-making the domain model depend on persistence concerns.
+layers. The constitution also defines Quarkus with Mutiny as the reactive
+target stack. Reactive persistence records/entities give the adapter enough
+mapping control without making the domain model depend on persistence concerns
+or introducing blocking JDBC/ORM runtime access.
 
 **Alternatives considered**:
 
@@ -16,9 +20,10 @@ making the domain model depend on persistence concerns.
   Architecture and DTO/entity separation.
 - Use Panache active-record entities for domain behavior: rejected because the
   active-record style would encourage persistence behavior to own model logic.
-- Use direct JDBC-only repositories: deferred because JPA provides clearer
-  entity mapping for this foundation while keeping SQL details inside the
-  adapter.
+- Use blocking Hibernate ORM/JPA `EntityManager`: rejected because runtime
+  database access must be reactive for this project.
+- Use direct JDBC-only repositories: rejected because JDBC is blocking and does
+  not satisfy the reactive database connection requirement.
 
 ## Decision: Use Flyway Versioned Migrations for Target Schema
 
@@ -44,6 +49,9 @@ and separate from runtime adapter code.
 outbound persistence adapter, Flyway migrations, and persistence adapter tests.
 They must not introduce persistence framework imports, annotations, or runtime
 dependencies into the domain or application layers.
+Runtime persistence access must use reactive PostgreSQL connectivity; Flyway
+remains a versioned schema-management mechanism and not the runtime database
+access path for repositories.
 
 **Rationale**: SPEC 003 introduces the first persistence boundary. Keeping
 dependencies at the adapter edge preserves Clean Architecture and prevents

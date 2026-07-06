@@ -250,6 +250,10 @@ This architecture and infrastructure enabler excludes:
   Application-facing persistence error abstractions are the only approved
   application-layer addition for this feature and MUST be framework-free under
   `src/main/java/com/alexastudillo/taxdocument/application/error/`.
+  Existing application output ports under
+  `src/main/java/com/alexastudillo/taxdocument/application/port/out/` MAY be
+  updated only to align their method signatures with Mutiny `Uni` reactive
+  contracts required by this specification.
   Mutiny `Uni` is allowed in application port signatures as the constitution's
   reactive contract, but domain objects and persistence entities MUST NOT use
   `Uni` as state.
@@ -344,7 +348,8 @@ This architecture and infrastructure enabler excludes:
   migration rollback/repair, and lifecycle correction behavior.
 - **FR-016**: Domain and application layers MUST NOT depend on JPA, Hibernate,
   Panache, PostgreSQL, Flyway, JDBC, SQL, Quarkus persistence APIs, or
-  persistence annotations.
+  persistence annotations, except for Mutiny `Uni` in application output port
+  method return types.
 - **FR-017**: Repository methods and sequence methods MUST expose only
   domain/application models or primitive values already accepted by the
   application port contracts, never persistence entities or database-specific
@@ -378,6 +383,14 @@ This architecture and infrastructure enabler excludes:
   any behavior not traceable to SPEC 003 artifacts MUST be documented as an
   explicit requirement, Pending Functional Validation, or Pending Naming
   Decision before task generation.
+- **FR-024**: Runtime database access for the persistence adapter MUST use a
+  reactive PostgreSQL connection path aligned with Quarkus Mutiny, such as the
+  Quarkus Reactive PostgreSQL Client or Hibernate Reactive over the reactive
+  PostgreSQL client. Runtime repository, sequence, and transaction adapter code
+  MUST NOT use blocking JDBC datasource access, blocking Hibernate ORM
+  sessions, blocking JPA `EntityManager`, or application-visible SQL/JDBC
+  abstractions. Flyway migration artifacts remain allowed only for versioned
+  schema management and MUST NOT become the runtime persistence access path.
 
 ### Architectural Requirements
 
@@ -385,8 +398,14 @@ This architecture and infrastructure enabler excludes:
   `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/`,
   `src/main/java/com/alexastudillo/taxdocument/application/error/` for the
   framework-free application persistence error contract,
+  `src/main/java/com/alexastudillo/taxdocument/application/port/out/` only for
+  updating existing output port return types to Mutiny `Uni` while preserving
+  application-layer contracts,
   `src/main/resources/db/migration/`,
   `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`,
+  `src/test/java/com/alexastudillo/taxdocument/application/port/out/` only for
+  `ApplicationPortBoundaryTest` validation of `Uni` signatures and absence of
+  persistence or adapter leakage,
   `src/test/java/com/alexastudillo/taxdocument/domain/` only for
   framework-free `TaxDocument.restore(...)` validation,
   required framework configuration in `build.gradle.kts` and
@@ -394,6 +413,11 @@ This architecture and infrastructure enabler excludes:
   restore change only when required by `FR-006` and `FR-007`.
 - **AR-002**: Persistence adapter tests MUST remain under
   `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`.
+  Application port boundary tests MAY exist under
+  `src/test/java/com/alexastudillo/taxdocument/application/port/out/` only to
+  verify Mutiny `Uni` signatures and absence of persistence-framework,
+  adapter-local, REST, SRI, XML, queue, storage, webhook, or bootstrap
+  dependencies.
   Framework-free domain restore tests MAY exist under
   `src/test/java/com/alexastudillo/taxdocument/domain/` only to validate
   `TaxDocument.restore(...)`. Domain restore tests MUST NOT use Quarkus, JPA,
@@ -429,16 +453,22 @@ This architecture and infrastructure enabler excludes:
   `bootstrap` packages or runtime wiring.
 - **AR-011**: Persistence dependencies and configuration MAY be introduced only
   for persistence adapter implementation, Flyway migration execution, and
-  persistence adapter tests. These dependencies MUST NOT imply imports,
-  annotations, or runtime framework dependencies in the domain or application
-  layers, except Mutiny `Uni` in application port signatures as the approved
-  reactive boundary contract.
+  persistence adapter tests. Runtime persistence dependencies MUST use reactive
+  PostgreSQL access rather than JDBC/blocking ORM access. These dependencies
+  MUST NOT imply imports, annotations, or runtime framework dependencies in the
+  domain or application layers, except Mutiny `Uni` in application port
+  signatures as the approved reactive boundary contract.
 - **AR-012**: SPEC 003 assumes the application ports approved by
   `002-tax-document-issuance-foundation`. It may clarify persistence behavior
   required to implement `TaxDocumentRepository`, `SequenceNumberPort`, and
-  `TransactionPort`, but MUST NOT rename, redesign, or broaden those ports
-  unless this specification is explicitly amended with an architectural reason
-  before task generation.
+  `TransactionPort` and may update existing output port return types to
+  Mutiny `Uni` for reactive boundaries, but MUST NOT rename, redesign, or
+  broaden those ports unless this specification is explicitly amended with an
+  architectural reason before task generation.
+- **AR-013**: SPEC 003 MUST NOT create application use cases, REST DTOs,
+  adapters outside `adapter.out.persistence`, bootstrap wiring, or
+  document-specific issuance behavior while updating application output port
+  signatures.
 
 ### Naming and Migration Requirements
 
@@ -582,6 +612,14 @@ passwords, or sensitive configuration values.
 - **SC-011**: Temporal persistence validation proves `issue_date` rehydrates as
   the same calendar date and `authorized_at` rehydrates as the same UTC instant
   at the documented precision.
+- **SC-012**: Application port boundary validation proves existing output port
+  operations return Mutiny `Uni` wrappers containing only domain/application
+  payload types and do not import persistence-framework, adapter-local, REST,
+  SRI, XML, queue, storage, webhook, or bootstrap types.
+- **SC-013**: Reactive persistence boundary validation proves runtime
+  repository, sequence, and transaction adapter database access uses reactive
+  PostgreSQL APIs and does not use JDBC datasource access, blocking Hibernate
+  ORM sessions, or blocking JPA `EntityManager`.
 
 ## Assumptions
 

@@ -16,6 +16,9 @@ src/main/java/com/alexastudillo/taxdocument/application/error/
 Persistence adapter internals may catch database/framework exceptions and may
 use adapter-local diagnostics, but adapter-local exception types must not cross
 inward or become application/domain dependencies.
+Reactive PostgreSQL client failures are adapter-local infrastructure details
+and must be translated to the same stable application-facing categories before
+crossing inward.
 
 ## Error Categories
 
@@ -44,8 +47,9 @@ inward or become application/domain dependencies.
 - Do not expose SQL exception classes outside `adapter.out.persistence`.
 - Do not expose `SQLException`, `PersistenceException`,
   `ConstraintViolationException`, Hibernate exceptions, Panache exceptions,
-  JDBC types, PostgreSQL-specific exceptions, Flyway exceptions, or equivalent
-  persistence-specific types outside the adapter.
+  JDBC types, reactive PostgreSQL client exceptions, PostgreSQL-specific
+  exceptions, Flyway exceptions, or equivalent persistence-specific types
+  outside the adapter.
 - Error messages must not include credentials, tokens, passwords, private keys,
   connection strings with secrets, or sensitive configuration values.
 - Errors returned to application/domain code must be stable enough for tests to
@@ -69,6 +73,6 @@ Adapter tests must verify:
 ## Traceability
 
 - Spec: `FR-008`, `FR-009`, `FR-010`, `FR-012`, `FR-014`, `FR-017`,
-  `FR-018`
+  `FR-018`, `FR-024`
 - Plan: Idempotency, Audit, and Error Handling
 - Constitution: Ports and Adapters; DTO and Validation Separation

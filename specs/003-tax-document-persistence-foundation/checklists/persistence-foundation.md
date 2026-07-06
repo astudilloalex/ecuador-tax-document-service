@@ -27,7 +27,7 @@
 ## Requirement Consistency
 
 - [x] CHK013 Are the spec, plan, data model, and schema contract consistent on the minimum table set and deferred `tax_document_audit_events` table? [Consistency, Spec §FR-003, Spec §FR-020, Plan §Scale/Scope, Data Model §Deferred Data]
-- [x] CHK014 Are source layout requirements consistent between the spec scope boundaries and the plan project structure, including the narrow `application.error` contract and framework-free domain restore test allowance? [Consistency, Spec §AR-001, Plan §Project Structure]
+- [x] CHK014 Are source layout requirements consistent between the spec scope boundaries and the plan project structure, including the narrow `application.error` contract, existing `application.port.out` Mutiny signature update allowance, `ApplicationPortBoundaryTest`, and framework-free domain restore test allowance? [Consistency, Spec §AR-001, Plan §Project Structure]
 - [x] CHK015 Are port responsibilities consistent with the existing 002 application port contracts and the 003 persistence port contract? [Consistency, Spec §FR-005, Spec §FR-011, Contract §Persistence Port Implementations]
 - [x] CHK016 Are Clean Architecture boundary requirements consistent across the constitution check, layer design, and DTO mapping flow? [Consistency, Plan §Constitution Check, Plan §Layer and Boundary Design, Spec §AR-003]
 - [x] CHK017 Are SRI isolation requirements consistent across the spec, research decisions, and schema contract? [Consistency, Spec §AR-008, Research §Store Canonical Document Type Values, Contract §Persistence Schema]
@@ -69,7 +69,7 @@
 
 ## Dependencies & Assumptions
 
-- [x] CHK041 Are approved persistence dependencies documented without implying domain/application dependency on persistence frameworks? [Dependency, Plan §Technical Context, Spec §FR-016]
+- [x] CHK041 Are approved reactive persistence dependencies documented without implying domain/application dependency on persistence frameworks? [Dependency, Plan §Technical Context, Spec §FR-016, Spec §FR-024]
 - [x] CHK042 Are assumptions about feature 002 port contracts and requested-value sequence reservation explicitly documented? [Assumption, Spec §Assumptions, Plan §Pending Functional Validations]
 - [x] CHK043 Are deferred production data migration and compatibility concerns explicitly bounded outside this feature? [Assumption, Spec §Scope Boundaries, Spec §PFV-PER-008, Research §Defer XML Paths and Legacy Compatibility Views]
 - [x] CHK044 Are durable documentation dependencies on `docs/migration/` clear and traceable to the constitution? [Dependency, Spec §FR-015, Contract §Migration Documentation Updates, Constitution §Specification-Governed Migration]
@@ -83,6 +83,8 @@
 - [x] CHK049 Are repository save semantics explicitly defined for create, update, duplicate, and same-aggregate persistence behavior? [Clarity, Spec §FR-005, Plan §Idempotency, Contract §TaxDocumentRepository, Research §Repository `save` Creates or Updates Only the Same Aggregate]
 - [x] CHK050 Are temporal persistence rules defined for `issue_date` and `authorized_at`, including domain type, database type, timezone handling, and rehydration precision? [Completeness, Spec §FR-021, Plan §Temporal Rules, Data Model §TaxDocument Persistence Record, Contract §Temporal Columns]
 - [x] CHK051 Are primary key, foreign key, cascade, and delete/update restrictions defined for the persistence tables? [Completeness, Spec §FR-022, Plan §Schema Relationship and Constraint Design, Data Model §Schema Rules, Contract §Persistence Schema]
+- [x] CHK052 Are Mutiny `Uni` application output port signature changes explicitly allowed, contractually constrained, and backed by tasks? [Coverage, Spec §FR-004, Spec §AR-001, Contract §Persistence Port Implementations, Tasks §T046-T047]
+- [x] CHK053 Are runtime database connection requirements explicitly reactive and bounded away from JDBC, blocking Hibernate ORM, and blocking JPA `EntityManager`? [Consistency, Spec §FR-024, Plan §Technical Context, Research §Reactive Persistence Records, Tasks §T048]
 
 ## Notes
 
