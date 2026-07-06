@@ -28,6 +28,8 @@ Persistence dependencies and configuration are allowed only for the outbound
 persistence adapter, Flyway migrations, and persistence adapter tests. They do
 not authorize JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus
 persistence APIs, or framework annotations in the domain or application layers.
+The only approved application-layer addition is a narrow framework-free
+`application.error` contract for persistence failure categories.
 
 **Storage**: PostgreSQL target schema managed by Flyway migrations under
 `src/main/resources/db/migration/`.
@@ -50,9 +52,11 @@ transactional behavior instead of application-only duplicate checks.
 
 **Constraints**: Persistence-specific code is limited to
 `adapter.out.persistence` plus approved configuration and Flyway locations.
-Domain and application layers must remain free of JPA, Hibernate, Panache,
-PostgreSQL, Flyway, JDBC, SQL, Quarkus persistence APIs, and persistence
-annotations. Target database names are English lowercase snake_case.
+The only application source addition is the framework-free
+`application.error` persistence error contract. Domain and application layers
+must remain free of JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC, SQL,
+Quarkus persistence APIs, persistence annotations, and adapter-local exception
+types. Target database names are English lowercase snake_case.
 
 **Scale/Scope**: Initial common issuance tables only:
 `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and
@@ -126,6 +130,9 @@ src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/
 ├── repository/
 └── transaction/
 
+src/main/java/com/alexastudillo/taxdocument/application/error/
+└── *.java                                # framework-free persistence error contract only
+
 src/main/java/com/alexastudillo/taxdocument/domain/taxdocument/
 └── TaxDocument.java                      # framework-free restore path only
 
@@ -135,6 +142,8 @@ src/main/resources/
     └── V1__create_tax_document_persistence_foundation.sql
 
 src/test/java/com/alexastudillo/taxdocument/
+├── domain/
+│   └── taxdocument/                      # framework-free restore tests only
 └── adapter/
     └── out/
         └── persistence/                  # adapter integration tests
@@ -143,13 +152,18 @@ src/test/java/com/alexastudillo/taxdocument/
 **Structure Decision**: The only domain change is the required
 `TaxDocument` rehydration mechanism from `FR-006` and `FR-007`. It must remain
 framework-free, must not import persistence entities, and must not introduce
-document-specific issuance behavior. All persistence entities, mappers, query
-details, duplicate translation, and transaction integration belong to
-`adapter.out.persistence`. Allowed configuration changes are limited to
-`build.gradle.kts` and `src/main/resources/application.properties` when needed
-for persistence dependencies or tests. No inbound REST, outbound SRI, outbound
-storage, outbound queue, outbound webhook, or bootstrap package is created by
-this feature.
+document-specific issuance behavior. Framework-free domain tests under
+`src/test/java/com/alexastudillo/taxdocument/domain/` are allowed only for
+`TaxDocument.restore(...)` validation. The only application-layer addition is
+the framework-free persistence error contract in `application.error`; it must
+not import adapter or persistence framework types. All persistence entities,
+mappers, query details, database exception translation, adapter-local
+diagnostics, and transaction integration belong to `adapter.out.persistence`.
+Allowed configuration changes are limited to `build.gradle.kts` and
+`src/main/resources/application.properties` when needed for persistence
+dependencies or tests. No inbound REST, outbound SRI, outbound storage,
+outbound queue, outbound webhook, or bootstrap package is created by this
+feature.
 
 ## Layer and Boundary Design
 
@@ -163,17 +177,19 @@ authorization combinations and preserves existing invariants.
 `002-tax-document-issuance-foundation` are implemented:
 `TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`. SPEC 003
 clarifies persistence behavior for these ports but does not rename, redesign,
-or broaden them. Application-facing error categories are contract terms for
-adapter translation and must not expose SQL, Hibernate, JPA, Flyway,
-PostgreSQL, or other persistence-specific types inward.
+or broaden them. Application-facing persistence error categories are defined in
+the narrow `com.alexastudillo.taxdocument.application.error` contract. Adapter
+code maps database/framework failures into those application-layer errors and
+must not expose SQL, Hibernate, JPA, Flyway, PostgreSQL, adapter-local
+exceptions, or other persistence-specific types inward.
 
 **Inbound REST Adapter**: Not applicable. No REST resources, request DTOs,
 response DTOs, transport validation, or HTTP error mapping are created.
 
 **Outbound Adapters**: Create only `adapter.out.persistence`. It owns JPA
 entities, persistence repositories/helpers, mappers, transaction adapter,
-database error translation, and PostgreSQL-backed implementations of the
-specified application ports.
+database/framework exception translation, adapter-local diagnostics, and
+PostgreSQL-backed implementations of the specified application ports.
 
 **DTO Mapping Flow**: This feature implements only:
 
@@ -268,6 +284,10 @@ private keys, database passwords, or sensitive configuration values.
 - Generic persistence failures map to application-facing persistence failure
   errors without exposing SQL, Hibernate, JPA, Panache, Flyway, or
   PostgreSQL-specific types.
+- Application-facing persistence errors are defined only in the framework-free
+  application error contract. Adapter-local exception or diagnostic types may
+  exist only inside `adapter.out.persistence` and are never imported by
+  application or domain code.
 
 ## Schema Relationship and Constraint Design
 

@@ -252,7 +252,8 @@ authorization state required by future issuance use cases.
 - `authorization_state` must be one of the canonical `AuthorizationState`
   values.
 - Invalid persisted authorization combinations are rejected during
-  rehydration with application-facing data integrity errors.
+  rehydration with framework-free application-layer data integrity errors
+  defined by the `application.error` contract.
 - `authorization_number` and `authorized_at` must be consistent with
   `DocumentState.AUTHORIZED` and `AuthorizationState.AUTHORIZED`.
 - `authorization_number` present while authorization state is not `AUTHORIZED`

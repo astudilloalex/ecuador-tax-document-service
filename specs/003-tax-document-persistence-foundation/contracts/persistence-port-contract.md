@@ -9,6 +9,12 @@ This contract clarifies behavior for the ports approved by
 `002-tax-document-issuance-foundation`; it does not rename, redesign, or
 broaden those ports.
 
+Application-facing persistence errors referenced by this contract are defined
+only in the framework-free application error contract under
+`com.alexastudillo.taxdocument.application.error`. Persistence adapters may use
+adapter-local diagnostics internally, but application code must never depend on
+`adapter.out.persistence` exception types.
+
 ## Scope
 
 Included ports:
@@ -53,6 +59,8 @@ Forbidden behavior:
 
 - Returning persistence entities.
 - Leaking JPA, Hibernate, JDBC, SQL, PostgreSQL, or Flyway exceptions.
+- Leaking `adapter.out.persistence` exception or diagnostic types to
+  application callers.
 - Creating REST, SRI, XML, storage, queue, webhook, bootstrap, archive, purge,
   delete, production correction, or migration repair behavior.
 

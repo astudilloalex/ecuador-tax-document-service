@@ -12,8 +12,12 @@ database migration contents.
 - Container runtime available if persistence tests use Testcontainers.
 - Feature implementation limited to:
   - `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/`
+  - `src/main/java/com/alexastudillo/taxdocument/application/error/` for the
+    framework-free persistence error contract only
   - `src/main/resources/db/migration/`
   - `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`
+  - `src/test/java/com/alexastudillo/taxdocument/domain/` for
+    framework-free `TaxDocument.restore(...)` validation only
   - `build.gradle.kts` and `src/main/resources/application.properties` for
     required persistence dependencies/configuration only
   - framework-free `TaxDocument` restore behavior required by the spec
@@ -45,6 +49,12 @@ Expected result:
 
 - Persistence-specific implementation files exist only under
   `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/`.
+- Application-layer persistence error files exist only under
+  `src/main/java/com/alexastudillo/taxdocument/application/error/` and do not
+  import adapter or persistence framework types.
+- Framework-free domain restore tests may exist only under
+  `src/test/java/com/alexastudillo/taxdocument/domain/` for
+  `TaxDocument.restore(...)` validation.
 - No files are created under:
   - `adapter/in/rest`
   - `adapter/out/sri`
@@ -64,6 +74,8 @@ rg -n "jakarta\\.persistence|org\\.hibernate|io\\.quarkus|Panache|java\\.sql|jav
 Expected result:
 
 - No matches in domain/application source.
+- Application error abstractions do not import `adapter.out.persistence`
+  exception or diagnostic types.
 
 ### 4. Verify Target Schema Naming
 
@@ -85,6 +97,9 @@ Expected result:
   delete/update restrictions are present for required tables.
 - `issue_date` is represented as a date and `authorized_at` is represented as a
   UTC-normalized timestamp.
+- No `tax_document_audit_events` table is created unless SPEC 003 plan
+  explicitly justifies audit persistence. While `PFV-PER-004` remains deferred,
+  the table is absent from migrations and schema documentation.
 
 ### 5. Verify Forbidden Scope
 

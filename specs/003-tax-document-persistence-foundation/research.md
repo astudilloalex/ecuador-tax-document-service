@@ -82,8 +82,9 @@ and prevent SRI leakage into the target database model.
 
 **Decision**: Enforce uniqueness for `access_key`, issuance identity, and
 sequence reservation using target database constraints and transaction
-boundaries. Translate resulting constraint violations to application-facing
-duplicate or sequence reservation conflict errors.
+boundaries. Translate resulting constraint violations to framework-free
+application-layer duplicate or sequence reservation conflict errors defined by
+the `application.error` contract.
 
 **Rationale**: Pre-save existence checks alone are race-prone. Database
 constraints are the reliable enforcement point, while adapter translation keeps

@@ -17,9 +17,10 @@ based on feature context and requirements.
   Spec §SC-001-SC-011, Spec §FR-023, Plan §Phase 1 Design Summary]
 - [x] CHK002 Are all allowed implementation surfaces documented with enough
   specificity to prevent task generation outside the persistence adapter,
-  migration, configuration, domain restore, and test locations? [Completeness,
-  Spec §AR-001, Spec §AR-010, Plan §Project Structure, Quickstart
-  §Prerequisites]
+  narrow application error contract, migration, configuration, domain restore,
+  framework-free domain restore test, and persistence adapter test locations?
+  [Completeness, Spec §AR-001, Spec §AR-010, Plan §Project Structure,
+  Quickstart §Prerequisites]
 - [x] CHK003 Are persistence dependency and configuration requirements bounded
   to persistence support and adapter testing without implying domain or
   application dependencies on persistence frameworks? [Completeness,
@@ -44,8 +45,8 @@ based on feature context and requirements.
   §FR-011, Spec §FR-012, Spec §PFV-PER-005, Contract §SequenceNumberPort]
 - [x] CHK008 Are application-facing persistence error categories defined with
   stable names and forbidden framework exception leakage so tasks do not
-  expose database-specific types inward? [Clarity, Spec §FR-014, Spec §AR-006,
-  Contract §Persistence Error Translation]
+  expose database-specific or adapter-local exception types inward? [Clarity,
+  Spec §FR-014, Spec §AR-006, Contract §Persistence Error Translation]
 
 ## Requirement Consistency
 
@@ -64,10 +65,10 @@ based on feature context and requirements.
   contract? [Consistency, Plan §Schema Relationship and Constraint Design,
   Data Model §Target Tables, Contract §Persistence Schema]
 - [x] CHK012 Are test requirements consistent with the constitution's layered
-  testing rules, keeping domain/application tests infrastructure-free while
-  allowing persistence adapter tests to use approved infrastructure support?
-  [Consistency, Constitution §Layered Testing Requirements, Spec §AR-002,
-  Plan §Testing]
+  testing rules, keeping domain/application and domain restore tests
+  infrastructure-free while allowing persistence adapter tests to use approved
+  infrastructure support? [Consistency, Constitution §Layered Testing
+  Requirements, Spec §AR-002, Plan §Testing]
 
 ## Acceptance Criteria Quality
 

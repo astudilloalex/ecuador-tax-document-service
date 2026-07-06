@@ -247,6 +247,9 @@ This architecture and infrastructure enabler excludes:
   configuration locations. Approved configuration locations are limited to
   `build.gradle.kts` and `src/main/resources/application.properties` for
   persistence dependencies and runtime/test persistence settings.
+  Application-facing persistence error abstractions are the only approved
+  application-layer addition for this feature and MUST be framework-free under
+  `src/main/java/com/alexastudillo/taxdocument/application/error/`.
 - **FR-005**: The feature MUST implement the application-facing
   `TaxDocumentRepository` contract so future use cases can save a
   `TaxDocument`, load by `AccessKey`, load by issuance identity, check
@@ -309,15 +312,21 @@ This architecture and infrastructure enabler excludes:
 - **FR-014**: The persistence foundation MUST implement transaction boundaries
   through `TransactionPort` or an equivalent application-facing transaction
   abstraction without exposing persistence transaction types to domain or
-  application code. Persistence adapters MUST translate database and framework
-  failures into stable application-facing error categories, including duplicate
-  access key conflict, duplicate issuance identity conflict, duplicate or
+  application code. Application-facing persistence error categories MUST be
+  defined as narrow framework-free application-layer abstractions under
+  `src/main/java/com/alexastudillo/taxdocument/application/error/`, not as
+  adapter-local exception contracts. Persistence adapter internals MAY catch
+  database and framework exceptions, but MUST map them into those
+  application-layer errors before crossing inward. Stable categories MUST
+  include duplicate access key conflict, duplicate issuance identity conflict,
   unavailable sequence reservation conflict, invalid persisted tax document
   state, invalid persistence relationship, generic persistence failure, and
-  transaction failure. Contracts outside `adapter.out.persistence` MUST NOT
-  expose `SQLException`, `PersistenceException`, `ConstraintViolationException`,
-  Hibernate exceptions, Panache exceptions, PostgreSQL-specific exceptions, or
-  equivalent persistence-specific types.
+  transaction failure. Application and domain code MUST NOT depend on
+  `adapter.out.persistence` exception types. Contracts outside
+  `adapter.out.persistence` MUST NOT expose `SQLException`,
+  `PersistenceException`, `ConstraintViolationException`, Hibernate exceptions,
+  Panache exceptions, PostgreSQL-specific exceptions, or equivalent
+  persistence-specific types.
 - **FR-015**: The persistence foundation MUST update durable migration
   documentation with legacy-to-target naming notes and table/column mappings
   for all database objects introduced by this feature. The documentation MUST
@@ -365,16 +374,24 @@ This architecture and infrastructure enabler excludes:
 
 ### Architectural Requirements
 
-- **AR-001**: Persistence-specific source artifacts MUST be limited to:
+- **AR-001**: SPEC 003 source artifacts MUST be limited to:
   `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/`,
+  `src/main/java/com/alexastudillo/taxdocument/application/error/` for the
+  framework-free application persistence error contract,
   `src/main/resources/db/migration/`,
   `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`,
+  `src/test/java/com/alexastudillo/taxdocument/domain/` only for
+  framework-free `TaxDocument.restore(...)` validation,
   required framework configuration in `build.gradle.kts` and
   `src/main/resources/application.properties`, and a framework-free domain
   restore change only when required by `FR-006` and `FR-007`.
-- **AR-002**: Persistence tests MUST be limited to persistence adapter test
-  locations and MUST NOT require domain or application tests to start the
-  runtime framework or external infrastructure.
+- **AR-002**: Persistence adapter tests MUST remain under
+  `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/`.
+  Framework-free domain restore tests MAY exist under
+  `src/test/java/com/alexastudillo/taxdocument/domain/` only to validate
+  `TaxDocument.restore(...)`. Domain restore tests MUST NOT use Quarkus, JPA,
+  Hibernate, Panache, PostgreSQL, Flyway, JDBC, SQL, REST, XML, SOAP, SRI,
+  queue, storage, webhook, or adapter dependencies.
 - **AR-003**: Source dependencies MUST preserve Clean Architecture direction:
   persistence adapters may depend on application ports and domain models;
   domain and application code MUST NOT depend on persistence adapters.
@@ -383,9 +400,10 @@ This architecture and infrastructure enabler excludes:
   document-specific calculations, retry eligibility, or SRI behavior.
 - **AR-005**: Persistence mappers MUST translate between domain objects and
   persistence entities without reusing either model across the boundary.
-- **AR-006**: Persistence errors MUST be translated to application-facing
-  outcomes or exceptions that do not expose database-specific types beyond the
-  adapter boundary.
+- **AR-006**: Persistence errors MUST be translated to framework-free
+  application-layer error abstractions in `application.error`. Adapter-local
+  diagnostic or exception types MUST remain inside `adapter.out.persistence`
+  and MUST NOT become application or domain dependencies.
 - **AR-007**: Transaction handling MUST be available to application
   orchestration through `TransactionPort` and MUST NOT require use cases to
   import persistence transaction objects.

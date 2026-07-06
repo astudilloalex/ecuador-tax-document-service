@@ -5,9 +5,21 @@
 Define how persistence adapter failures are translated before crossing inward
 to the application layer.
 
+Application-facing persistence errors are application-layer abstractions, not
+adapter-local exceptions. SPEC 003 may add only a narrow framework-free error
+contract under:
+
+```text
+src/main/java/com/alexastudillo/taxdocument/application/error/
+```
+
+Persistence adapter internals may catch database/framework exceptions and may
+use adapter-local diagnostics, but adapter-local exception types must not cross
+inward or become application/domain dependencies.
+
 ## Error Categories
 
-| Adapter Condition | Stable Application-Facing Category | Notes |
+| Adapter Condition | Stable Application-Layer Category | Notes |
 |-------------------|------------------------------------|-------|
 | Duplicate `access_key` | `DuplicateAccessKeyConflict` | Required by clarification and `FR-009`. |
 | Duplicate issuance identity | `DuplicateIssuanceIdentityConflict` | Required by clarification and `FR-010`. |
@@ -23,6 +35,12 @@ to the application layer.
 
 ## Boundary Rules
 
+- Application-facing categories must be defined in
+  `com.alexastudillo.taxdocument.application.error`.
+- Adapter code maps database/framework failures into the application-layer
+  categories before errors cross inward.
+- Application and domain code must never depend on `adapter.out.persistence`
+  exception or diagnostic types.
 - Do not expose SQL exception classes outside `adapter.out.persistence`.
 - Do not expose `SQLException`, `PersistenceException`,
   `ConstraintViolationException`, Hibernate exceptions, Panache exceptions,
