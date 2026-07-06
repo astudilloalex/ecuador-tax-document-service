@@ -5,11 +5,10 @@
 - Source branch: `3-ft-2`
 - Target integration branch: `main`
 
-## PR Creation Status
+## Handoff Notes
 
-Prepared only. The GitHub CLI is not installed in this environment, so no
-authenticated GitHub account was available and no pull request was created from
-this session. Do not claim `codex-bot` as the pull request author unless the
+Create or update the pull request with the currently authenticated GitHub
+account. Do not claim `codex-bot` as the pull request author unless the
 environment used to create the PR is authenticated as `codex-bot`.
 
 ## Summary
