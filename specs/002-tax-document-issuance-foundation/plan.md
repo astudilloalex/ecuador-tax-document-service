@@ -21,9 +21,12 @@ webhook adapters, bootstrap wiring, or document-specific issuance flows.
 
 **Language/Version**: Java 25.
 
-**Primary Dependencies**: Quarkus and Gradle with Kotlin DSL are the project
-stack. Domain and application artifacts for this feature must use only Java and
-project-local domain/application types; they must not depend on Quarkus APIs.
+**Primary Dependencies**: Quarkus with Mutiny and Gradle with Kotlin DSL are
+the project stack. Domain artifacts for this feature must use only Java and
+project-local domain types; they must not depend on Quarkus APIs, Mutiny, or
+adapter/runtime APIs. Application output ports may use Mutiny `Uni` as the
+framework-free reactive contract required by the constitution, but must not
+depend on adapter implementations or Quarkus-specific types.
 
 **Storage**: N/A for this feature. Persistence is represented only by
 application ports. No PostgreSQL, Redis, XML storage, filesystem, queue, or

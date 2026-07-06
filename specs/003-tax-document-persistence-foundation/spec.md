@@ -250,6 +250,9 @@ This architecture and infrastructure enabler excludes:
   Application-facing persistence error abstractions are the only approved
   application-layer addition for this feature and MUST be framework-free under
   `src/main/java/com/alexastudillo/taxdocument/application/error/`.
+  Mutiny `Uni` is allowed in application port signatures as the constitution's
+  reactive contract, but domain objects and persistence entities MUST NOT use
+  `Uni` as state.
 - **FR-005**: The feature MUST implement the application-facing
   `TaxDocumentRepository` contract so future use cases can save a
   `TaxDocument`, load by `AccessKey`, load by issuance identity, check
@@ -264,7 +267,9 @@ This architecture and infrastructure enabler excludes:
   `findByAccessKey(accessKey)` and `findByIssuanceIdentity(identity)` MUST
   return an empty optional/result when no persisted tax document exists, and
   `existsByAccessKey(accessKey)` and `existsByIssuanceIdentity(identity)` MUST
-  return `false` when no persisted tax document exists.
+  return `false` when no persisted tax document exists. Repository operations
+  MUST return Mutiny `Uni` wrappers containing only domain/application payloads
+  and MUST NOT expose persistence entities or framework exceptions.
 - **FR-006**: The feature MUST support rehydrating a persisted `TaxDocument`
   with persisted `DocumentState`, `AuthorizationState`, optional
   `AuthorizationNumber`, optional `AuthorizedAt`, `IssueDate`,
@@ -297,7 +302,8 @@ This architecture and infrastructure enabler excludes:
   with an application-facing duplicate conflict error.
 - **FR-011**: The persistence foundation MUST implement sequence reservation
   through `SequenceNumberPort` for the issuer, establishment, issuing point,
-  document type, and requested sequence value.
+  document type, and requested sequence value. Sequence port operations MUST
+  return Mutiny `Uni` wrappers containing domain/application payloads.
 - **FR-012**: Sequence reservation MUST prevent conflicting duplicate
   reservations. An exact repeated reservation for the same issuer,
   establishment, issuing point, document type, and sequence value MUST be
@@ -312,7 +318,8 @@ This architecture and infrastructure enabler excludes:
 - **FR-014**: The persistence foundation MUST implement transaction boundaries
   through `TransactionPort` or an equivalent application-facing transaction
   abstraction without exposing persistence transaction types to domain or
-  application code. Application-facing persistence error categories MUST be
+  application code. Transaction operations MUST return Mutiny `Uni` results.
+  Application-facing persistence error categories MUST be
   defined as narrow framework-free application-layer abstractions under
   `src/main/java/com/alexastudillo/taxdocument/application/error/`, not as
   adapter-local exception contracts. Persistence adapter internals MAY catch
@@ -424,7 +431,8 @@ This architecture and infrastructure enabler excludes:
   for persistence adapter implementation, Flyway migration execution, and
   persistence adapter tests. These dependencies MUST NOT imply imports,
   annotations, or runtime framework dependencies in the domain or application
-  layers.
+  layers, except Mutiny `Uni` in application port signatures as the approved
+  reactive boundary contract.
 - **AR-012**: SPEC 003 assumes the application ports approved by
   `002-tax-document-issuance-foundation`. It may clarify persistence behavior
   required to implement `TaxDocumentRepository`, `SequenceNumberPort`, and

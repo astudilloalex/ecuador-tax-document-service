@@ -52,6 +52,9 @@ Expected result:
 - Application-layer persistence error files exist only under
   `src/main/java/com/alexastudillo/taxdocument/application/error/` and do not
   import adapter or persistence framework types.
+- Application output port operations may return Mutiny `Uni` as the approved
+  reactive boundary contract; `Uni` must not appear in domain models or
+  persistence entity state.
 - Framework-free domain restore tests may exist only under
   `src/test/java/com/alexastudillo/taxdocument/domain/` for
   `TaxDocument.restore(...)` validation.
@@ -76,6 +79,20 @@ Expected result:
 - No matches in domain/application source.
 - Application error abstractions do not import `adapter.out.persistence`
   exception or diagnostic types.
+- Application ports may import `io.smallrye.mutiny.Uni`; domain source must
+  not import Mutiny.
+
+### 3a. Verify Reactive Port Boundary
+
+```bash
+rg -n "Uni<" src/main/java/com/alexastudillo/taxdocument/application/port/out
+```
+
+Expected result:
+
+- Every application output port operation returns `Uni`.
+- `Uni` wraps only domain/application payload types.
+- Domain source files do not import `io.smallrye.mutiny`.
 
 ### 4. Verify Target Schema Naming
 

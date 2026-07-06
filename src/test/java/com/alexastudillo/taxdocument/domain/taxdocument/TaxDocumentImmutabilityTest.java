@@ -28,7 +28,8 @@ class TaxDocumentImmutabilityTest {
         Issuer issuer = new Issuer("issuer-1", "1790012345001", "Example Legal Name", null);
         Establishment establishment = new Establishment("establishment-1", "001", issuer.issuerId());
         IssuingPoint issuingPoint = new IssuingPoint("issuing-point-1", "002", establishment.establishmentId());
-        SequenceNumber sequenceNumber = new SequenceNumber("000000123", DocumentType.INVOICE, issuer, establishment, issuingPoint);
+        SequenceNumber sequenceNumber =
+                new SequenceNumber("000000123", DocumentType.INVOICE, issuer, establishment, issuingPoint);
         return new TaxDocument(
                 DocumentType.INVOICE,
                 issuer,

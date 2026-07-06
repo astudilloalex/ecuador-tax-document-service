@@ -5,12 +5,13 @@ import com.alexastudillo.taxdocument.domain.taxdocument.AuthorizationNumber;
 import com.alexastudillo.taxdocument.domain.taxdocument.AuthorizationState;
 import com.alexastudillo.taxdocument.domain.taxdocument.AuthorizedAt;
 import com.alexastudillo.taxdocument.domain.taxdocument.TaxDocument;
+import io.smallrye.mutiny.Uni;
 import java.util.Optional;
 
 public interface SriAuthorizationPort {
-    ReceptionResult submitForReception(TaxDocument taxDocument);
+    Uni<ReceptionResult> submitForReception(TaxDocument taxDocument);
 
-    AuthorizationResult requestAuthorization(AccessKey accessKey);
+    Uni<AuthorizationResult> requestAuthorization(AccessKey accessKey);
 
     record ReceptionResult(AccessKey accessKey, AuthorizationState authorizationState, String correlationId) {
     }

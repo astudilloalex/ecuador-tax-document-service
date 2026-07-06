@@ -45,6 +45,39 @@ public final class TaxDocument {
         validateIssuanceIdentity();
     }
 
+    public static TaxDocument restore(
+            DocumentType documentType,
+            Issuer issuer,
+            Establishment establishment,
+            IssuingPoint issuingPoint,
+            SequenceNumber sequenceNumber,
+            AccessKey accessKey,
+            IssueDate issueDate,
+            DocumentState documentState,
+            AuthorizationState authorizationState,
+            AuthorizationNumber authorizationNumber,
+            AuthorizedAt authorizedAt,
+            IssuanceMode issuanceMode,
+            String externalRequestId) {
+        TaxDocument taxDocument = new TaxDocument(
+                documentType,
+                issuer,
+                establishment,
+                issuingPoint,
+                sequenceNumber,
+                accessKey,
+                issueDate,
+                issuanceMode,
+                externalRequestId);
+        taxDocument.documentState = Objects.requireNonNull(documentState, "documentState must not be null");
+        taxDocument.authorizationState =
+                Objects.requireNonNull(authorizationState, "authorizationState must not be null");
+        taxDocument.authorizationNumber = authorizationNumber;
+        taxDocument.authorizedAt = authorizedAt;
+        taxDocument.validateRestoredAuthorizationData();
+        return taxDocument;
+    }
+
     private static String normalizeExternalRequestId(String externalRequestId) {
         if (externalRequestId == null || externalRequestId.isBlank()) {
             return null;
@@ -64,6 +97,27 @@ public final class TaxDocument {
         }
         if (!sequenceNumber.issuingPoint().equals(issuingPoint)) {
             throw new IllegalArgumentException("sequenceNumber issuingPoint must match taxDocument issuingPoint");
+        }
+    }
+
+    private void validateRestoredAuthorizationData() {
+        if (documentState == DocumentState.AUTHORIZED && authorizationState != AuthorizationState.AUTHORIZED) {
+            throw new IllegalArgumentException("authorized documentState requires authorized authorizationState");
+        }
+        if (authorizationState == AuthorizationState.AUTHORIZED && documentState != DocumentState.AUTHORIZED) {
+            throw new IllegalArgumentException("authorized authorizationState requires authorized documentState");
+        }
+        if (authorizationNumber != null && authorizationState != AuthorizationState.AUTHORIZED) {
+            throw new IllegalArgumentException("authorizationNumber requires authorized authorizationState");
+        }
+        if (authorizedAt != null && authorizationNumber == null) {
+            throw new IllegalArgumentException("authorizedAt requires authorizationNumber");
+        }
+        if (authorizationState == AuthorizationState.AUTHORIZED && authorizationNumber == null) {
+            throw new IllegalArgumentException("authorized authorizationState requires authorizationNumber");
+        }
+        if (authorizationState == AuthorizationState.AUTHORIZED && authorizedAt == null) {
+            throw new IllegalArgumentException("authorized authorizationState requires authorizedAt");
         }
     }
 

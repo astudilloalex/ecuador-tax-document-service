@@ -13,7 +13,7 @@ Target project identity:
 | Group | `com.alexastudillo` |
 | Artifact | `ecuador-tax-document-service` |
 | Base package | `com.alexastudillo.taxdocument` |
-| Runtime stack | Java 25, Quarkus, Gradle with Kotlin DSL |
+| Runtime stack | Java 25, Quarkus with Mutiny, Gradle with Kotlin DSL |
 | Project type | Backend only |
 | Architecture | Clean Architecture with Ports and Adapters |
 | Canonical language | English |
@@ -68,6 +68,10 @@ and immutable authorized document rules.
 orchestration, transaction boundaries, application-level validation,
 idempotency decisions, authorization checks, retry eligibility, sequence
 availability, and result models returned to inbound adapters.
+Application operations that cross an external dependency boundary must expose
+Mutiny `Uni` results so use cases can compose reactive workflows without
+depending on adapter or framework-specific models. Domain models and domain
+services must remain free of Mutiny and other framework/runtime APIs.
 
 `adapter.in.rest` owns thin REST resources, transport validation, authentication
 context extraction, REST DTO mapping, HTTP status mapping, error response

@@ -15,7 +15,14 @@ val quarkusPlatformVersion: String by project
 dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
     implementation("io.quarkus:quarkus-arc")
-    testImplementation("io.quarkus:quarkus-junit")
+    implementation("io.quarkus:quarkus-mutiny")
+    implementation("io.quarkus:quarkus-hibernate-orm")
+    implementation("io.quarkus:quarkus-jdbc-postgresql")
+    implementation("io.quarkus:quarkus-flyway")
+
+    testImplementation("io.quarkus:quarkus-junit5")
+    testImplementation("org.testcontainers:testcontainers:2.0.3")
+    testImplementation("org.testcontainers:testcontainers-postgresql:2.0.3")
 }
 
 group = "com.alexastudillo"

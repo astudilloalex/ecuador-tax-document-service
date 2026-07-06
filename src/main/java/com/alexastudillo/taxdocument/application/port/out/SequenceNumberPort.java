@@ -5,16 +5,17 @@ import com.alexastudillo.taxdocument.domain.taxdocument.Establishment;
 import com.alexastudillo.taxdocument.domain.taxdocument.Issuer;
 import com.alexastudillo.taxdocument.domain.taxdocument.IssuingPoint;
 import com.alexastudillo.taxdocument.domain.taxdocument.SequenceNumber;
+import io.smallrye.mutiny.Uni;
 
 public interface SequenceNumberPort {
-    SequenceNumber reserve(
+    Uni<SequenceNumber> reserve(
             DocumentType documentType,
             Issuer issuer,
             Establishment establishment,
             IssuingPoint issuingPoint,
             String requestedValue);
 
-    boolean isAvailable(
+    Uni<Boolean> isAvailable(
             DocumentType documentType,
             Issuer issuer,
             Establishment establishment,

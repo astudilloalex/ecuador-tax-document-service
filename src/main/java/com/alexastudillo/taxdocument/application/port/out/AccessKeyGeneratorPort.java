@@ -7,9 +7,10 @@ import com.alexastudillo.taxdocument.domain.taxdocument.IssueDate;
 import com.alexastudillo.taxdocument.domain.taxdocument.Issuer;
 import com.alexastudillo.taxdocument.domain.taxdocument.IssuingPoint;
 import com.alexastudillo.taxdocument.domain.taxdocument.SequenceNumber;
+import io.smallrye.mutiny.Uni;
 
 public interface AccessKeyGeneratorPort {
-    AccessKey generate(
+    Uni<AccessKey> generate(
             DocumentType documentType,
             Issuer issuer,
             Establishment establishment,

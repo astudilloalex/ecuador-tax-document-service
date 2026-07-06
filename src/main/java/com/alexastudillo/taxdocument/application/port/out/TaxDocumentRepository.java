@@ -7,23 +7,24 @@ import com.alexastudillo.taxdocument.domain.taxdocument.Issuer;
 import com.alexastudillo.taxdocument.domain.taxdocument.IssuingPoint;
 import com.alexastudillo.taxdocument.domain.taxdocument.SequenceNumber;
 import com.alexastudillo.taxdocument.domain.taxdocument.TaxDocument;
+import io.smallrye.mutiny.Uni;
 import java.util.Optional;
 
 public interface TaxDocumentRepository {
-    TaxDocument save(TaxDocument taxDocument);
+    Uni<TaxDocument> save(TaxDocument taxDocument);
 
-    Optional<TaxDocument> findByAccessKey(AccessKey accessKey);
+    Uni<Optional<TaxDocument>> findByAccessKey(AccessKey accessKey);
 
-    Optional<TaxDocument> findByIssuanceIdentity(
+    Uni<Optional<TaxDocument>> findByIssuanceIdentity(
             DocumentType documentType,
             Issuer issuer,
             Establishment establishment,
             IssuingPoint issuingPoint,
             SequenceNumber sequenceNumber);
 
-    boolean existsByAccessKey(AccessKey accessKey);
+    Uni<Boolean> existsByAccessKey(AccessKey accessKey);
 
-    boolean existsByIssuanceIdentity(
+    Uni<Boolean> existsByIssuanceIdentity(
             DocumentType documentType,
             Issuer issuer,
             Establishment establishment,

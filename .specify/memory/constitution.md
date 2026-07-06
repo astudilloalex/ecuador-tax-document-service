@@ -267,7 +267,7 @@ copying legacy architecture, naming, modules, coupling, or database design.
 
 ## Target Stack, Naming, and API Constraints
 
-The target backend stack is Java 25, Quarkus, Gradle with Kotlin DSL, backend only, Clean
+The target backend stack is Java 25, Quarkus with Mutiny for reactive programming, Gradle with Kotlin DSL, backend only, Clean
 Architecture, and Ports and Adapters. Target Java code MUST live under
 `com.alexastudillo.taxdocument`.
 

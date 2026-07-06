@@ -88,6 +88,74 @@ case, API, persistence, or database names.
 | `06` | `WAYBILL` | SRI adapter-only concept | Decided |
 | `07` | `WITHHOLDING` | SRI adapter-only concept | Decided |
 
+## Persistence Foundation Database Mappings
+
+Feature `003-tax-document-persistence-foundation` introduces the initial target
+database objects for common tax document persistence. These objects are target
+database objects, not a one-to-one copy of legacy tables.
+
+| Target Table | Classification | Purpose | Primary Key | Important Constraints and Indexes |
+|--------------|----------------|---------|-------------|-----------------------------------|
+| `issuers` | Target database object | Persist issuer identity and canonical issuer metadata. | `issuer_id` | `legal_identifier` is required; `idx_issuers_legal_identifier` supports lookup when needed. |
+| `establishments` | Target database object | Persist establishments owned by issuers. | `establishment_id` | `issuer_id` references `issuers.issuer_id`; `(issuer_id, establishment_code)` is unique; `idx_establishments_issuer_id` supports relationship lookup. |
+| `issuing_points` | Target database object | Persist issuing points owned by establishments. | `issuing_point_id` | `establishment_id` references `establishments.establishment_id`; `(establishment_id, issuing_point_code)` is unique; `idx_issuing_points_establishment_id` supports relationship lookup. |
+| `issuance_sequences` | Target database object | Persist requested sequence reservations. | `issuance_sequence_id` | `issuer_id`, `establishment_id`, and `issuing_point_id` are foreign keys; `(issuer_id, establishment_id, issuing_point_id, document_type, sequence_number)` is unique; `idx_issuance_sequences_identity` supports reservation lookup. |
+| `tax_documents` | Target database object | Persist common tax document identity, lifecycle state, and authorization state. | `tax_document_id` | `access_key` is unique; `(issuer_id, document_type, establishment_id, issuing_point_id, sequence_number)` is unique; `idx_tax_documents_access_key` and `idx_tax_documents_issuance_identity` support repository lookup. |
+
+Required target columns introduced or confirmed by this persistence foundation:
+
+| Target Column | Target Table(s) | Classification | Notes |
+|---------------|-----------------|----------------|-------|
+| `issuer_id` | `issuers`, `establishments`, `issuance_sequences`, `tax_documents` | Target database object | Canonical issuer identity. |
+| `legal_identifier` | `issuers` | Target database object | Issuer tax/legal identifier. |
+| `legal_name` | `issuers` | Target database object | Canonical legal name. |
+| `trade_name` | `issuers` | Target database object | Canonical trade name. |
+| `establishment_id` | `establishments`, `issuance_sequences`, `tax_documents` | Target database object | Canonical establishment identity. |
+| `establishment_code` | `establishments` | Target database object | Canonical establishment code. |
+| `issuing_point_id` | `issuing_points`, `issuance_sequences`, `tax_documents` | Target database object | Canonical issuing point identity. |
+| `issuing_point_code` | `issuing_points` | Target database object | Canonical issuing point code. |
+| `issuance_sequence_id` | `issuance_sequences` | Target database object | Adapter-owned sequence reservation identity. |
+| `tax_document_id` | `tax_documents` | Target database object | Adapter-owned tax document persistence identity. |
+| `access_key` | `tax_documents` | Target database object | Unique 49-digit access key. |
+| `document_type` | `issuance_sequences`, `tax_documents` | Target database object | Stores canonical `DocumentType` values, not SRI numeric codes. |
+| `sequence_number` | `issuance_sequences`, `tax_documents` | Target database object | Requested sequence value; automatic numbering is deferred. |
+| `issue_date` | `tax_documents` | Target database object | Database `date`; rehydrates as the same `IssueDate` calendar date without timezone conversion. |
+| `document_state` | `tax_documents` | Target database object | Canonical `DocumentState` value. |
+| `authorization_state` | `tax_documents` | Target database object | Canonical `AuthorizationState` value. |
+| `authorization_number` | `tax_documents` | Target database object | Optional; valid only with authorized state combinations. |
+| `authorized_at` | `tax_documents` | Target database object | UTC-normalized timestamp; rehydration tests compare at microsecond or selected database precision. |
+| `issuance_mode` | `tax_documents` | Target database object | Canonical `IssuanceMode` value. |
+| `external_request_id` | `tax_documents` | Target database object | Optional external idempotency identifier. |
+| `created_at` | all SPEC 003 tables | Target database object | Persistence diagnostic timestamp. |
+| `updated_at` | all SPEC 003 tables | Target database object | Persistence diagnostic timestamp. |
+| `reserved_at` | `issuance_sequences` | Target database object | Timestamp of first sequence reservation. |
+
+Relationship and lifecycle rules for SPEC 003:
+
+- Foreign keys use restrictive update and delete behavior. Cascade deletes are
+  not part of this feature.
+- `access_key` uniqueness and issuance identity uniqueness are database-backed
+  reliability guarantees, not application-only checks.
+- Sequence reservation uniqueness is enforced by
+  `(issuer_id, establishment_id, issuing_point_id, document_type,
+  sequence_number)`.
+- `document_type` stores canonical English enum values such as `INVOICE` and
+  `WITHHOLDING`; official SRI numeric document codes remain SRI adapter-only
+  concepts.
+- `tax_document_audit_events` remains deferred and is not created by SPEC 003.
+
+SPEC 003 deferred persistence PFVs:
+
+| PFV ID | Deferred Area | Resolution |
+|--------|---------------|------------|
+| PFV-PER-002 | Legacy compatibility views | Deferred to a migration or compatibility specification. |
+| PFV-PER-003 | Historical XML path storage | Deferred to an XML storage specification. |
+| PFV-PER-004 | Audit persistence | Deferred; `tax_document_audit_events` is absent from migrations and schema documentation. |
+| PFV-PER-005 | Auto-numbering policy | Deferred to future numbering policy or document-specific issuance specifications. |
+| PFV-PER-006 | Migration failure handling, rollback playbooks, and persisted data repair workflows | Deferred to a future operations or migration specification. |
+| PFV-PER-007 | Archive, purge, delete, production correction, and lifecycle correction workflows | Deferred to a future lifecycle, retention, or operations specification. |
+| PFV-PER-008 | Production data migration | Deferred to a future data migration specification. |
+
 ## Legacy State Mappings
 
 Legacy document states are mapped to canonical English target states for the

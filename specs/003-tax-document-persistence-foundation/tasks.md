@@ -18,10 +18,10 @@
 
 **Purpose**: Add only approved persistence dependencies, configuration, and package scaffolding.
 
-- [ ] T001 Add Quarkus Hibernate ORM, JDBC PostgreSQL, Flyway, and Testcontainers dependencies in `build.gradle.kts`
-- [ ] T002 Add persistence-only datasource and Flyway configuration placeholders in `src/main/resources/application.properties`
-- [ ] T003 [P] Create persistence adapter package markers in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
-- [ ] T004 [P] Create persistence adapter test package markers in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
+- [X] T001 Add Quarkus Mutiny, Hibernate ORM, JDBC PostgreSQL, Flyway, and Testcontainers dependencies in `build.gradle.kts`
+- [X] T002 Add persistence-only datasource and Flyway configuration placeholders in `src/main/resources/application.properties`
+- [X] T003 [P] Create persistence adapter package markers in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
+- [X] T004 [P] Create persistence adapter test package markers in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
 
 ---
 
@@ -31,14 +31,14 @@
 
 **Critical**: No user story implementation should start until this phase is complete.
 
-- [ ] T005 Create Flyway schema migration for `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and `tax_documents` with English snake_case names, primary keys, foreign keys, unique constraints, indexes, temporal columns, and restrictive delete/update rules in `src/main/resources/db/migration/V1__create_tax_document_persistence_foundation.sql`
-- [ ] T006 [P] Create stable application-layer persistence failure categories for duplicate access key conflict, duplicate issuance identity conflict, unavailable sequence reservation conflict, invalid persisted tax document state, invalid persistence relationship, generic persistence failure, and transaction failure in `src/main/java/com/alexastudillo/taxdocument/application/error/PersistenceFailureCategory.java`
-- [ ] T007 [P] Create framework-free application-layer persistence failure abstraction carrying stable categories without adapter or persistence framework dependencies in `src/main/java/com/alexastudillo/taxdocument/application/error/PersistenceFailure.java`
-- [ ] T008 Create persistence exception translator for duplicate, relationship, invalid state, transaction, and generic database/framework failures that maps to application-layer errors while keeping adapter-local diagnostics inside `adapter.out.persistence` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
-- [ ] T009 [P] Create issuer hierarchy JPA entities for `issuers`, `establishments`, and `issuing_points` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuerEntity.java`, `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/EstablishmentEntity.java`, and `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuingPointEntity.java`
-- [ ] T010 [P] Add shared persistence test fixture builders for issuer, establishment, issuing point, sequence, and tax document data in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTestData.java`
-- [ ] T011 [P] Add transaction adapter tests for return-value, void, and translated failure behavior in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTransactionAdapterTest.java`
-- [ ] T012 Implement `TransactionPort` using adapter-local transaction handling in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/transaction/PersistenceTransactionAdapter.java`
+- [X] T005 Create Flyway schema migration for `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and `tax_documents` with English snake_case names, primary keys, foreign keys, unique constraints, indexes, temporal columns, and restrictive delete/update rules in `src/main/resources/db/migration/V1__create_tax_document_persistence_foundation.sql`
+- [X] T006 [P] Create stable application-layer persistence failure categories for duplicate access key conflict, duplicate issuance identity conflict, unavailable sequence reservation conflict, invalid persisted tax document state, invalid persistence relationship, generic persistence failure, and transaction failure in `src/main/java/com/alexastudillo/taxdocument/application/error/PersistenceFailureCategory.java`
+- [X] T007 [P] Create framework-free application-layer persistence failure abstraction carrying stable categories without adapter or persistence framework dependencies in `src/main/java/com/alexastudillo/taxdocument/application/error/PersistenceFailure.java`
+- [X] T008 Create persistence exception translator for duplicate, relationship, invalid state, transaction, and generic database/framework failures that maps to application-layer errors while keeping adapter-local diagnostics inside `adapter.out.persistence` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
+- [X] T009 [P] Create issuer hierarchy JPA entities for `issuers`, `establishments`, and `issuing_points` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuerEntity.java`, `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/EstablishmentEntity.java`, and `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuingPointEntity.java`
+- [X] T010 [P] Add shared persistence test fixture builders for issuer, establishment, issuing point, sequence, and tax document data in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTestData.java`
+- [X] T011 [P] Add transaction adapter tests for return-value, void, and translated failure behavior in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTransactionAdapterTest.java`
+- [X] T012 Implement `TransactionPort` using adapter-local transaction handling in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/transaction/PersistenceTransactionAdapter.java`
 
 **Checkpoint**: Migration foundation, shared entities, transaction boundary, and persistence error translation are ready without inward framework leakage.
 
@@ -52,19 +52,19 @@
 
 ### Tests for User Story 1
 
-- [ ] T013 [P] [US1] Add framework-free domain restore tests for persisted non-`PENDING` state, authorized state, invalid authorization combinations, and absence of Quarkus, JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC, SQL, REST, XML, SOAP, SRI, queue, storage, webhook, adapter, or filesystem imports in `src/test/java/com/alexastudillo/taxdocument/domain/taxdocument/TaxDocumentRestoreTest.java`
-- [ ] T014 [P] [US1] Add tax document persistence mapper tests for domain-to-entity and entity-to-domain rehydration, canonical enum names, and temporal precision in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentPersistenceMapperTest.java`
-- [ ] T015 [P] [US1] Add repository save/load/missing lookup tests for access key and issuance identity in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTaxDocumentRepositoryTest.java`
-- [ ] T016 [P] [US1] Add invalid persisted tax document state translation tests for unknown enum values and inconsistent relationships in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceErrorTranslationTest.java`
+- [X] T013 [P] [US1] Add framework-free domain restore tests for persisted non-`PENDING` state, authorized state, invalid authorization combinations, and absence of Quarkus, JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC, SQL, REST, XML, SOAP, SRI, queue, storage, webhook, adapter, or filesystem imports in `src/test/java/com/alexastudillo/taxdocument/domain/taxdocument/TaxDocumentRestoreTest.java`
+- [X] T014 [P] [US1] Add tax document persistence mapper tests for domain-to-entity and entity-to-domain rehydration, canonical enum names, and temporal precision in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentPersistenceMapperTest.java`
+- [X] T015 [P] [US1] Add repository save/load/missing lookup tests for access key and issuance identity in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTaxDocumentRepositoryTest.java`
+- [X] T016 [P] [US1] Add invalid persisted tax document state translation tests for unknown enum values and inconsistent relationships in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceErrorTranslationTest.java`
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Add framework-free `TaxDocument.restore(...)` rehydration path preserving access key, document type, issuer, establishment, issuing point, sequence number, issue date, document state, authorization state, authorization number, authorized timestamp, issuance mode, and external request ID in `src/main/java/com/alexastudillo/taxdocument/domain/taxdocument/TaxDocument.java`
-- [ ] T018 [US1] Create tax document JPA entity for `tax_documents` using canonical field names and adapter-only annotations in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/TaxDocumentEntity.java`
-- [ ] T019 [US1] Create mapper between `TaxDocument` and `TaxDocumentEntity` with domain restore and no SRI code translation in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/mapper/TaxDocumentPersistenceMapper.java`
-- [ ] T020 [US1] Implement `TaxDocumentRepository.save`, `findByAccessKey`, `findByIssuanceIdentity`, `existsByAccessKey`, and `existsByIssuanceIdentity` using domain/application signatures only in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
-- [ ] T021 [US1] Implement missing-record behavior returning `Optional.empty()` or `false` without throwing not-found persistence exceptions in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
-- [ ] T022 [US1] Implement invalid persisted state and relationship translation to stable application-layer persistence failure categories in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
+- [X] T017 [US1] Add framework-free `TaxDocument.restore(...)` rehydration path preserving access key, document type, issuer, establishment, issuing point, sequence number, issue date, document state, authorization state, authorization number, authorized timestamp, issuance mode, and external request ID in `src/main/java/com/alexastudillo/taxdocument/domain/taxdocument/TaxDocument.java`
+- [X] T018 [US1] Create tax document JPA entity for `tax_documents` using canonical field names and adapter-only annotations in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/TaxDocumentEntity.java`
+- [X] T019 [US1] Create mapper between `TaxDocument` and `TaxDocumentEntity` with domain restore and no SRI code translation in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/mapper/TaxDocumentPersistenceMapper.java`
+- [X] T020 [US1] Implement `TaxDocumentRepository.save`, `findByAccessKey`, `findByIssuanceIdentity`, `existsByAccessKey`, and `existsByIssuanceIdentity` using Mutiny `Uni` domain/application signatures only in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
+- [X] T021 [US1] Implement missing-record behavior returning `Uni` results containing `Optional.empty()` or `false` without throwing not-found persistence exceptions in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
+- [X] T022 [US1] Implement invalid persisted state and relationship translation to stable application-layer persistence failure categories in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
 
 **Checkpoint**: User Story 1 can persist and rehydrate tax documents and handle missing/invalid persisted data without leaking persistence entities or framework types.
 
@@ -78,15 +78,15 @@
 
 ### Tests for User Story 2
 
-- [ ] T023 [P] [US2] Add duplicate access key conflict tests for pre-save and database-enforced race scenarios in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentDuplicatePersistenceTest.java`
-- [ ] T024 [P] [US2] Add duplicate issuance identity conflict tests for pre-save and database-enforced race scenarios in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentDuplicatePersistenceTest.java`
-- [ ] T025 [P] [US2] Add same-aggregate update tests proving `save` updates the same persisted tax document but does not replace a different document in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTaxDocumentRepositoryTest.java`
+- [X] T023 [P] [US2] Add duplicate access key conflict tests for pre-save and database-enforced race scenarios in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentDuplicatePersistenceTest.java`
+- [X] T024 [P] [US2] Add duplicate issuance identity conflict tests for pre-save and database-enforced race scenarios in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/TaxDocumentDuplicatePersistenceTest.java`
+- [X] T025 [P] [US2] Add same-aggregate update tests proving `save` updates the same persisted tax document but does not replace a different document in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceTaxDocumentRepositoryTest.java`
 
 ### Implementation for User Story 2
 
-- [ ] T026 [US2] Enforce duplicate access key and duplicate issuance identity translation to application-layer `DuplicateAccessKeyConflict` and `DuplicateIssuanceIdentityConflict` categories in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
-- [ ] T027 [US2] Implement same-aggregate update and different-aggregate conflict behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
-- [ ] T028 [US2] Ensure database unique constraint names for `access_key` and issuance identity are mapped to stable application-layer duplicate categories in `src/main/resources/db/migration/V1__create_tax_document_persistence_foundation.sql`
+- [X] T026 [US2] Enforce duplicate access key and duplicate issuance identity translation to application-layer `DuplicateAccessKeyConflict` and `DuplicateIssuanceIdentityConflict` categories in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
+- [X] T027 [US2] Implement same-aggregate update and different-aggregate conflict behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceTaxDocumentRepository.java`
+- [X] T028 [US2] Ensure database unique constraint names for `access_key` and issuance identity are mapped to stable application-layer duplicate categories in `src/main/resources/db/migration/V1__create_tax_document_persistence_foundation.sql`
 
 **Checkpoint**: Duplicate access key and duplicate issuance identity scenarios are stable, race-safe, and application-facing.
 
@@ -100,15 +100,15 @@
 
 ### Tests for User Story 3
 
-- [ ] T029 [P] [US3] Add sequence reservation tests for first reservation and exact repeated idempotent reservation in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSequenceNumberAdapterTest.java`
-- [ ] T030 [P] [US3] Add sequence availability and conflicting duplicate reservation tests in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSequenceNumberAdapterTest.java`
+- [X] T029 [P] [US3] Add sequence reservation tests for first reservation and exact repeated idempotent reservation in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSequenceNumberAdapterTest.java`
+- [X] T030 [P] [US3] Add sequence availability and conflicting duplicate reservation tests in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSequenceNumberAdapterTest.java`
 
 ### Implementation for User Story 3
 
-- [ ] T031 [US3] Create issuance sequence JPA entity for `issuance_sequences` with canonical `document_type` and requested `sequence_number` fields in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuanceSequenceEntity.java`
-- [ ] T032 [US3] Create mapper between `IssuanceSequenceEntity` and domain `SequenceNumber` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/mapper/SequenceNumberPersistenceMapper.java`
-- [ ] T033 [US3] Implement `SequenceNumberPort.reserve` and `isAvailable` with requested-value behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceSequenceNumberAdapter.java`
-- [ ] T034 [US3] Translate unavailable sequence reservation conflicts to the application-layer `UnavailableSequenceReservationConflict` category in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
+- [X] T031 [US3] Create issuance sequence JPA entity for `issuance_sequences` with canonical `document_type` and requested `sequence_number` fields in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/entity/IssuanceSequenceEntity.java`
+- [X] T032 [US3] Create mapper between `IssuanceSequenceEntity` and domain `SequenceNumber` in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/mapper/SequenceNumberPersistenceMapper.java`
+- [X] T033 [US3] Implement `SequenceNumberPort.reserve` and `isAvailable` with Mutiny `Uni` requested-value behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/repository/PersistenceSequenceNumberAdapter.java`
+- [X] T034 [US3] Translate unavailable sequence reservation conflicts to the application-layer `UnavailableSequenceReservationConflict` category in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
 
 **Checkpoint**: Sequence reservation is requested-value only, idempotent for exact repeats, conflict-safe for duplicates, and does not introduce auto-numbering.
 
@@ -122,16 +122,16 @@
 
 ### Tests for User Story 4
 
-- [ ] T035 [P] [US4] Add Clean Architecture boundary tests ensuring domain/application do not import JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus persistence APIs, or adapter types in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceBoundaryTest.java`
-- [ ] T036 [P] [US4] Add forbidden scope tests ensuring no SPEC 003 source exists under `adapter/in/rest`, `adapter/out/sri`, `adapter/out/storage`, `adapter/out/queue`, `adapter/out/webhook`, or `bootstrap` in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceBoundaryTest.java`
-- [ ] T037 [P] [US4] Add migration naming and scope tests for English lowercase snake_case tables, canonical `document_type` values, absence of SRI numeric document type storage, and absence of `tax_document_audit_events` unless SPEC 003 plan explicitly justifies audit persistence; if audit persistence remains deferred as `PFV-PER-004`, assert that the table is absent from migrations and schema documentation in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSchemaMigrationTest.java`
-- [ ] T038 [P] [US4] Add migration documentation coverage tests for target tables, columns, constraints, temporal mappings, and PFV references in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/MigrationDocumentationCoverageTest.java`
+- [X] T035 [P] [US4] Add Clean Architecture boundary tests ensuring domain/application do not import JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus persistence APIs, or adapter types in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceBoundaryTest.java`
+- [X] T036 [P] [US4] Add forbidden scope tests ensuring no SPEC 003 source exists under `adapter/in/rest`, `adapter/out/sri`, `adapter/out/storage`, `adapter/out/queue`, `adapter/out/webhook`, or `bootstrap` in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceBoundaryTest.java`
+- [X] T037 [P] [US4] Add migration naming and scope tests for English lowercase snake_case tables, canonical `document_type` values, absence of SRI numeric document type storage, and absence of `tax_document_audit_events` unless SPEC 003 plan explicitly justifies audit persistence; if audit persistence remains deferred as `PFV-PER-004`, assert that the table is absent from migrations and schema documentation in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/PersistenceSchemaMigrationTest.java`
+- [X] T038 [P] [US4] Add migration documentation coverage tests for target tables, columns, constraints, temporal mappings, and PFV references in `src/test/java/com/alexastudillo/taxdocument/adapter/out/persistence/MigrationDocumentationCoverageTest.java`
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Update durable migration mapping documentation with target tables, target columns, constraints, temporal mappings, classifications, and PFV references in `docs/migration/legacy-to-target-terminology.md`
-- [ ] T040 [US4] Add package-level documentation stating persistence adapter scope and forbidden behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
-- [ ] T041 [US4] Ensure persistence diagnostics exclude credentials, tokens, passwords, private keys, connection strings with secrets, and sensitive configuration values in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
+- [X] T039 [US4] Update durable migration mapping documentation with target tables, target columns, constraints, temporal mappings, classifications, and PFV references in `docs/migration/legacy-to-target-terminology.md`
+- [X] T040 [US4] Add package-level documentation stating persistence adapter scope and forbidden behavior in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/package-info.java`
+- [X] T041 [US4] Ensure persistence diagnostics exclude credentials, tokens, passwords, private keys, connection strings with secrets, and sensitive configuration values in `src/main/java/com/alexastudillo/taxdocument/adapter/out/persistence/error/PersistenceExceptionTranslator.java`
 
 **Checkpoint**: Architecture boundaries, English terminology, migration classification, and deferred PFVs are traceable and reviewable.
 
@@ -141,10 +141,10 @@
 
 **Purpose**: Validate the full persistence foundation against the constitution, quickstart, and task traceability rules.
 
-- [ ] T042 [Validation] Run the full test suite using the commands documented in `specs/003-tax-document-persistence-foundation/quickstart.md`. If failures are caused by SPEC 003 implementation or test files owned by this task set, fix only those SPEC 003-owned source or test files. Do not modify out-of-scope adapters, REST, SRI, XML, queue, webhook, storage, bootstrap, or document-specific issuance code. If a failure requires an out-of-scope change, document it as a finding instead of fixing it.
-- [ ] T043 Verify no out-of-scope packages or runtime wiring were created by comparing source layout against `specs/003-tax-document-persistence-foundation/quickstart.md`
-- [ ] T044 Verify every completed task maps to SPEC 003 requirements, contracts, plan sections, or data-model sections in `specs/003-tax-document-persistence-foundation/tasks.md`
-- [ ] T045 Verify deferred PFVs remain excluded from implementation and task scope in `specs/003-tax-document-persistence-foundation/quickstart.md`
+- [X] T042 [Validation] Run the full test suite using the commands documented in `specs/003-tax-document-persistence-foundation/quickstart.md`. If failures are caused by SPEC 003 implementation or test files owned by this task set, fix only those SPEC 003-owned source or test files. Do not modify out-of-scope adapters, REST, SRI, XML, queue, webhook, storage, bootstrap, or document-specific issuance code. If a failure requires an out-of-scope change, document it as a finding instead of fixing it.
+- [X] T043 Verify no out-of-scope packages or runtime wiring were created by comparing source layout against `specs/003-tax-document-persistence-foundation/quickstart.md`
+- [X] T044 Verify every completed task maps to SPEC 003 requirements, contracts, plan sections, or data-model sections in `specs/003-tax-document-persistence-foundation/tasks.md`
+- [X] T045 Verify deferred PFVs remain excluded from implementation and task scope in `specs/003-tax-document-persistence-foundation/quickstart.md`
 
 ---
 

@@ -18,9 +18,10 @@ bootstrap behavior, or document-specific issuance flows.
 
 **Language/Version**: Java 25
 
-**Primary Dependencies**: Quarkus, Gradle with Kotlin DSL, Quarkus Hibernate
-ORM with plain JPA entities, Quarkus JDBC PostgreSQL, Quarkus Flyway, Quarkus
-Arc, JUnit, Quarkus JUnit, Testcontainers for PostgreSQL-backed adapter tests.
+**Primary Dependencies**: Quarkus with Mutiny, Gradle with Kotlin DSL, Quarkus
+Hibernate ORM with plain JPA entities, Quarkus JDBC PostgreSQL, Quarkus
+Flyway, Quarkus Arc, JUnit, Quarkus JUnit, Testcontainers for
+PostgreSQL-backed adapter tests.
 Panache active-record style is not used for domain objects and is not needed
 for this foundation.
 
@@ -28,8 +29,12 @@ Persistence dependencies and configuration are allowed only for the outbound
 persistence adapter, Flyway migrations, and persistence adapter tests. They do
 not authorize JPA, Hibernate, Panache, JDBC, SQL, PostgreSQL, Flyway, Quarkus
 persistence APIs, or framework annotations in the domain or application layers.
-The only approved application-layer addition is a narrow framework-free
-`application.error` contract for persistence failure categories.
+The existing application output ports return Mutiny `Uni` wrappers per the
+constitution's reactive target stack. `Uni` is allowed only as an
+application-boundary contract; domain models, value objects, and persistence
+entities must not use `Uni` as state. The only approved new application-layer
+addition is a narrow framework-free `application.error` contract for
+persistence failure categories.
 
 **Storage**: PostgreSQL target schema managed by Flyway migrations under
 `src/main/resources/db/migration/`.
@@ -53,10 +58,11 @@ transactional behavior instead of application-only duplicate checks.
 **Constraints**: Persistence-specific code is limited to
 `adapter.out.persistence` plus approved configuration and Flyway locations.
 The only application source addition is the framework-free
-`application.error` persistence error contract. Domain and application layers
-must remain free of JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC, SQL,
-Quarkus persistence APIs, persistence annotations, and adapter-local exception
-types. Target database names are English lowercase snake_case.
+`application.error` persistence error contract, plus constitution-aligned
+Mutiny `Uni` return types on application output ports. Domain and application
+layers must remain free of JPA, Hibernate, Panache, PostgreSQL, Flyway, JDBC,
+SQL, Quarkus persistence APIs, persistence annotations, and adapter-local
+exception types. Target database names are English lowercase snake_case.
 
 **Scale/Scope**: Initial common issuance tables only:
 `issuers`, `establishments`, `issuing_points`, `issuance_sequences`, and
@@ -177,11 +183,13 @@ authorization combinations and preserves existing invariants.
 `002-tax-document-issuance-foundation` are implemented:
 `TaxDocumentRepository`, `SequenceNumberPort`, and `TransactionPort`. SPEC 003
 clarifies persistence behavior for these ports but does not rename, redesign,
-or broaden them. Application-facing persistence error categories are defined in
-the narrow `com.alexastudillo.taxdocument.application.error` contract. Adapter
-code maps database/framework failures into those application-layer errors and
-must not expose SQL, Hibernate, JPA, Flyway, PostgreSQL, adapter-local
-exceptions, or other persistence-specific types inward.
+or broaden them. The ports expose Mutiny `Uni` results to satisfy the
+constitution's reactive stack while carrying only domain/application payloads.
+Application-facing persistence error categories are defined in the narrow
+`com.alexastudillo.taxdocument.application.error` contract. Adapter code maps
+database/framework failures into those application-layer errors and must not
+expose SQL, Hibernate, JPA, Flyway, PostgreSQL, adapter-local exceptions, or
+other persistence-specific types inward.
 
 **Inbound REST Adapter**: Not applicable. No REST resources, request DTOs,
 response DTOs, transport validation, or HTTP error mapping are created.

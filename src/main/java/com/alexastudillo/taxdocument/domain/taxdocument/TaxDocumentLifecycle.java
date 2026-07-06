@@ -9,7 +9,8 @@ import java.util.Set;
  * Common state transition policy for tax document issuance.
  */
 public final class TaxDocumentLifecycle {
-    private static final Map<DocumentState, Set<DocumentState>> ALLOWED_TRANSITIONS = new EnumMap<>(DocumentState.class);
+    private static final Map<DocumentState, Set<DocumentState>> ALLOWED_TRANSITIONS =
+            new EnumMap<>(DocumentState.class);
 
     static {
         ALLOWED_TRANSITIONS.put(DocumentState.PENDING, EnumSet.of(DocumentState.IN_PROGRESS, DocumentState.VOIDED));

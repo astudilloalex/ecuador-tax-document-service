@@ -10,6 +10,12 @@ Define the required application-layer output ports for the common tax document
 issuance foundation. This contract defines responsibilities and boundary rules;
 it does not define adapter implementations.
 
+Per the constitution target stack, application port operations that represent
+external dependency access return Mutiny `Uni` results. `Uni` is allowed at the
+application boundary for reactive composition; domain objects and domain
+services remain free of Mutiny, Quarkus, persistence, REST, SRI, XML, queue,
+storage, and webhook dependencies.
+
 ## Required Ports
 
 | Port | Required Responsibility | Forbidden Leakage |
@@ -29,6 +35,8 @@ it does not define adapter implementations.
 ## Acceptance Checks
 
 - Each port is owned by the application layer.
+- Each port operation returns `Uni` and exposes only domain/application payload
+  types inside that `Uni`.
 - No port signature uses REST DTOs, persistence entities, SRI XML/SOAP DTOs,
   queue job models, filesystem types, HTTP client types, or framework-specific
   classes.

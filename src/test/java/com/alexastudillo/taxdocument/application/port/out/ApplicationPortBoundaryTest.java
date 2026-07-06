@@ -1,9 +1,13 @@
 package com.alexastudillo.taxdocument.application.port.out;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.smallrye.mutiny.Uni;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
@@ -45,12 +49,27 @@ class ApplicationPortBoundaryTest {
     @Test
     void portSignaturesAvoidFrameworkAndAdapterTypes() {
         for (Class<?> port : PORTS) {
-            for (Method method : port.getMethods()) {
+            for (Method method : declaredPortMethods(port)) {
                 String signature = method.toGenericString().toLowerCase();
                 for (String forbidden : FORBIDDEN_SIGNATURE_TERMS) {
                     assertFalse(signature.contains(forbidden), port.getName() + "#" + method.getName());
                 }
             }
         }
+    }
+
+    @Test
+    void portOperationsReturnMutinyUni() {
+        for (Class<?> port : PORTS) {
+            for (Method method : declaredPortMethods(port)) {
+                assertEquals(Uni.class, method.getReturnType(), port.getName() + "#" + method.getName());
+            }
+        }
+    }
+
+    private static Set<Method> declaredPortMethods(Class<?> port) {
+        return Arrays.stream(port.getDeclaredMethods())
+                .filter(method -> Modifier.isAbstract(method.getModifiers()))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 }

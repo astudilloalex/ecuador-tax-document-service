@@ -1,9 +1,10 @@
 package com.alexastudillo.taxdocument.application.port.out;
 
+import io.smallrye.mutiny.Uni;
 import java.util.function.Supplier;
 
 public interface TransactionPort {
-    <T> T withinTransaction(Supplier<T> operation);
+    <T> Uni<T> withinTransaction(Supplier<T> operation);
 
-    void withinTransaction(Runnable operation);
+    Uni<Void> withinTransaction(Runnable operation);
 }

@@ -9,6 +9,10 @@ This contract clarifies behavior for the ports approved by
 `002-tax-document-issuance-foundation`; it does not rename, redesign, or
 broaden those ports.
 
+All implemented port operations return Mutiny `Uni` results according to the
+constitution target stack. `Uni` is the application-layer reactive boundary
+contract; payloads inside `Uni` remain domain/application models only.
+
 Application-facing persistence errors referenced by this contract are defined
 only in the framework-free application error contract under
 `com.alexastudillo.taxdocument.application.error`. Persistence adapters may use
@@ -36,7 +40,7 @@ Excluded ports:
 
 ## `TaxDocumentRepository`
 
-### `save(TaxDocument taxDocument)`
+### `Uni<TaxDocument> save(TaxDocument taxDocument)`
 
 Required behavior:
 
@@ -53,7 +57,8 @@ Required behavior:
   conflict error.
 - Rejects duplicate issuance identity saves with an application-facing
   duplicate conflict error.
-- Returns a domain `TaxDocument`, never a persistence entity.
+- Returns a `Uni` containing a domain `TaxDocument`, never a persistence
+  entity.
 
 Forbidden behavior:
 
@@ -64,23 +69,23 @@ Forbidden behavior:
 - Creating REST, SRI, XML, storage, queue, webhook, bootstrap, archive, purge,
   delete, production correction, or migration repair behavior.
 
-### `findByAccessKey(AccessKey accessKey)`
+### `Uni<Optional<TaxDocument>> findByAccessKey(AccessKey accessKey)`
 
 Required behavior:
 
 - Loads a persisted tax document by `access_key`.
-- Returns `Optional.empty()` when no document exists.
+- Returns a `Uni` containing `Optional.empty()` when no document exists.
 - Rehydrates through the domain restore path.
 - Rejects invalid persisted authorization combinations with an
   application-facing data integrity error.
 
-### `findByIssuanceIdentity(...)`
+### `Uni<Optional<TaxDocument>> findByIssuanceIdentity(...)`
 
 Required behavior:
 
 - Loads by issuer, canonical document type, establishment, issuing point, and
   sequence number.
-- Returns `Optional.empty()` when no document exists.
+- Returns a `Uni` containing `Optional.empty()` when no document exists.
 - Uses canonical `DocumentType` values, not SRI numeric codes.
 
 ### Existence Checks
@@ -89,22 +94,22 @@ Required behavior:
 
 - `existsByAccessKey` reflects persisted `access_key`.
 - `existsByIssuanceIdentity` reflects persisted issuance identity.
-- `existsByAccessKey` returns `false` when no persisted tax document exists for
-  the access key.
-- `existsByIssuanceIdentity` returns `false` when no persisted tax document
-  exists for the issuance identity.
+- `existsByAccessKey` returns a `Uni` containing `false` when no persisted tax
+  document exists for the access key.
+- `existsByIssuanceIdentity` returns a `Uni` containing `false` when no
+  persisted tax document exists for the issuance identity.
 - Existence checks are not the only duplicate protection; database constraints
   remain authoritative.
 
 ## `SequenceNumberPort`
 
-### `reserve(...)`
+### `Uni<SequenceNumber> reserve(...)`
 
 Required behavior:
 
 - Reserves a requested sequence value for issuer, establishment, issuing point,
   and canonical document type.
-- Returns a domain `SequenceNumber`.
+- Returns a `Uni` containing a domain `SequenceNumber`.
 - Exact repeated reservation for the same identity returns the existing
   `SequenceNumber` idempotently.
 - Conflicting duplicate reservation must fail with an application-facing
@@ -114,13 +119,13 @@ Required behavior:
   guarantees; application-only checks are insufficient.
 - Automatic next-number allocation is out of scope.
 
-### `isAvailable(...)`
+### `Uni<Boolean> isAvailable(...)`
 
 Required behavior:
 
-- Returns `true` only when the requested reservation identity has no existing
-  reservation.
-- Returns `false` when a conflicting reservation exists.
+- Returns a `Uni` containing `true` only when the requested reservation
+  identity has no existing reservation.
+- Returns a `Uni` containing `false` when a conflicting reservation exists.
 
 ## `TransactionPort`
 
@@ -128,6 +133,7 @@ Required behavior:
 
 - Executes application operations inside persistence transaction boundaries.
 - Supports return-value and void operations.
+- Returns Mutiny `Uni` results for both return-value and void operations.
 - Does not expose persistence transaction types to application callers.
 - Translates transaction failures to application-facing failures.
 
