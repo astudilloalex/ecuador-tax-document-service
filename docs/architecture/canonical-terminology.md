@@ -63,6 +63,30 @@ Plural resource names must use natural English forms. Examples:
 `establishments`, `issuing_points`, `issuance_sequences`,
 `webhook_subscriptions`, and `webhook_delivery_attempts`.
 
+## Issuance Foundation Terms
+
+Feature `002-tax-document-issuance-foundation` adds the following canonical
+terms for common domain and application issuance foundations. These terms must
+use the same artifact-specific format rules defined above.
+
+| Canonical Term | Class Form | Field/Method Form | Database Form | URL Form | Event/Test Stem | Documentation File |
+|----------------|------------|-------------------|---------------|----------|-----------------|--------------------|
+| taxDocument | `TaxDocument` | `taxDocument` | `tax_document` | `tax-document` | `TaxDocument` | `tax-document.md` |
+| documentType | `DocumentType` | `documentType` | `document_type` | `document-type` | `DocumentType` | `document-type.md` |
+| documentState | `DocumentState` | `documentState` | `document_state` | `document-state` | `DocumentState` | `document-state.md` |
+| authorizationState | `AuthorizationState` | `authorizationState` | `authorization_state` | `authorization-state` | `AuthorizationState` | `authorization-state.md` |
+| issuer | `Issuer` | `issuer` | `issuer` | `issuer` | `Issuer` | `issuer.md` |
+| establishment | `Establishment` | `establishment` | `establishment` | `establishment` | `Establishment` | `establishment.md` |
+| issuingPoint | `IssuingPoint` | `issuingPoint` | `issuing_point` | `issuing-point` | `IssuingPoint` | `issuing-point.md` |
+| sequenceNumber | `SequenceNumber` | `sequenceNumber` | `sequence_number` | `sequence-number` | `SequenceNumber` | `sequence-number.md` |
+| accessKey | `AccessKey` | `accessKey` | `access_key` | `access-key` | `AccessKey` | `access-key.md` |
+| authorizationNumber | `AuthorizationNumber` | `authorizationNumber` | `authorization_number` | `authorization-number` | `AuthorizationNumber` | `authorization-number.md` |
+| issueDate | `IssueDate` | `issueDate` | `issue_date` | `issue-date` | `IssueDate` | `issue-date.md` |
+| authorizedAt | `AuthorizedAt` | `authorizedAt` | `authorized_at` | `authorized-at` | `AuthorizedAt` | `authorized-at.md` |
+| issuanceRequest | `IssuanceRequest` | `issuanceRequest` | `issuance_request` | `issuance-request` | `IssuanceRequest` | `issuance-request.md` |
+| issuanceResult | `IssuanceResult` | `issuanceResult` | `issuance_result` | `issuance-result` | `IssuanceResult` | `issuance-result.md` |
+| issuanceMode | `IssuanceMode` | `issuanceMode` | `issuance_mode` | `issuance-mode` | `IssuanceMode` | `issuance-mode.md` |
+
 ## Forbidden Generic Names
 
 The following generic names are forbidden for target business behavior:
