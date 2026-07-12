@@ -16,7 +16,8 @@ otherwise.
 | `factura` | Invoice | Target Domain | The commercial and fiscal invoice concept; this does not imply a legacy API or database contract. |
 | `borrador de factura` | Invoice Draft | Target Domain | An internal, pre-issuance record with no official fiscal identifier or SRI status. |
 | `comprobante` | Tax Document | Target Domain | Generic target concept for a document governed by Ecuadorian tax rules. |
-| `emisor` | Issuer | Target Domain | The tenant-owned legal person or business responsible for a tax document. |
+| `empresa` | Company | Target Domain | Authorized legal entity within a tenant boundary or acting as that boundary; it has exactly one Issuer fiscal profile. |
+| `emisor` | Issuer | Target Domain | The single authoritative fiscal profile belonging to exactly one Company and responsible for a tax document. |
 | `razón social` | Legal Name | Target Domain | Registered legal identity; it is not client-overridable on an invoice draft. |
 | `RUC` | RUC | Target Domain | Legally defined Ecuadorian identifier that remains exact. |
 | `punto de emisión` | Emission Point | Target Domain | Active issuer-owned point selected for future fiscal issuance. |
@@ -28,6 +29,7 @@ otherwise.
 | `forma de pago` | Payment Method | Target Domain | Active catalog method selected for a draft payment. |
 | `pago` | Payment | Target Domain | Amount allocated to one payment method for an invoice draft. |
 | `información adicional` | Additional Information | Target Domain | Optional named information captured for later review. |
+| `clave de idempotencia` | Idempotency Key | Target API | Caller-generated key scoped to the effective Company and tenant where applicable for deduplicating invoice-draft creation commands. |
 | `clave de acceso` | Access Key | SRI Adapter Only | Official 49-digit SRI identifier; allocation is excluded from invoice-draft creation. |
 | `secuencial` | Official Sequential Number | SRI Adapter Only | Official invoice sequence allocated only by a later fiscal issuance capability. |
 

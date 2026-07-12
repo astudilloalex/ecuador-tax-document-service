@@ -22,7 +22,7 @@
 - [x] Legacy evidence is referenced only as historical evidence
 - [x] Source conflicts and Pending Functional Validation items are explicitly recorded
 - [x] Target terminology is English and consistent with the terminology mapping
-- [ ] Requirements are testable and unambiguous
+- [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
@@ -32,7 +32,7 @@
 
 ## Feature Readiness
 
-- [ ] All functional requirements have clear acceptance criteria
+- [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature defines measurable outcomes for acceptance validation
 - [x] No implementation details leak into the specification
