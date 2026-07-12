@@ -1,10 +1,6 @@
 # Gradle
 .gradle/
 build/
-target/
-*.class
-*.jar
-*.log
 
 # Eclipse
 .project
@@ -38,7 +34,6 @@ nb-configuration.xml
 
 # Local environment
 .env
-.env*
 
 # Plugin directory
 /.quarkus/cli/plugins/
