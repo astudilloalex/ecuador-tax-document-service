@@ -4,43 +4,149 @@
 
 **Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
 
-**Note**: This template is filled in by the `/speckit-plan` command; its definition describes the execution workflow.
+**Note**: This template is filled by `$speckit-plan`. Every placeholder and every
+`NEEDS CLARIFICATION` entry MUST be resolved before Phase 1 design is approved.
 
 ## Summary
 
-[Extract from feature spec: primary requirement + technical approach from research]
+[Summarize the bounded stakeholder outcome and the technical approach selected through research.]
 
 ## Technical Context
 
-<!--
-  ACTION REQUIRED: Replace the content in this section with the technical details
-  for the project. The structure here is presented in advisory capacity to guide
-  the iteration process.
--->
+**Language/Version**: Java 25
 
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]
+**Framework**: Quarkus [exact version and selection rationale]
 
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]
+**Reactive Model**: Mutiny for asynchronous application and adapter flows
 
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]
+**Persistence**: Hibernate Reactive with Panache; Panache models remain in `infrastructure`
 
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]
+**Database**: PostgreSQL [supported version and environment assumptions]
 
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
+**Schema Migration**: Flyway only
 
-**Project Type**: [e.g., library/cli/web-service/mobile-app/compiler/desktop-app or NEEDS CLARIFICATION]
+**Authentication**: Keycloak through OIDC [realm/client assumptions and validated claims]
 
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]
+**Testing**: [test libraries plus applicable domain, use-case, authorization, persistence,
+migration, API, SRI, XML, signature, monetary, resilience, security, JVM, and native evidence]
 
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]
+**Target Execution**: JVM execution MUST be supported on [target platform]
 
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Native Compatibility**: [claimed, deferred, unsupported, or not applicable; reference the
+evidence table below]
+
+**External Integrations**: [SRI SOAP/XML, Keycloak, certificate, storage, rendering,
+notification, or other adapters in scope]
+
+**Performance Goals**: [measurable latency, throughput, concurrency, and resource targets]
+
+**Constraints**: [timeouts, payload limits, executor bounds, retention, availability, and other
+measurable limits]
+
+**Scale/Scope**: [tenant, issuer, document, request, and data-volume assumptions]
+
+**Sensitive Data**: [sensitive values in scope and their approved storage, redaction, retention,
+and deletion controls]
+
+## Source and Terminology Evidence
+
+Record exact versions, dates, or repository paths. A missing legacy observation MUST NOT be used
+to remove target behavior, and unresolved or contradictory behavior MUST remain Pending Functional
+Validation.
+
+| Authority | Applicable source and version/path | Requirements or decisions governed |
+|-----------|------------------------------------|-------------------------------------|
+| Ecuadorian legislation and official SRI documentation | [citation and version, or justified non-applicability] | [affected rules] |
+| Constitution | `.specify/memory/constitution.md` v[version] | [affected gates] |
+| Approved specification and clarifications | [spec sections and clarification session] | [affected behavior] |
+| Architecture decisions | [ADR paths or None] | [affected choices] |
+| Legacy evidence | [paths under `docs/legacy/` or legacy source references] | [discovery evidence only] |
+
+**Source Conflicts and Resolutions**: [List each conflict, governing higher-authority source, and
+recorded resolution, or state None.]
+
+**Pending Functional Validation**: [List unresolved matters and the validation owner/condition, or
+state None.]
+
+**Terminology Mapping Impact**: [Entries to add or update in
+`docs/migration/terminology-mapping.md`, or state None.]
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+*GATE: Every row MUST pass before Phase 0 research begins. Re-evaluate every row after Phase 1
+design. A deviation requires recorded approval under the constitution before implementation.*
 
-[Gates determined based on constitution file]
+| Gate | Pre-Research evidence | Post-Design evidence |
+|------|-----------------------|----------------------|
+| Greenfield scope: one bounded outcome; no implicit legacy compatibility | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Authority: official sources are versioned; conflicts and Pending Functional Validation are recorded | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Language: target names are English and terminology mapping decisions are respected | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Baseline: required technologies are fixed; Quarkus version research is identified pre-research and resolved with justification post-design | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Architecture: `api`, `application`, `domain`, and `infrastructure` dependencies and mappings comply | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Domain purity: no framework, transport, persistence, JSON, OIDC, or Mutiny types in `domain` | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Reactive safety: every blocking or CPU-intensive operation is isolated, bounded, timed out, and testable | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Fiscal correctness: official rules, `BigDecimal` policies, time semantics, and invalid-data behavior are explicit | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Security: deny-by-default authorization, token validation, ownership enforcement, and cross-tenant tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Boundary consistency: states, retries, idempotency, duplicates, timeouts, recovery, reconciliation, and terminal outcomes are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| API and async quality: DTO separation, validation ownership, stable errors, correlation, and result observation are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| External adapters: ports, endpoint configuration, sanitized observability, resilience, and contract evidence are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Testing: acceptance scenarios and applicable risk-based tests are identified before production tasks | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Operations: meaningful liveness/readiness, structured logs, auditing, and destination-consistent health checks are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Simplicity: every dependency, abstraction, process, store, and distributed interaction is justified | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Runtime evidence: JVM verification is mandatory and native status has an evidence path | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+
+## Reactive and Resource Boundary Design
+
+List every blocking or CPU-intensive operation. If none exist, state why each external operation is
+non-blocking.
+
+| Operation | Infrastructure adapter and application port | Blocking/CPU classification | Execution context | Timeout and resource bound | Required concurrency/failure evidence |
+|-----------|---------------------------------------------|-----------------------------|-------------------|----------------------------|---------------------------------------|
+| [operation] | [adapter and port] | [blocking or CPU-intensive] | [worker or bounded executor] | [limits] | [tests/evidence] |
+
+Reactive wrappers MUST NOT be accepted as evidence that an underlying operation is non-blocking.
+
+## Security and Ownership Design
+
+**Protected and Public Operations**: [List protected operations and explicitly justified public
+operations.]
+
+**Token Validation**: [Signature, issuer, audience, expiration, authorized party, and scope/role
+rules that apply.]
+
+**Effective Authorization Scope**: [How tenant, company, issuer, emission point, certificate, and
+document ownership are derived and applied to every query and mutation.]
+
+**Cross-Tenant Evidence**: [Required denial scenarios and test locations.]
+
+**Sensitive Data and Certificate Lifecycle**: [Storage, encryption, rotation, expiration,
+revocation, deletion, backup, tenant ownership, redaction, and fail-closed behavior applicable to
+this feature.]
+
+## Data and External Consistency Design
+
+For every database/external-system boundary, complete one row. The plan MUST NOT claim a database
+transaction is atomic with an external operation.
+
+| Boundary or logical command | Intermediate states | Retry and idempotency | Duplicate handling | Timeout | Failure recovery and reconciliation | Observable terminal outcomes |
+|-----------------------------|---------------------|-----------------------|--------------------|---------|-------------------------------------|------------------------------|
+| [boundary/command] | [states] | [rules and stable key] | [rules] | [limit/outcome] | [procedure] | [states visible to authorized caller/operator] |
+
+## Native Compatibility Evaluation
+
+Each applicable row MUST contain actual build and runtime evidence before the feature is complete.
+Use `Not applicable` only with a specific reason. JVM execution remains mandatory.
+
+| Risk area | Applicable? | Build evidence | Runtime evidence | Decision and consequences |
+|-----------|-------------|----------------|------------------|---------------------------|
+| SOAP clients | [yes/no] | [command/result or planned evidence] | [scenario/result or planned evidence] | [support/defer/reject] |
+| XML generation and schema validation | [yes/no] | [evidence] | [evidence] | [decision] |
+| XML digital signatures | [yes/no] | [evidence] | [evidence] | [decision] |
+| PKCS#12 certificate handling | [yes/no] | [evidence] | [evidence] | [decision] |
+| Cryptographic providers | [yes/no] | [evidence] | [evidence] | [decision] |
+| Reflection and resource loading | [yes/no] | [evidence] | [evidence] | [decision] |
 
 ## Project Structure
 
@@ -48,66 +154,71 @@
 
 ```text
 specs/[###-feature]/
-├── plan.md              # This file (/speckit-plan command output)
-├── research.md          # Phase 0 output (/speckit-plan command)
-├── data-model.md        # Phase 1 output (/speckit-plan command)
-├── quickstart.md        # Phase 1 output (/speckit-plan command)
-├── contracts/           # Phase 1 output (/speckit-plan command)
-└── tasks.md             # Phase 2 output (/speckit-tasks command - NOT created by /speckit-plan)
+├── spec.md
+├── plan.md
+├── research.md
+├── data-model.md
+├── quickstart.md
+├── contracts/
+└── tasks.md
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
+
+Replace capability placeholders with concrete English names and remove unused paths.
 
 ```text
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
-src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+src/main/java/com/alexastudillo/taxdocument/
+├── api/<capability>/
+├── application/<capability>/
+├── domain/<capability>/
+└── infrastructure/<capability>/
 
-tests/
-├── contract/
-├── integration/
-└── unit/
+src/main/resources/
+├── application.properties
+└── db/migration/
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+src/test/java/com/alexastudillo/taxdocument/
+├── api/<capability>/
+├── application/<capability>/
+├── domain/<capability>/
+└── infrastructure/<capability>/
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: [Document capability grouping, explicit cross-layer mappings, composition
+location, and any justified exception.]
+
+## Test and Operational Evidence Plan
+
+Create one row for each applicable constitutional test category and each acceptance scenario.
+Tests MUST target observable behavior or invariants, not coverage percentage.
+
+| Requirement/risk | Test level and environment | Planned path | Observable behavior or invariant | Failure/boundary cases |
+|------------------|----------------------------|--------------|----------------------------------|------------------------|
+| [FR/SC/risk] | [domain/use-case/PostgreSQL/API/adapter/runtime] | [exact path] | [assertion] | [cases] |
+
+**Liveness and Readiness**: [Distinct semantics and dependencies required to accept traffic.]
+
+**Structured Observability**: [Correlation propagation, sanitized logs, metrics, and traces.]
+
+**Audit Events**: [Operational state transitions and certificate operations requiring audit.]
+
+**External Destination Consistency**: [How health checks and business adapters share the same
+configured destinations.]
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+Every new dependency, abstraction, background process, persistent store, and distributed
+interaction MUST appear below. If there are none, state `None` and explain how the feature uses
+the existing baseline directly.
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| Addition | Requirement creating the need | Simpler alternatives considered | Why insufficient | Testing and operational consequences |
+|----------|-------------------------------|--------------------------------|------------------|--------------------------------------|
+| [addition] | [requirement ID] | [alternatives] | [specific reason] | [consequences] |
+
+Constitution deviations require approval before implementation and MUST include an expiration or
+objective remediation condition.
+
+| Deviated principle and rule | Scope | Justification | Approval record | Expiration or remediation condition |
+|-----------------------------|-------|---------------|-----------------|-------------------------------------|
+| [principle/rule] | [scope] | [reason] | [record] | [condition/date] |

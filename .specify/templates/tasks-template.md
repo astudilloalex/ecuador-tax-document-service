@@ -1,252 +1,213 @@
 ---
 
-description: "Task list template for feature implementation"
+description: "Dependency-ordered implementation tasks for an approved feature"
 ---
 
 # Tasks: [FEATURE NAME]
 
-**Input**: Design documents from `/specs/[###-feature-name]/`
+**Input**: Approved design documents from `/specs/[###-feature-name]/`
 
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
+**Prerequisites**: `spec.md`, completed clarifications, `plan.md`, completed requirement-quality
+checklist, `research.md`, `data-model.md`, `contracts/`, and `quickstart.md` where applicable
 
-**Tests**: The examples below include test tasks. Tests are OPTIONAL - only include them if explicitly requested in the feature specification.
+**Analysis Gate**: `$speckit-analyze` MUST run after this file is generated and before any task is
+implemented. Unresolved critical findings MUST block `$speckit-implement`.
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+**Tests**: Applicable constitutional test categories are mandatory. A category MAY be omitted only
+when the implementation plan records why it is not applicable. Test tasks MUST precede the
+production tasks whose behavior or invariant they cover.
 
-## Format: `[ID] [P?] [Story] Description`
+**Organization**: Tasks are grouped by user story so each story remains an independently valuable,
+independently testable increment of the single bounded feature outcome.
 
-- **[P]**: Can run in parallel (different files, no dependencies)
-- **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
-- Include exact file paths in descriptions
+## Format: `[ID] [P?] [Story] Description with exact file path and requirement reference`
+
+- **[P]**: The task can run in parallel because it changes different files and has no dependency
+  on incomplete work.
+- **[Story]**: The user story served by the task, such as `[US1]` or `[US2]`; it is required only in
+  user-story phases.
+- Every description MUST include an exact repository-relative file path.
+- Every user-story task MUST reference the applicable story, requirement, success criterion, or
+  documented risk identifier in its description.
+- All target names, paths, comments, fixtures, and documentation MUST use approved English
+  terminology.
 
 ## Path Conventions
 
-- **Single project**: `src/`, `tests/` at repository root
-- **Web app**: `backend/src/`, `frontend/src/`
-- **Mobile**: `api/src/`, `ios/src/` or `android/src/`
-- Paths shown below assume single project - adjust based on plan.md structure
+```text
+src/main/java/com/alexastudillo/taxdocument/
+├── api/<capability>/
+├── application/<capability>/
+├── domain/<capability>/
+└── infrastructure/<capability>/
+
+src/main/resources/db/migration/
+src/test/java/com/alexastudillo/taxdocument/
+src/test/resources/
+```
 
 <!--
-  ============================================================================
-  IMPORTANT: The tasks below are SAMPLE TASKS for illustration purposes only.
-
-  The /speckit-tasks command MUST replace these with actual tasks based on:
-  - User stories from spec.md (with their priorities P1, P2, P3...)
-  - Feature requirements from plan.md
-  - Entities from data-model.md
-  - Endpoints from contracts/
-
-  Tasks MUST be organized by user story so each story can be:
-  - Implemented independently
-  - Tested independently
-  - Delivered as an MVP increment
-
-  DO NOT keep these sample tasks in the generated tasks.md file.
-  ============================================================================
+  The tasks below are examples only. `$speckit-tasks` MUST replace them with concrete tasks from
+  the approved artifacts. Keep the phase structure and strict task format, but remove unused
+  examples. Do not preserve a legacy route, payload, table, status, or behavior unless an explicit
+  approved requirement requires it.
 -->
 
-## Phase 1: Setup (Shared Infrastructure)
+## Phase 1: Setup
 
-**Purpose**: Project initialization and basic structure
+**Purpose**: Establish the approved Java 25 and Quarkus baseline and verification tooling.
 
-- [ ] T001 Create project structure per implementation plan
-- [ ] T002 Initialize [language] project with [framework] dependencies
-- [ ] T003 [P] Configure linting and formatting tools
-
----
-
-## Phase 2: Foundational (Blocking Prerequisites)
-
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
-
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
-
-Examples of foundational tasks (adjust based on your project):
-
-- [ ] T004 Setup database schema and migrations framework
-- [ ] T005 [P] Implement authentication/authorization framework
-- [ ] T006 [P] Setup API routing and middleware structure
-- [ ] T007 Create base models/entities that all stories depend on
-- [ ] T008 Configure error handling and logging infrastructure
-- [ ] T009 Setup environment configuration management
-
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+- [ ] T001 Configure the approved Java 25 and justified Quarkus baseline in `build.gradle.kts`
+- [ ] T002 Create capability-grouped Clean Architecture package roots under `src/main/java/com/alexastudillo/taxdocument/`
+- [ ] T003 [P] Configure formatting and static-analysis checks in `build.gradle.kts`
+- [ ] T004 [P] Configure sanitized test settings in `src/test/resources/application.properties`
+- [ ] T005 Record approved terminology introduced by the feature in `docs/migration/terminology-mapping.md`
 
 ---
 
-## Phase 3: User Story 1 - [Title] (Priority: P1) 🎯 MVP
+## Phase 2: Foundational Controls
 
-**Goal**: [Brief description of what this story delivers]
+**Purpose**: Complete the cross-cutting controls that block all user stories.
 
-**Independent Test**: [How to verify this story works on its own]
+**CRITICAL**: User-story production work MUST NOT begin until this phase is complete.
 
-### Tests for User Story 1 (OPTIONAL - only if tests requested) ⚠️
+- [ ] T006 Configure Flyway as the only schema evolution mechanism in `src/main/resources/application.properties`
+- [ ] T007 Create the first repeatable target migration in `src/main/resources/db/migration/[version]__[english_description].sql`
+- [ ] T008 [P] Configure Keycloak OIDC authentication defaults in `src/main/resources/application.properties`
+- [ ] T009 [P] Define the stable target error contract in `src/main/java/com/alexastudillo/taxdocument/api/error/[ErrorContract].java`
+- [ ] T010 [P] Implement correlation propagation in `src/main/java/com/alexastudillo/taxdocument/api/observability/[CorrelationFilter].java`
+- [ ] T011 [P] Define distinct liveness and readiness behavior in `src/main/java/com/alexastudillo/taxdocument/infrastructure/health/[HealthChecks].java`
+- [ ] T012 Create PostgreSQL and Flyway integration-test support in `src/test/java/com/alexastudillo/taxdocument/infrastructure/persistence/[DatabaseTestSupport].java`
 
-> **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
+**Checkpoint**: The architectural, migration, authentication, error, correlation, health, and test
+foundations required by the approved plan are ready.
 
-- [ ] T010 [P] [US1] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T011 [P] [US1] Integration test for [user journey] in tests/integration/test_[name].py
+---
 
-### Implementation for User Story 1
+## Phase 3: User Story 1 - [Title] (Priority: P1) MVP
 
-- [ ] T012 [P] [US1] Create [Entity1] model in src/models/[entity1].py
-- [ ] T013 [P] [US1] Create [Entity2] model in src/models/[entity2].py
-- [ ] T014 [US1] Implement [Service] in src/services/[service].py (depends on T012, T013)
-- [ ] T015 [US1] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T016 [US1] Add validation and error handling
-- [ ] T017 [US1] Add logging for user story 1 operations
+**Goal**: [Bounded stakeholder value delivered by this story]
 
-**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
+**Independent Test**: [Observable scenario proving this story works without later stories]
+
+### Required Evidence for User Story 1
+
+Include every applicable category from the plan. These examples are not a fixed test list.
+
+- [ ] T013 [P] [US1] Add pure domain tests for [FR/DR IDs] in `src/test/java/com/alexastudillo/taxdocument/domain/[capability]/[DomainType]Test.java`
+- [ ] T014 [P] [US1] Add application authorization and tenant-isolation tests for [FR IDs] in `src/test/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase]Test.java`
+- [ ] T015 [P] [US1] Add PostgreSQL persistence and Flyway invariant tests for [FR IDs] in `src/test/java/com/alexastudillo/taxdocument/infrastructure/persistence/[RepositoryAdapter]Test.java`
+- [ ] T016 [P] [US1] Add API contract and safe-error tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/api/[capability]/[Resource]Test.java`
+- [ ] T017 [P] [US1] Add external-adapter timeout, retry, idempotency, and reconciliation tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/infrastructure/[adapter]/[Adapter]Test.java`
+- [ ] T018 [P] [US1] Add official-rule vectors for XML, access keys, signatures, or monetary boundaries for [DR IDs] in `src/test/resources/[capability]/`
+
+### Production Implementation for User Story 1
+
+- [ ] T019 [P] [US1] Implement synchronous domain behavior for [FR/DR IDs] in `src/main/java/com/alexastudillo/taxdocument/domain/[capability]/[DomainType].java`
+- [ ] T020 [P] [US1] Define the outbound application port for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/port/[Port].java`
+- [ ] T021 [US1] Implement the authorized application use case for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase].java`
+- [ ] T022 [P] [US1] Implement the explicit API DTO mappings for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/api/[capability]/[Mapper].java`
+- [ ] T023 [P] [US1] Implement the Panache persistence model and domain mapping for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/infrastructure/persistence/[capability]/[PersistenceModel].java`
+- [ ] T024 [US1] Implement the outbound infrastructure adapter with approved timeouts and bounds for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/infrastructure/[adapter]/[Adapter].java`
+- [ ] T025 [US1] Expose the target-first operation and correlation-safe errors for [FR/SC IDs] in `src/main/java/com/alexastudillo/taxdocument/api/[capability]/[Resource].java`
+
+**Checkpoint**: User Story 1 satisfies its acceptance scenarios and applicable failure, security,
+tenant-isolation, persistence, integration, and observability evidence independently.
 
 ---
 
 ## Phase 4: User Story 2 - [Title] (Priority: P2)
 
-**Goal**: [Brief description of what this story delivers]
+**Goal**: [Bounded stakeholder value delivered by this story]
 
-**Independent Test**: [How to verify this story works on its own]
+**Independent Test**: [Observable scenario proving this story independently]
 
-### Tests for User Story 2 (OPTIONAL - only if tests requested) ⚠️
+### Required Evidence for User Story 2
 
-- [ ] T018 [P] [US2] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T019 [P] [US2] Integration test for [user journey] in tests/integration/test_[name].py
+- [ ] T026 [P] [US2] Add applicable domain and use-case tests for [FR/DR IDs] in `src/test/java/com/alexastudillo/taxdocument/[boundary]/[capability]/[Test].java`
+- [ ] T027 [P] [US2] Add applicable API, persistence, authorization, and adapter tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/[boundary]/[capability]/[Test].java`
 
-### Implementation for User Story 2
+### Production Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Create [Entity] model in src/models/[entity].py
-- [ ] T021 [US2] Implement [Service] in src/services/[service].py
-- [ ] T022 [US2] Implement [endpoint/feature] in src/[location]/[file].py
-- [ ] T023 [US2] Integrate with User Story 1 components (if needed)
+- [ ] T028 [P] [US2] Implement domain behavior for [FR/DR IDs] in `src/main/java/com/alexastudillo/taxdocument/domain/[capability]/[Type].java`
+- [ ] T029 [US2] Implement the application use case and effective ownership scope for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase].java`
+- [ ] T030 [P] [US2] Implement required infrastructure mappings and adapters for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/infrastructure/[capability]/[Adapter].java`
+- [ ] T031 [US2] Expose the target-first operation for [FR/SC IDs] in `src/main/java/com/alexastudillo/taxdocument/api/[capability]/[Resource].java`
 
-**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
-
----
-
-## Phase 5: User Story 3 - [Title] (Priority: P3)
-
-**Goal**: [Brief description of what this story delivers]
-
-**Independent Test**: [How to verify this story works on its own]
-
-### Tests for User Story 3 (OPTIONAL - only if tests requested) ⚠️
-
-- [ ] T024 [P] [US3] Contract test for [endpoint] in tests/contract/test_[name].py
-- [ ] T025 [P] [US3] Integration test for [user journey] in tests/integration/test_[name].py
-
-### Implementation for User Story 3
-
-- [ ] T026 [P] [US3] Create [Entity] model in src/models/[entity].py
-- [ ] T027 [US3] Implement [Service] in src/services/[service].py
-- [ ] T028 [US3] Implement [endpoint/feature] in src/[location]/[file].py
-
-**Checkpoint**: All user stories should now be independently functional
+**Checkpoint**: User Stories 1 and 2 each remain independently testable.
 
 ---
 
-[Add more user story phases as needed, following the same pattern]
+[Add one phase per remaining user story. Each phase MUST retain required-evidence tasks before its
+production tasks and MUST use exact paths and requirement references.]
 
 ---
 
-## Phase N: Polish & Cross-Cutting Concerns
+## Final Phase: Cross-Cutting Validation and Documentation
 
-**Purpose**: Improvements that affect multiple user stories
+**Purpose**: Satisfy the feature Definition of Done without hiding unfinished story work here.
 
-- [ ] TXXX [P] Documentation updates in docs/
-- [ ] TXXX Code cleanup and refactoring
-- [ ] TXXX Performance optimization across all stories
-- [ ] TXXX [P] Additional unit tests (if requested) in tests/unit/
-- [ ] TXXX Security hardening
-- [ ] TXXX Run quickstart.md validation
+- [ ] TXXX [P] Prove Flyway migration from an empty PostgreSQL database in `src/test/java/com/alexastudillo/taxdocument/infrastructure/persistence/[MigrationTest].java`
+- [ ] TXXX [P] Add sensitive-data exposure tests in `src/test/java/com/alexastudillo/taxdocument/infrastructure/security/[SensitiveDataTest].java`
+- [ ] TXXX [P] Add JVM runtime smoke evidence in `src/test/java/com/alexastudillo/taxdocument/runtime/[JvmSmokeTest].java`
+- [ ] TXXX Record native build and runtime evidence or an evidence-based deferral in `specs/[###-feature-name]/plan.md`
+- [ ] TXXX Validate end-to-end acceptance and recovery scenarios in `specs/[###-feature-name]/quickstart.md`
+- [ ] TXXX Update affected English terminology and classifications in `docs/migration/terminology-mapping.md`
+- [ ] TXXX Record final constitution and Definition of Done review in `specs/[###-feature-name]/plan.md`
+- [ ] TXXX Run formatting, static analysis, required tests, and sensitive-data checks from `build.gradle.kts`
 
 ---
 
 ## Dependencies & Execution Order
 
+### Workflow Dependencies
+
+- The constitution MUST already be approved on `main`.
+- `$speckit-specify` and `$speckit-clarify` MUST produce the approved bounded requirements.
+- `$speckit-plan` MUST pass its pre-research and post-design constitution checks.
+- `$speckit-checklist` MUST evaluate requirement quality honestly before task generation.
+- `$speckit-analyze` MUST run after this task list and MUST resolve critical findings before
+  implementation.
+
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3+)**: All depend on Foundational phase completion
-  - User stories can then proceed in parallel (if staffed)
-  - Or sequentially in priority order (P1 → P2 → P3)
-- **Polish (Final Phase)**: Depends on all desired user stories being complete
-
-### User Story Dependencies
-
-- **User Story 1 (P1)**: Can start after Foundational (Phase 2) - No dependencies on other stories
-- **User Story 2 (P2)**: Can start after Foundational (Phase 2) - May integrate with US1 but should be independently testable
-- **User Story 3 (P3)**: Can start after Foundational (Phase 2) - May integrate with US1/US2 but should be independently testable
-
-### Within Each User Story
-
-- Tests (if included) MUST be written and FAIL before implementation
-- Models before services
-- Services before endpoints
-- Core implementation before integration
-- Story complete before moving to next priority
+- **Setup** has no feature-task dependency.
+- **Foundational Controls** depends on Setup and blocks all user-story production work.
+- **User Stories** depend on Foundational Controls. Stories MAY run in parallel only when their
+  files and approved behavior are independent.
+- Within a story, required evidence tasks precede the production tasks they cover; domain behavior
+  precedes application orchestration, which precedes adapters and API exposure.
+- **Cross-Cutting Validation** depends on every story included in the release scope.
 
 ### Parallel Opportunities
 
-- All Setup tasks marked [P] can run in parallel
-- All Foundational tasks marked [P] can run in parallel (within Phase 2)
-- Once Foundational phase completes, all user stories can start in parallel (if team capacity allows)
-- All tests for a user story marked [P] can run in parallel
-- Models within a story marked [P] can run in parallel
-- Different user stories can be worked on in parallel by different team members
-
----
-
-## Parallel Example: User Story 1
-
-```bash
-# Launch all tests for User Story 1 together (if tests requested):
-Task: "Contract test for [endpoint] in tests/contract/test_[name].py"
-Task: "Integration test for [user journey] in tests/integration/test_[name].py"
-
-# Launch all models for User Story 1 together:
-Task: "Create [Entity1] model in src/models/[entity1].py"
-Task: "Create [Entity2] model in src/models/[entity2].py"
-```
-
----
+- A `[P]` marker is permitted only for different files with no incomplete dependency.
+- Tests in different boundaries MAY run in parallel after shared test support exists.
+- Independent stories MAY run in parallel after Foundational Controls, subject to file ownership.
+- Tasks that edit `build.gradle.kts`, `application.properties`, a shared migration, or the same
+  terminology mapping MUST run sequentially.
 
 ## Implementation Strategy
 
-### MVP First (User Story 1 Only)
+### MVP First
 
-1. Complete Phase 1: Setup
-2. Complete Phase 2: Foundational (CRITICAL - blocks all stories)
-3. Complete Phase 3: User Story 1
-4. **STOP and VALIDATE**: Test User Story 1 independently
-5. Deploy/demo if ready
+1. Complete Setup and Foundational Controls.
+2. Complete all required evidence and production tasks for User Story 1.
+3. Validate User Story 1 independently, including failure and authorization boundaries.
+4. Verify JVM execution and update the plan with evidence.
+5. Add later stories only after the MVP remains compliant and independently valuable.
 
 ### Incremental Delivery
 
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 → Test independently → Deploy/Demo (MVP!)
-3. Add User Story 2 → Test independently → Deploy/Demo
-4. Add User Story 3 → Test independently → Deploy/Demo
-5. Each story adds value without breaking previous stories
-
-### Parallel Team Strategy
-
-With multiple developers:
-
-1. Team completes Setup + Foundational together
-2. Once Foundational is done:
-   - Developer A: User Story 1
-   - Developer B: User Story 2
-   - Developer C: User Story 3
-3. Stories complete and integrate independently
-
----
+Each increment MUST preserve prior acceptance scenarios, database evolution, tenant isolation,
+idempotency, sensitive-data controls, and observable terminal outcomes. A later story MUST NOT be
+required to make an earlier story safe or testable.
 
 ## Notes
 
-- [P] tasks = different files, no dependencies
-- [Story] label maps task to specific user story for traceability
-- Each user story should be independently completable and testable
-- Verify tests fail before implementing
-- Commit after each task or logical group
-- Stop at any checkpoint to validate story independently
-- Avoid: vague tasks, same file conflicts, cross-story dependencies that break independence
+- Historical files under `docs/legacy/` MUST NOT be edited.
+- Panache persistence models MUST NOT become domain or transport models.
+- Blocking and CPU-intensive adapter work MUST use the plan's bounded execution context.
+- Retries MUST preserve the logical fiscal operation, access key, sequence, and persisted document.
+- A task MUST NOT be marked complete merely to unblock the workflow.
+- Tests that assert only coverage are prohibited.
