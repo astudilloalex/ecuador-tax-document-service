@@ -3,11 +3,17 @@
 **Feature**: `001-create-invoice-draft`
 **Date**: 2026-07-12
 **Constitution**: v2.0.0
-**Status**: Complete; no unresolved planning decisions remain
+**Status**: Blocked for task generation; PFV-001 through PFV-003 remain open until every row and
+stable target mapping in `reference-data-baseline.md` is approved from the cited official evidence
 
 ## 1. Runtime and Framework Baseline
 
 **Decision**: Use Java 25, Quarkus 3.33.2.1 LTS, and mandatory JVM execution.
+
+The repository currently declares Quarkus `3.37.2` for both plugin and platform in
+`gradle.properties`. The first implementation setup action MUST align both values to `3.33.2.1`;
+mixed plugin/platform versions are prohibited. This plan records the change but does not mutate
+build configuration during planning.
 
 **Rationale**: Quarkus identifies 3.33 as the current production-recommended LTS line and
 3.33.2.1 as its current community micro release. Quarkus 3.31 introduced full Java 25 support, so
@@ -87,10 +93,13 @@ session, principal, or thread-local source is allowed.
 
 ## 5. Correlation Contract
 
-**Decision**: `X-Correlation-Id` accepts one trimmed identifier containing 1–64 characters from
-`A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, or `-`. A valid supplied value is preserved and returned. When
-absent, the API generates a UUID and returns it. Blank, repeated, or unsafe supplied values produce
-`INVALID_REQUEST`.
+**Decision**: `X-Correlation-Id` accepts one trimmed identifier containing 1–64 characters, starting
+with an ASCII letter or digit, and then using only `A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, or `-`. A
+valid supplied value is preserved and returned. When absent, the API generates a safe UUID and
+returns it. Blank, repeated, over-length, or unsafe supplied values are never echoed; the API
+generates a safe replacement UUID for the error response and returns `INVALID_REQUEST` when
+correlation validation governs. Correlation validation follows Company validation and precedes
+idempotency-key validation.
 
 **Rationale**: The bounded character set prevents log/header injection while accepting common
 distributed-tracing identifiers. Correlation is transport evidence, is excluded from idempotency,
@@ -198,10 +207,19 @@ event-loop request path. Business persistence uses the reactive PostgreSQL clien
 
 ## 11. Fiscal and Monetary Rules
 
-**Decision**: Preserve the exact approved `BigDecimal`, `HALF_UP`, IVA-only, buyer-identification,
-current Ecuadorian date, zero-value, payment, text, collection, and no-calculated-input rules from
-the specification. Versioned local reference catalogs are managed by Flyway; codes and rates are
-not hard-coded.
+**Decision**: Preserve the exact approved `BigDecimal`, line-level `HALF_UP`, IVA-only,
+buyer-identification, zero-value, payment, text, collection, and no-calculated-input rules from the
+specification. Quantity and unit price use `numeric(12,6)` with maximum `999999.999999`; money uses
+`numeric(17,2)` with maximum `999999999999999.99`; percentage rates use `numeric(5,2)` from `0.00`
+through `100.00`. Every input, intermediate, rounded, grouped, payment-sum, or final range breach is
+rejected before persistence as `BUSINESS_VALIDATION_FAILED` with
+`MONETARY_RANGE_EXCEEDED`.
+
+Capture one `requestCreationInstant` at the request boundary and derive the expected emission date
+once using `America/Guayaquil`. Commit crossing midnight does not change the accepted date;
+`createdAt` records the confirmed commit instant; equivalent replay does not revalidate the date.
+Versioned local reference catalogs are managed and seeded only by Flyway; codes, rates, validity,
+and identifiers are not hard-coded or startup-generated.
 
 **Official evidence**:
 
@@ -220,3 +238,28 @@ Company Service latency is nonexistent and excluded.
 Packaged JVM evidence is mandatory. Native support may be claimed only after both build and
 runtime smoke evidence covers DTO reflection/resources, validation, reactive persistence, Flyway
 resources, OpenAPI, health, create, replay, conflict, rollback, and timeout behavior.
+
+## 13. Reference-Data Baseline Evidence Gate
+
+**Decision**: `reference-data-baseline.md` is the sole planning inventory for initial buyer
+identification types, IVA tax rules, and payment methods. Flyway owns the corresponding fixed rows.
+`taxRuleId` and `paymentMethodId` values are stable target-contract UUIDs; application startup MUST
+NOT create or replace them. Quickstart and fixtures may use only UUIDs listed as approved and
+seeded in that baseline.
+
+**Official evidence reviewed**:
+
+- [SRI electronic invoicing page, publishing Technical Sheet v2.32](https://www.sri.gob.ec/facturacion-electronica)
+- [SRI Technical Sheet v2.31, Table 6 identification types and Tables 16–17 tax/IVA codes](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/d5411726-0081-4f0c-b5f0-08f3924c5f28/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.31.pdf)
+- [SRI current payment-method catalog](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/5fe276a4-34dd-4d2c-a19e-614e195e01d3/FORMAS%2BDE%2BPAGO.pdf)
+- [SRI IVA guidance](https://www.sri.gob.ec/impuesto-al-valor-agregado-iva)
+- [SRI Circular NAC-DGECCGC25-00000006](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar?id=236482f4-6125-42fd-b073-62c99d08233d&nombre=NAC-DGECCGC25-00000006.pdf)
+
+**Unresolved material evidence**: The current SRI IVA guidance reports a general rate of `13%`,
+while Circular NAC-DGECCGC25-00000006 states that `15%` remains effective until modified and the
+approved feature calculation vector uses `15%`. No official modification date reconciling those
+sources has been established in this planning pass. Therefore the percentage-rate baseline row and
+any dependent fixture MUST remain Pending Functional Validation. Research MUST NOT be marked
+complete, and `$speckit-tasks` MUST NOT run, until the governing rate, effective interval, and
+stable target UUID mapping are approved. The zero-rate, not-subject, exempt, identification, and
+payment rows remain subject to the row-by-row approval status recorded in the baseline.

@@ -60,6 +60,8 @@ Excluded content:
 - `Idempotency-Key` and its hash;
 - `X-Correlation-Id`;
 - every HTTP header and transport field;
+- `requestCreationInstant`, because it is request-boundary evidence rather than client-controlled
+  business content;
 - JSON property ordering;
 - server-calculated amounts, which are prohibited request inputs;
 - timestamps, generated identifiers, catalog-derived codes/rates, and other server results.
@@ -92,13 +94,19 @@ ambiguous. The exact normalization vectors become committed test fixtures before
 
 1. Enforce request payload size.
 2. Validate and canonicalize Company header.
-3. Validate and hash idempotency key.
-4. Validate request representation and prohibited properties.
-5. Normalize business content and compute fingerprint.
-6. Look up binding by CompanyId plus key hash.
-7. If fingerprint/version match, load by CompanyId plus draftId and return the original result.
-8. If they differ, return `IDEMPOTENCY_CONFLICT`.
-9. Only an unbound command proceeds to current catalog/domain validation, calculation, and write.
+3. Initialize and validate correlation: preserve one valid value, generate a UUID when absent, or
+   generate a safe replacement and return `INVALID_REQUEST` without echoing invalid input.
+4. Validate and hash idempotency key.
+5. Validate request representation and prohibited properties.
+6. Normalize business content and compute fingerprint.
+7. Look up binding by CompanyId plus key hash.
+8. If fingerprint/version match, load by CompanyId plus draftId and return the original result.
+9. If they differ, return `IDEMPOTENCY_CONFLICT`.
+10. Only an unbound command proceeds to current catalog/domain validation, calculation, and write.
+
+Correlation initialization still provides a safe response identifier for a higher-precedence
+payload-size or Company-context failure. Correlation values never affect the key hash, request
+fingerprint, binding scope, replay result, or conflict decision.
 
 Replay does not call Company Service, validate current Company/Issuer/emission-point state,
 authenticate, authorize, recalculate, or mutate the original draft.

@@ -13,6 +13,27 @@ for review before any fiscal identifier allocation or SRI interaction."
 
 ### Session 2026-07-12
 
+- Q: What numeric envelope governs quantities, prices, money, and rates? → A: Quantity and unit
+  price use at most six fractional digits and range from `0` through `999999.999999`, with quantity
+  strictly greater than zero; every monetary value/result ranges from `0.00` through
+  `999999999999999.99`; rates range from `0.00` through `100.00`. Persistence uses
+  `numeric(12,6)`, `numeric(17,2)`, and `numeric(5,2)` respectively. Any input, intermediate,
+  rounded, grouped, payment-sum, or invoice-total overflow produces `BUSINESS_VALIDATION_FAILED`
+  with violation `MONETARY_RANGE_EXCEEDED` before persistence.
+- Q: Which instant determines the accepted Ecuador emission date? → A: Capture
+  `requestCreationInstant` once at the request boundary and derive the expected date in
+  `America/Guayaquil`. That date remains fixed across midnight and commit; `createdAt` is the
+  confirmed commit instant, and equivalent replay returns the original draft without current-date
+  revalidation.
+- Q: What reference-data baseline is required before tasks? → A: Identification types, IVA rules,
+  and payment methods require approved, versioned, officially sourced baseline rows. Tax-rule and
+  payment-method identifiers are stable published UUIDs seeded by Flyway, never startup-generated.
+  Every unverified row is Pending Functional Validation and blocks task generation.
+- Q: How is `X-Correlation-Id` initialized and validated? → A: Initialize correlation at the HTTP
+  boundary; generate a safe UUID when absent, preserve one valid supplied identifier, and replace
+  blank, repeated, over-length, or unsafe input with a safe UUID for the `INVALID_REQUEST` response
+  without echoing the invalid value. Correlation validation follows Company validation and precedes
+  idempotency-key validation; correlation never affects idempotency.
 - Q: What is the definitive Company context, identity, Company-dependency, and draft-snapshot model?
   → A: Every request supplies exactly one nonblank, syntactically valid non-nil Company UUID in
   `X-Company-Id`; the service normalizes it to canonical lowercase hyphenated form, performs no
@@ -20,10 +41,6 @@ for review before any fiscal identifier allocation or SRI interaction."
   stores no Company/Issuer/establishment/emission-point snapshot. CompanyId is prohibited from the
   path, query, and request body; idempotency is scoped by normalized CompanyId plus key; fiscal
   context is deferred to a later issuance specification.
-- Q: Which monetary precision and rounding policy should govern invoice drafts? → A: Line-level
-  `HALF_UP` with six-decimal quantity/unit-price inputs, two-decimal tax-rate precision,
-  two-decimal discounts/payments, rejected excess precision, rounded line values, and totals
-  aggregated from rounded line values.
 - Q: Which tax scope and per-line tax cardinality should invoice drafts support? → A: The IVA tax
   family only, with exactly one active, emission-date-effective tax treatment per line: configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA. The three zero-tax
@@ -39,9 +56,6 @@ for review before any fiscal identifier allocation or SRI interaction."
   a caller-generated idempotency key scoped by normalized Company UUID plus key. Equivalent retries
   return the original committed draft; different content conflicts; concurrent equivalent commands
   create exactly one draft; failed or rolled-back commands do not bind the key.
-- Q: What emission-date window should draft creation allow? → A: The emission date must equal the
-  current Ecuadorian civil date at creation. Fiscal dates remain date-only values; creation and
-  last-modification timestamps remain unambiguous instants.
 - Q: How should draft creation handle client-supplied calculated monetary fields? → A: Reject every
   request containing a system-calculated input field; such values are never ignored, compared, or
   persisted.
@@ -146,6 +160,27 @@ issued electronic invoice, or triggering any SRI side effect.
 - Official SRI electronic-document statuses do not include `DRAFT`. Here, `DRAFT` is an internal
   target-domain state and MUST NOT be presented as an SRI status, issued invoice, or tax-valid
   electronic document.
+
+**Pending Functional Validation**:
+
+- **PFV-001 — Identification-type baseline**: Approve the baseline rows for codes `04` through
+  `08`, including display name, validation strategy, validity interval, active state, catalog
+  version, and exact official source. — **Evidence needed**: versioned official SRI catalog/schema
+  plus approved target mapping. — **Blocks**: `$speckit-tasks`, final Flyway reference-data rows,
+  and authoritative identification vectors.
+- **PFV-002 — IVA tax-rule baseline**: Approve every supported tax-rule row, its stable published
+  `taxRuleId` UUID, official tax and percentage codes, display name, treatment, rate, validity
+  interval, active state, catalog version, and exact official source. — **Evidence needed**:
+  versioned official SRI IVA catalog/rule source plus approved target UUID mapping. — **Blocks**:
+  `$speckit-tasks`, Flyway reference data, API integration examples, and tax-rule fixtures.
+- **PFV-003 — Payment-method baseline**: Approve every supported payment-method row, its stable
+  published `paymentMethodId` UUID, official code, display name, validity interval, active state,
+  catalog version, and exact official source. — **Evidence needed**: versioned official SRI payment
+  catalog plus approved target UUID mapping. — **Blocks**: `$speckit-tasks`, Flyway reference data,
+  API integration examples, and payment fixtures.
+
+No baseline row, identifier, rate, mapping, validity period, or validation strategy may be inferred
+while its official evidence or target mapping remains unresolved.
 
 **Terminology Mapping**: The approved terms `Invoice Draft`, `Invoice`, `Company`, `Issuer`,
 `Establishment`, `Emission Point`, `Fiscal Context Snapshot`, `Buyer`, `Invoice Line`, `Tax
@@ -255,11 +290,12 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     command has equivalent business content and is otherwise valid, **then** the scopes are
     independent, separate drafts MAY be created, and neither Company deduplicates against the
     other's draft.
-26. **Given** an emission date equal to the current Ecuadorian civil date at creation, **when** all
-    other draft data is valid, **then** the emission date is accepted as a date-only value.
-27. **Given** an emission date before or after the current Ecuadorian civil date at creation,
-    **when** draft creation is attempted, **then** the request is rejected and no draft is
-    persisted.
+26. **Given** an emission date equal to the Ecuadorian civil date derived from the one captured
+    `requestCreationInstant`, **when** all other draft data is valid, **then** the emission date is
+    accepted as a date-only value.
+27. **Given** an emission date before or after the Ecuadorian civil date derived from the one
+    captured `requestCreationInstant`, **when** draft creation is attempted, **then** the request is
+    rejected and no draft is persisted.
 28. **Given** a creation request containing any client-supplied line gross amount, line net amount,
     tax base, tax amount, grouped tax total, subtotal before taxes, total discount, or grand total,
     **when** draft creation is attempted, **then** a stable calculated-field validation error is
@@ -329,6 +365,43 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 48. **Given** multiple `X-Company-Id` values are supplied, **when** draft creation is attempted,
     **then** `COMPANY_CONTEXT_INVALID` rejects the ambiguous context in a safe English error response
     with a correlation identifier and no draft, child, or idempotency binding is persisted.
+49. **Given** quantity is `0.000001` or `999999.999999`, unit price is `0` or
+    `999999.999999`, and every resulting money value remains within the approved monetary range,
+    **when** the draft is validated and calculated, **then** those inclusive boundary values are
+    accepted without precision loss.
+50. **Given** any quantity or unit price exceeds its limit, or any monetary input, exact
+    intermediate result, rounded line result, grouped amount, payment sum, subtotal, discount total,
+    tax amount, or grand total falls outside `0.00` through `999999999999999.99`, **when** draft
+    creation is attempted, **then** `BUSINESS_VALIDATION_FAILED` contains violation code
+    `MONETARY_RANGE_EXCEEDED` and no draft, child, or idempotency binding is persisted.
+51. **Given** `requestCreationInstant` is captured immediately before midnight in
+    `America/Guayaquil` and the supplied emission date equals the date derived from that instant,
+    **when** validation succeeds before midnight but commit completes after midnight, **then** the
+    original derived emission date remains accepted and `createdAt` records the later confirmed
+    commit instant.
+52. **Given** a committed draft is replayed on a later Ecuadorian civil date with the same Company,
+    key, and equivalent content, **when** the binding is resolved, **then** the original draft and
+    emission date are returned without revalidating the emission date against the replay date.
+53. **Given** any identification-type, IVA-rule, or payment-method baseline row lacks verified
+    official evidence or an approved target mapping, **when** pre-task readiness is evaluated,
+    **then** the row remains Pending Functional Validation and `$speckit-tasks` is blocked.
+54. **Given** an approved baseline publishes stable fixed `taxRuleId` and `paymentMethodId` UUIDs,
+    **when** a client submits those identifiers, **then** the applicable effective rows can be
+    selected without a catalog-query endpoint and no identifier is generated at application
+    startup.
+55. **Given** `X-Correlation-Id` is absent and Company context is valid, **when** request processing
+    begins, **then** one safe UUID correlation identifier is generated and returned on the terminal
+    response.
+56. **Given** exactly one safe supplied `X-Correlation-Id` satisfies the approved character and
+    length rules, **when** request processing begins, **then** that identifier is preserved and
+    returned unchanged.
+57. **Given** `X-Correlation-Id` is blank, repeated, longer than 64 characters, or contains an
+    unsafe character, and Company context is valid, **when** correlation validation is reached,
+    **then** the invalid value is never echoed, a safe replacement UUID is returned with
+    `INVALID_REQUEST`, and no draft, child, or idempotency binding is persisted.
+58. **Given** both Company context and the supplied correlation identifier are invalid, **when**
+    failure precedence is evaluated, **then** the applicable Company-context error is returned,
+    correlation input is not echoed, and a safe replacement UUID correlates the error response.
 
 ### Edge Cases
 
@@ -337,12 +410,22 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   response, or idempotency scoping. Nil UUID text MUST be rejected rather than normalized into an
   accepted CompanyId.
 - Failure evaluation MUST follow FR-041. In particular, an oversized payload MUST be rejected
-  before Company-header evaluation; invalid Company context MUST be rejected before idempotency-key
-  or body-field validation; and an existing equivalent local binding MUST return the original
-  result before current business rules are reevaluated.
-- An impossible calendar date and any date other than the current Ecuadorian civil date at creation
-  MUST be rejected rather than normalized.
-- Quantity zero or negative, negative unit price, and negative discount MUST be rejected.
+  before Company-header evaluation; invalid Company context MUST take precedence over invalid
+  correlation; correlation validation MUST take precedence over idempotency-key and body-field
+  validation; and an existing equivalent local binding MUST return the original result before
+  current business rules are reevaluated.
+- Correlation initialization MUST always produce a safe response identifier. If both Company
+  context and correlation input are invalid, the Company error governs, the unsafe correlation is
+  not echoed, and the replacement identifier correlates the response.
+- An impossible calendar date and an emission date different from the date derived once from
+  `requestCreationInstant` in `America/Guayaquil` MUST be rejected rather than normalized. Crossing
+  midnight after that instant MUST NOT change the expected date, and replay MUST NOT reevaluate it.
+- Quantity zero, negative, or greater than `999999.999999`; unit price negative or greater than
+  `999999.999999`; and negative discount MUST be rejected.
+- Every money-bearing input, intermediate result, rounded line result, grouped amount, payment sum,
+  subtotal, discount total, tax amount, and grand total MUST remain within `0.00` through
+  `999999999999999.99`. A range failure MUST NOT be saturated, truncated, wrapped, or deferred to a
+  persistence error.
 - A discount equal to gross amount MAY produce a zero net line, and all lines MAY produce a rounded
   grand total of `0.00`; neither outcome alone is a validation failure.
 - Quantity or unit-price input with more than six decimal places, or discount/payment input not
@@ -363,6 +446,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - If reference data becomes invalid before the draft is committed, the operation MUST reject the
   request or commit a draft based on one consistent validated reference-data state; it MUST NOT
   persist a partially validated mix.
+- A reference row without verified official evidence and an approved target mapping MUST remain
+  Pending Functional Validation. Placeholder or randomly generated startup UUIDs MUST NOT be used
+  to bypass the pre-task baseline gate.
 - Multiple payments that differ from the rounded grand total by any non-zero amount MUST be
   rejected. Payment comparison MUST use exact two-decimal values after line-level `HALF_UP`
   calculation and aggregation.
@@ -446,9 +532,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   snapshots. This prohibition includes `issuerId`, Issuer RUC, legal name, trade name, address, and
   every other Issuer fiscal attribute. Strict request-body validation MUST reject these properties
   as unknown or prohibited. Draft creation MUST neither resolve nor persist those values.
-- **FR-006**: The emission date MUST be a real date equal to the current Ecuadorian civil date at
-  creation and MUST be represented without a time-of-day component. A past, future, or impossible
-  date MUST be rejected rather than normalized.
+- **FR-006**: The request boundary MUST capture `requestCreationInstant` exactly once. The expected
+  emission date MUST be derived from that instant in the IANA time zone `America/Guayaquil` and
+  represented without a time-of-day component. A different or impossible date MUST be rejected
+  rather than normalized. The derived date MUST remain fixed even when validation or commit crosses
+  midnight.
 - **FR-007**: Buyer legal name, identification value, and exactly one supported identification type
   MUST be present. Supported types are RUC (`04`), Ecuadorian identity card (`05`), passport (`06`),
   final consumer (`07`), and foreign identification (`08`). The selected type MUST be active and
@@ -460,9 +548,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   characters, exactly 7 to 15 digits, and only digits, `+`, spaces, hyphens, and parentheses.
 - **FR-009**: A draft MUST contain between 1 and 500 invoice lines, inclusive.
 - **FR-010**: Every invoice line MUST contain a product or service code, description, quantity
-  greater than zero, unit price greater than or equal to zero, absolute discount greater than or
-  equal to zero, and exactly one selected IVA tax rule. The code MUST contain 1 to 25 SRI-valid
-  alphanumeric characters and the description MUST contain 1 to 300 characters.
+  greater than zero and no greater than `999999.999999`, unit price from `0` through
+  `999999.999999`, absolute discount from `0.00` through `999999999999999.99`, and exactly one
+  selected IVA tax rule. Quantity and unit price MUST contain no more than six fractional digits.
+  The code MUST contain 1 to 25 SRI-valid alphanumeric characters and the description MUST contain
+  1 to 300 characters.
 - **FR-011**: Each selected IVA tax rule and its tax category MUST be active, and the rule's
   effective period MUST include the draft emission date. Supported rules MUST represent configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA. Any other tax or multiple
@@ -471,12 +561,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-012**: The service MUST calculate line gross amount, line net amount, tax base, tax amount,
   grouped tax totals, subtotal before taxes, total discount, and grand total. A creation request
   containing any of those system-calculated fields MUST be rejected with a stable validation error
-  and MUST NOT persist any draft data.
+  and MUST NOT persist any draft data. Every monetary input, exact intermediate result, rounded line
+  result, grouped amount, payment sum, subtotal, discount total, tax amount, and grand total MUST
+  remain within `0.00` through `999999999999999.99` inclusive.
 - **FR-013**: A draft MUST contain at least one payment and every payment MUST select an active
   payment method. When the rounded grand total is greater than `0.00`, every payment amount MUST be
-  greater than `0.00` and the draft MUST contain no more than 10 payments. When the rounded grand
-  total is `0.00`, the draft MUST contain exactly one payment with amount `0.00`. A selected payment
-  method MUST appear at most once within the draft.
+  greater than `0.00` and no greater than `999999999999999.99`, and the draft MUST contain no more
+  than 10 payments. When the rounded grand total is `0.00`, the draft MUST contain exactly one
+  payment with amount `0.00`. A selected payment method MUST appear at most once within the draft.
 - **FR-014**: The exact sum of two-decimal payment amounts MUST equal the system-calculated
   two-decimal grand total after the DR-010 rounding pipeline is applied.
 - **FR-015**: Optional additional information MUST contain no more than 15 named textual entries.
@@ -488,7 +580,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-018**: A successfully created draft MUST receive a unique draft identifier unrelated to an
   official sequential number, access key, or authorization number.
 - **FR-019**: Creation and last-modification timestamps MUST be returned as unambiguous instants.
-  The last-modification timestamp MUST NOT precede the creation timestamp.
+  `createdAt` MUST represent the confirmed commit instant and MUST NOT be used to derive the
+  accepted emission date. The last-modification timestamp MUST NOT precede `createdAt`.
 - **FR-020**: The complete draft, its invoice lines, tax selections and calculated amounts,
   payments, and additional information MUST be persisted as one all-or-nothing outcome.
 - **FR-021**: A request-contract, business-validation, reference-data, or persistence failure MUST
@@ -508,8 +601,13 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-025**: Validation and failure outcomes MUST use stable machine-readable English error
   categories and safe English messages. They MUST NOT expose buyer identification, issuer secrets,
   internal paths, persistence errors, stack traces, or other sensitive implementation details.
-- **FR-026**: Every creation attempt MUST carry or receive a correlation identifier that can be
-  used to correlate its safe operational records.
+- **FR-026**: Correlation MUST be initialized at the request boundary for every creation attempt.
+  When `X-Correlation-Id` is absent, the service MUST generate a safe UUID. One supplied value MUST
+  be trimmed and preserved only when it contains 1 to 64 characters, begins with an ASCII letter or
+  digit, and contains only ASCII letters, digits, `.`, `_`, `:`, or `-`. A blank, repeated,
+  over-length, or otherwise unsafe supplied value MUST NOT be echoed; the service MUST generate a
+  safe replacement UUID and return `INVALID_REQUEST` when correlation validation is the governing
+  outcome. The safe correlation identifier MUST be returned and used for operational correlation.
 - **FR-027**: Every creation command MUST provide a non-blank caller-generated idempotency key. Its
   scope MUST be the normalized Company UUID plus the key, with no tenant component. After trimming,
   the key MUST contain 1 to 128 printable ASCII characters. Changing the normalized Company UUID
@@ -545,7 +643,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   resolve only the local Company-scoped binding and MUST NOT repeat creation, call a Company
   capability, authenticate or authorize the client, validate current Company, Issuer, or
   emission-point state, refresh external data, or apply current Company data. An idempotency key
-  MUST NOT be treated as an authentication or authorization credential.
+  MUST NOT be treated as an authentication or authorization credential. Replay MUST NOT revalidate
+  the original emission date against the current Ecuadorian civil date.
 - **FR-034**: The invoice-draft capability MUST own its idempotency binding and MUST NOT delegate
   that responsibility to a Company capability, gateway, BFF, or other external service.
 - **FR-035**: Buyer legal name MUST contain 1 to 300 characters. Leading and trailing whitespace
@@ -577,13 +676,16 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   implementations, or Company Service clients.
 - **FR-041**: Observable failure evaluation MUST use this precedence: (1) request payload-size
   enforcement; (2) `X-Company-Id` presence, cardinality, trimming, UUID syntax, and nil validation;
-  (3) `Idempotency-Key` syntax validation; (4) request representation and unknown or prohibited
-  property validation; (5) normalized business-content generation; (6) local Company-scoped
-  idempotency lookup; (7) equivalent binding returns the original persisted draft; (8) a binding
-  with different content returns `IDEMPOTENCY_CONFLICT`; (9) buyer, line, tax-selection, payment,
-  text, and collection validation; (10) monetary and tax calculation; and (11) atomic aggregate and
-  idempotency-binding persistence. No authentication, authorization, tenant resolution, Company
-  lookup, Issuer lookup, or emission-point ownership validation step may be inserted.
+  (3) `X-Correlation-Id` validation; (4) `Idempotency-Key` syntax validation; (5) request
+  representation and unknown or prohibited property validation; (6) normalized business-content
+  generation; (7) local Company-scoped idempotency lookup; (8) equivalent binding returns the
+  original persisted draft; (9) a binding with different content returns `IDEMPOTENCY_CONFLICT`;
+  (10) buyer, line, tax-selection, payment, text, and collection validation; (11) monetary and tax
+  calculation; and (12) atomic aggregate and idempotency-binding persistence. Correlation
+  initialization MUST still produce a safe identifier for an earlier payload-size or
+  Company-context error, but correlation invalidity MUST NOT replace that higher-precedence error.
+  No authentication, authorization, tenant resolution, Company lookup, Issuer lookup, or
+  emission-point ownership validation step may be inserted.
 - **FR-042**: The create operation MUST reject a request body larger than `2 MiB` (`2,097,152`
   bytes) with a stable safe English payload-size error before Company-header evaluation. The error
   MUST include or return a correlation identifier and MUST leave no draft, child data, or
@@ -592,13 +694,37 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   return a stable safe English error with a correlation identifier and MUST leave no draft, child
   data, or idempotency binding. A timeout or response-delivery failure after successful commit MUST
   preserve the binding and be recoverable through the replay behavior in FR-032 and FR-033.
+- **FR-044**: Any value outside the approved quantity, unit-price, monetary, or percentage-rate
+  envelope MUST return `BUSINESS_VALIDATION_FAILED` with violation code
+  `MONETARY_RANGE_EXCEEDED` before persistence. The same limits MUST govern API schemas and
+  representations, validation, exact calculation, rounded/grouped results, payment reconciliation,
+  persistence, responses, and acceptance vectors. An out-of-range value MUST NOT be silently
+  rounded, clamped, truncated, wrapped, or exposed as a persistence error.
+- **FR-045**: Before `$speckit-tasks`, the supported identification types, IVA tax rules, and payment
+  methods MUST have an approved versioned baseline. Every baseline row MUST record official code,
+  display name, treatment or validation strategy, rate when applicable, `valid-from`, `valid-to`,
+  active state, catalog version, and exact official source.
+- **FR-046**: Every approved tax rule and payment method MUST use a stable fixed UUID published by
+  the target integration contract and seeded through the authoritative Flyway baseline. Those
+  UUIDs MUST NOT be generated randomly at application startup. This feature MUST NOT add a catalog
+  query operation; clients are expected to know the published stable identifiers through the
+  integration contract.
+- **FR-047**: No tax rate, payment code, identification rule, validity period, official mapping, or
+  baseline UUID may be invented. Any unverified baseline row MUST remain Pending Functional
+  Validation and MUST block `$speckit-tasks` until its official evidence and target mapping are
+  approved.
 
 ### Domain Rules and Invariants
 
-- **DR-001**: Official SRI Technical Sheet v2.32 and the active, versioned target catalogs MUST
-  govern supported identification, tax, and payment codes. Tax codes and rates MUST come from
-  versioned, effective-dated catalogs and MUST NOT be hard-coded. Legacy enums and catalog rows
-  MUST NOT become authoritative.
+- **DR-001**: Official SRI Technical Sheet v2.32 and approved, versioned, effective-dated target
+  baselines MUST govern supported identification types, tax rules, and payment methods. Each
+  baseline row MUST retain the official code, display name, treatment or validation strategy, rate
+  when applicable, validity interval, active state, catalog version, and exact official source.
+  Tax and payment references MUST use approved stable fixed UUIDs published by the target service
+  contract and supplied by authoritative Flyway migration data; they MUST NOT be generated at
+  startup.
+  Legacy enums and catalog rows MUST NOT become authoritative, and no unresolved mapping may be
+  treated as approved reference data.
 - **DR-002**: `gross amount = quantity × unit price` for each invoice line.
 - **DR-003**: `net amount = gross amount − absolute discount` for each invoice line.
 - **DR-004**: A line discount MUST NOT exceed its gross amount.
@@ -614,23 +740,32 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   amounts are equal.
 - **DR-009**: `grand total = subtotal before taxes + sum of all calculated tax amounts`.
 - **DR-010**: Quantity, unit price, discount, tax rates, tax bases, tax amounts, payment amounts,
-  and invoice totals MUST use exact decimal arithmetic; binary floating-point arithmetic is
-  prohibited. Quantity and unit price MUST allow no more than six decimal places. Catalog tax rates
-  expressed in percentage points MUST allow no more than two decimal places. Discounts and payments
-  MUST be expressed to two decimal places. Excess input precision MUST be rejected rather than
-  rounded. For each line, the service
-  MUST calculate the exact gross amount and round it to scale two using `HALF_UP`; subtract the
+  and invoice totals MUST use exact `BigDecimal` arithmetic; binary floating-point arithmetic is
+  prohibited. Quantity MUST be greater than `0` and no greater than `999999.999999`; unit price
+  MUST be from `0` through `999999.999999`; both MUST allow no more than six decimal places and
+  target `numeric(12,6)` persistence. Catalog percentage rates MUST be from `0.00` through `100.00`,
+  allow no more than two decimal places, and target `numeric(5,2)` persistence. Discounts and
+  payments MUST be expressed to two decimal places. Every monetary input, exact intermediate,
+  rounded line value, grouped value, payment sum, subtotal, discount total, tax amount, and grand
+  total MUST be from `0.00` through `999999999999999.99` and target `numeric(17,2)` persistence.
+  Excess input precision MUST be rejected rather than rounded. For each line, the service MUST
+  calculate the exact gross amount before rounding it to scale two using `HALF_UP`; subtract the
   two-decimal discount and round net amount to scale two using `HALF_UP`; use that rounded net as
   the tax base; and round each calculated tax amount to scale two using `HALF_UP`. Subtotal before
   taxes, total discount, grouped tax bases, grouped tax amounts, and grand total MUST be sums of
   those rounded line values and MUST be represented at scale two. Payment reconciliation MUST
-  compare the exact sum of two-decimal payment amounts with the two-decimal grand total.
+  compare the exact sum of two-decimal payment amounts with the two-decimal grand total. Every
+  range check MUST occur before persistence and any violation MUST produce
+  `BUSINESS_VALIDATION_FAILED` with violation code `MONETARY_RANGE_EXCEEDED`.
 - **DR-011**: The service is responsible for calculation and payment reconciliation. The caller is
   responsible only for commercial inputs and payment allocations. Caller-supplied calculated
   fields are prohibited and MUST NOT be ignored, reconciled, or persisted.
-- **DR-012**: The emission date MUST use date-only Ecuadorian civil-date semantics and equal the
-  Ecuadorian civil date at the creation instant. Creation and last-modification timestamps MUST be
-  unambiguous instants.
+- **DR-012**: The request boundary MUST capture `requestCreationInstant` exactly once and derive the
+  expected date-only Ecuadorian civil date using `America/Guayaquil`. That expected date MUST remain
+  fixed through validation and commit, including when commit crosses midnight. `createdAt` MUST be
+  the confirmed commit instant and MUST NOT determine the accepted emission date. Creation and
+  last-modification timestamps MUST be unambiguous instants. An equivalent replay MUST return the
+  original emission date without comparing it with the current Ecuadorian date.
 - **DR-013**: Impossible dates, inconsistent totals, inactive or temporally inapplicable catalog
   combinations, unsupported identification types, and invalid local aggregate relationships MUST
   be rejected without normalization or partial persistence.
@@ -666,6 +801,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **DR-023**: The opaque emission-point identifier captured by a draft is unverified commercial
   input for later processing. It MUST NOT be represented as an Issuer, establishment, emission
   point, Company master-data snapshot, or proof of a validated external relationship.
+- **DR-024**: Correlation initialization belongs to the request boundary. An absent correlation
+  value MUST produce a generated safe UUID; one valid supplied value MUST be preserved; and an
+  invalid supplied value MUST never be echoed and MUST produce a safe replacement UUID. Correlation
+  values are transport evidence and MUST NOT participate in idempotency equivalence.
 
 ### Key Entities
 
@@ -687,11 +826,16 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **Invoice Line**: One product or service entry with code, description, positive quantity,
   non-negative unit price and discount, exactly one applicable IVA tax rule, and calculated
   amounts.
-- **Tax Rule**: Versioned, effective rule combining a tax category, rate, applicability period, and
-  calculation behavior. It represents configured percentage-rate IVA, IVA 0%, not subject to IVA,
-  or exempt from IVA and is captured for review at draft creation.
+- **Tax Rule**: Approved, versioned, effective rule identified by a stable published UUID and
+  combining an official code, tax category, treatment, rate, applicability period, active state,
+  catalog version, official source, and calculation behavior. It represents configured
+  percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA and is captured for review at
+  draft creation.
 - **Tax Total**: System-calculated aggregate tax base and amount for one versioned tax-treatment-code
   and applicable-rate group.
+- **Payment Method**: Approved, versioned, effective reference identified by a stable published UUID
+  and retaining its official code, display name, validity interval, active state, catalog version,
+  and official source. No catalog-query operation is included in this feature.
 - **Payment**: Exact decimal amount assigned to one active payment method. Positive-total drafts
   contain only positive payments; zero-total drafts contain exactly one `0.00` payment. In every
   case, payment amounts reconcile exactly to the rounded grand total, and a payment method appears
@@ -739,9 +883,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-012**: Every idempotency acceptance and concurrency vector commits at most one draft for one
   scoped key and equivalent content; conflict and failure vectors create or modify no draft and
   every lookup remains scoped by Company UUID plus idempotency key.
-- **SC-013**: Every accepted draft uses the current Ecuadorian civil date at creation as its
-  date-only emission date, and every past, future, or impossible date is rejected without persisted
-  draft data.
+- **SC-013**: Every accepted new draft uses the date derived from the one captured
+  `requestCreationInstant` in `America/Guayaquil`; all midnight-boundary vectors retain that date
+  through commit, and every different or impossible date is rejected without persisted draft data.
 - **SC-014**: Every request containing one or more system-calculated monetary fields is rejected
   with the same stable error category and persists no draft or child data, regardless of whether a
   supplied value matches the system's calculation.
@@ -786,6 +930,23 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-028**: Every simulated local persistence timeout or unexpected pre-commit failure leaves zero
   draft, child, and idempotency-binding records and returns a correlated safe error; every simulated
   post-commit response failure remains recoverable as the original draft by equivalent replay.
+- **SC-029**: Boundary review and vectors demonstrate that API schemas and inputs, exact
+  intermediate calculations, rounded and grouped results, payment sums, persistence values, and
+  response values all enforce the same quantity, unit-price, monetary, and percentage-rate
+  envelopes; every breach returns `BUSINESS_VALIDATION_FAILED` with `MONETARY_RANGE_EXCEEDED` and
+  persists no state.
+- **SC-030**: Every equivalent replay on a later Ecuadorian date returns the original draft and
+  emission date without current-date revalidation or mutation.
+- **SC-031**: Pre-task review records zero unverified rows across the identification-type, IVA-rule,
+  and payment-method baselines before `$speckit-tasks` may proceed; each approved row contains all
+  evidence and metadata required by FR-045.
+- **SC-032**: Every accepted `taxRuleId` and `paymentMethodId` is one published stable UUID from the
+  approved baseline; zero reference identifiers are randomly generated at startup, and this feature
+  exposes zero catalog-query operations.
+- **SC-033**: Correlation acceptance vectors generate a safe UUID when the header is absent, preserve
+  every single valid supplied identifier, never echo invalid input, and return a safe replacement
+  UUID with `INVALID_REQUEST` when correlation validation governs. Combined-failure vectors follow
+  FR-041, and changing correlation never changes idempotency equivalence.
 
 ## Assumptions and Dependencies
 
@@ -811,6 +972,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   BFF, or Company master-data runtime dependency. Only the required Company header contract is
   visible at this service boundary.
 - **Dependency**: Versioned identification, tax-category, tax-rule, and payment-method catalogs must
-  provide active/effective reference data aligned with the official sources cited above.
+  provide active/effective reference data aligned with the official sources cited above. PFV-001,
+  PFV-002, and PFV-003 MUST be resolved with approved official evidence and target mappings before
+  `$speckit-tasks` is generated.
+- **Dependency**: The target integration contract publishes the stable fixed UUIDs for approved tax
+  rules and payment methods. Callers know those identifiers through that contract because Create
+  Invoice Draft provides no catalog-query operation. The authoritative Flyway migration baseline
+  supplies the same identifiers and MUST NOT substitute startup-generated values.
+- **Dependency**: The IANA time-zone definition for `America/Guayaquil` governs conversion of the
+  single captured `requestCreationInstant` to the expected emission date.
 - **Dependency**: `docs/migration/terminology-mapping.md` is authoritative for the English target
   terms used by this feature.

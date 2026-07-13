@@ -19,7 +19,13 @@ paths:
       description: >-
         Accepts Company ownership context only through X-Company-Id. CompanyId is not a path,
         query, or body field. The request contains client-controlled commercial inputs only;
-        Company, Issuer, fiscal-snapshot, and system-calculated properties are prohibited.
+        Company, Issuer, fiscal-snapshot, and system-calculated properties are prohibited. The
+        service captures one requestCreationInstant at the request boundary and derives the
+        expected emission date from that instant in America/Guayaquil; that expected date remains
+        fixed even when validation or commit crosses midnight. Observable processing precedence
+        is payload size, Company context, correlation, idempotency-key syntax, representation,
+        normalization, local Company-scoped binding lookup, equivalent replay, idempotency
+        conflict, business validation, calculation, and atomic persistence.
       parameters:
         - $ref: '#/components/parameters/CompanyContext'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -43,7 +49,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/InvoiceDraftResponse'
         '200':
-          description: An equivalent request returned the original committed Invoice Draft.
+          description: >-
+            An equivalent request returned the original committed Invoice Draft without
+            revalidating its emission date against the current Ecuadorian date.
           headers:
             X-Correlation-Id:
               $ref: '#/components/headers/CorrelationId'
@@ -82,6 +90,7 @@ components:
       schema:
         type: string
         format: uuid
+        pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -99,8 +108,13 @@ components:
       in: header
       required: false
       description: >-
-        Optional caller correlation identifier. A valid supplied value is preserved and returned;
-        a UUID is generated and returned when absent.
+        Optional caller correlation identifier. When supplied, exactly one value is accepted and
+        surrounding whitespace is trimmed. A valid value contains 1 to 64 characters, begins with
+        an ASCII letter or digit, and contains only ASCII letters, digits, period, underscore,
+        colon, or hyphen. A valid supplied value is preserved and returned. When absent, the
+        service generates and returns a safe UUID. A blank, repeated, over-length, or otherwise
+        unsafe supplied value is never echoed: the service generates a replacement UUID and
+        returns INVALID_REQUEST when correlation validation is the governing failure.
       schema:
         $ref: '#/components/schemas/CorrelationIdentifier'
 
@@ -150,7 +164,10 @@ components:
         emissionDate:
           type: string
           format: date
-          description: Must equal the Ecuadorian civil date at original creation.
+          description: >-
+            Must equal the Ecuadorian civil date derived in America/Guayaquil from the single
+            requestCreationInstant captured at the request boundary. That expected date is fixed
+            across midnight and commit; requestCreationInstant is not a request property.
         buyer:
           $ref: '#/components/schemas/BuyerInput'
         lines:
@@ -332,6 +349,8 @@ components:
         createdAt:
           type: string
           format: date-time
+          description: >-
+            Confirmed commit instant. It does not determine the accepted emission date.
         updatedAt:
           type: string
           format: date-time
@@ -479,26 +498,46 @@ components:
     PositiveSixScaleDecimal:
       type: string
       minLength: 1
-      maxLength: 25
-      pattern: '^(?=.*[1-9])(?=(?:\D*\d){1,18}\D*$)(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$'
-      examples: ['2', '2.500000']
+      maxLength: 13
+      pattern: '^(?=.*[1-9])(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,6})?$'
+      description: >-
+        Exact positive decimal from 0.000001 through 999999.999999 with at most six fractional
+        digits. A syntactically numeric value outside this envelope produces
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0.000001', '2', '999999.999999']
 
     NonNegativeSixScaleDecimal:
       type: string
       minLength: 1
-      maxLength: 25
-      pattern: '^(?=(?:\D*\d){1,18}\D*$)(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$'
-      examples: ['0', '10.000000']
+      maxLength: 13
+      pattern: '^(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,6})?$'
+      description: >-
+        Exact decimal from 0 through 999999.999999 with at most six fractional digits. A
+        syntactically numeric value outside this envelope produces BUSINESS_VALIDATION_FAILED with
+        violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0', '10.000000', '999999.999999']
 
     MoneyDecimal:
       type: string
-      pattern: '^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$'
-      examples: ['0.00', '17.25']
+      minLength: 4
+      maxLength: 18
+      pattern: '^(?:0|[1-9][0-9]{0,14})\.[0-9]{2}$'
+      description: >-
+        Exact non-negative USD amount from 0.00 through 999999999999999.99 with exactly two
+        fractional digits. A syntactically numeric value outside this envelope produces
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0.00', '17.25', '999999999999999.99']
 
     PercentageDecimal:
       type: string
+      minLength: 4
+      maxLength: 6
       pattern: '^(?:(?:0|[1-9][0-9]?)\.[0-9]{2}|100\.00)$'
-      examples: ['0.00', '15.00']
+      description: >-
+        Exact percentage from 0.00 through 100.00 with exactly two fractional digits. An
+        out-of-envelope catalog rate produces BUSINESS_VALIDATION_FAILED with violation
+        MONETARY_RANGE_EXCEEDED.
+      examples: ['0.00', '15.00', '100.00']
 
     ErrorCode:
       type: string
@@ -540,6 +579,9 @@ components:
           $ref: '#/components/schemas/CorrelationIdentifier'
         violations:
           type: array
+          description: >-
+            Safe validation details. BUSINESS_VALIDATION_FAILED uses MONETARY_RANGE_EXCEEDED for
+            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow.
           items:
             $ref: '#/components/schemas/Violation'
 
@@ -558,8 +600,10 @@ components:
   responses:
     BadRequest:
       description: >-
-        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. No draft, child,
-        or idempotency binding is created.
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. Invalid supplied
+        correlation input is never echoed; a safe replacement UUID is returned. Payload-size and
+        Company-context failures take precedence over correlation invalidity. No draft, child, or
+        idempotency binding is created.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -586,7 +630,9 @@ components:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
     ValidationFailure:
-      description: PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED.
+      description: >-
+        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. Numeric-envelope breaches use
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'

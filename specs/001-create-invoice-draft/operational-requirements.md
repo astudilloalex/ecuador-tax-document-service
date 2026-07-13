@@ -19,6 +19,21 @@ Before performance evidence is accepted, record:
 - dataset/catalog size;
 - warm-up duration, measurement duration, sample count, and percentile method.
 
+Server-side request duration MUST use a monotonic timer captured at the earliest service request
+boundary and stopped when the terminal response is ready for delivery. It MUST NOT use wall-clock
+timestamps, `requestCreationInstant`, `createdAt`, or correlation timestamps. Client network,
+gateway, and upstream queueing time are outside this server-side measurement.
+
+`requestCreationInstant` is separate functional evidence. The request boundary captures it exactly
+once from the approved wall clock and derives the expected emission date once using
+`America/Guayaquil`. It MUST be passed through validation and persistence without recapture, MUST
+remain fixed if commit crosses midnight, and MUST NOT be replaced by `createdAt`. Equivalent replay
+may capture an operational request instant but MUST NOT use it to revalidate or mutate the original
+emission date.
+
+Correlation initialization/validation time is included in request duration. Correlation identity
+never starts, stops, partitions, or otherwise changes a performance measurement.
+
 ## Request Performance Budgets
 
 | Profile | Load | Required outcome |
@@ -32,14 +47,28 @@ Before performance evidence is accepted, record:
 The overall request deadline is 10 seconds and the local database write-transaction timeout is 5
 seconds. A request larger than 2 MiB is rejected before Company-header evaluation.
 
+The overall deadline begins at the same service boundary as the monotonic request timer. Therefore
+body reading, Company-header validation, safe correlation initialization/validation, idempotency
+processing, domain work, persistence, and serialization all consume the same 10-second budget.
+Failure precedence determines the observable result; it does not reset the timer.
+
 If evidence misses a budget, the plan must be revisited before implementation is considered
 complete. The response is not to add a Company cache, application cache, broker, or unapproved
 distributed component.
+
+Performance execution is currently blocked by `PFV-001`, `PFV-002`, and `PFV-003`. No benchmark
+may substitute invented tax-rule/payment-method UUIDs or unapproved reference rows. Record results
+only after the published contract identifiers and authoritative Flyway seeds are approved and
+identical.
 
 ## Capacity and Resource Safety
 
 - Accept at most 500 invoice lines, 10 payments, and 15 additional-information entries.
 - Bound request body at 2,097,152 bytes.
+- Enforce quantity `numeric(12,6)`, monetary `numeric(17,2)`, and percentage-rate `numeric(5,2)`
+  envelopes in representation, calculation, persistence, and response paths. Individually valid
+  inputs whose exact intermediate, grouped, payment-sum, or total result overflows the monetary
+  maximum MUST fail before persistence with `MONETARY_RANGE_EXCEEDED`.
 - Bound reactive connection-pool acquisition and query duration beneath the request deadline.
 - Do not synchronously wait for `Uni`, `CompletionStage`, or future results.
 - Domain work remains synchronous and bounded; a maximum-payload benchmark must show no event-loop
@@ -55,15 +84,25 @@ distributed component.
 
 - the same PostgreSQL destination used for business persistence is reachable through a bounded,
   read-only check;
-- required Flyway migrations and mandatory local reference-catalog initialization completed.
+- required Flyway migrations and mandatory approved local reference-catalog initialization
+  completed, including exact agreement between published and seeded stable UUIDs.
 
 Readiness performs no destructive action and no Company, gateway/BFF, identity-provider, SRI,
 certificate, storage, queue, or notification check.
 
 ## Correlation and Structured Logs
 
-Every request accepts or generates `X-Correlation-Id`, returns it on successes and safe failures,
-and propagates it through logs/traces.
+Correlation is initialized at the HTTP boundary for every request:
+
+- absent input generates one safe UUID;
+- one valid, trimmed 1–64 character value using the approved safe ASCII grammar is preserved;
+- blank, repeated, over-length, or unsafe input is never echoed, produces a safe replacement UUID,
+  and returns `INVALID_REQUEST` when correlation validation governs;
+- payload-size or Company-context failures retain their higher precedence, but still use a safe
+  generated identifier when supplied correlation cannot safely be preserved;
+- the safe correlation value is returned in `X-Correlation-Id` and propagated through logs/traces;
+- correlation is transport evidence and is excluded from the request fingerprint and Company/key
+  idempotency scope.
 
 Allowed structured fields include:
 
@@ -73,6 +112,8 @@ Allowed structured fields include:
 - HTTP status;
 - new/replay/conflict indicator;
 - duration;
+- whether correlation was generated or accepted, using a bounded boolean/category rather than the
+  value as a metric dimension;
 - bounded line/payment/additional-information counts;
 - database outcome category.
 
@@ -88,7 +129,9 @@ Required bounded metrics:
 - request count and duration by operation/outcome/status;
 - payload-size rejection count;
 - Company-header required/invalid counts;
+- correlation generated/accepted/invalid counts using bounded outcome labels;
 - business-validation failure count by bounded violation code;
+- monetary-range-exceeded count;
 - persistence duration, unavailable, timeout, and rollback counts;
 - idempotency new/replay/conflict counts;
 - liveness/readiness state.
@@ -102,6 +145,9 @@ The expected trace path is API → application use case → reactive PostgreSQL 
 Company Service, identity, SRI, XML, certificate, queue, or notification span should exist.
 
 Trace attributes follow the same sensitive/high-cardinality restrictions as metrics and logs.
+The request span uses monotonic duration; `requestCreationInstant` MAY appear only as a safe event
+attribute when needed to prove midnight behavior and MUST NOT replace the trace clock. Invalid
+correlation input MUST never appear in a span.
 
 ## Audit Events
 
@@ -125,7 +171,9 @@ Mandatory JVM evidence:
 - packaged JVM boot;
 - OpenAPI and health;
 - create, normalization, replay, conflict, rollback, unavailable, timeout, and correlation paths;
-- representative fiscal/monetary vectors;
+- single-capture `requestCreationInstant`, Guayaquil midnight, later-date replay, and representative
+  fiscal/monetary maximum/overflow vectors;
+- absent/valid/invalid/combined-precedence correlation vectors;
 - sensitive-data and high-cardinality-label checks;
 - the performance profiles above.
 

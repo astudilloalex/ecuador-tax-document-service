@@ -1,6 +1,6 @@
 # Implementation Plan: Create Invoice Draft
 
-**Branch**: `001-create-invoice-draft` | **Date**: 2026-07-12 | **Spec**: `specs/001-create-invoice-draft/spec.md`
+**Branch**: `6-ft-1` | **Date**: 2026-07-12 | **Spec**: `specs/001-create-invoice-draft/spec.md`
 
 **Input**: Clarified feature specification with Constitution v2.0.0 Company-context decisions
 
@@ -18,7 +18,9 @@ master data, fiscal snapshot, cache, or SRI side effect.
 **Language/Version**: Java 25
 
 **Framework**: Quarkus 3.33.2.1 LTS; selected from the current production-recommended LTS line and
-justified in `research.md`
+justified in `research.md`. Implementation setup MUST align both `quarkusPluginVersion` and
+`quarkusPlatformVersion` in `gradle.properties` from the current `3.37.2` to `3.33.2.1` before any
+feature dependency or source work; the plugin and platform versions MUST remain identical.
 
 **Reactive Model**: Mutiny for HTTP/application orchestration and every I/O port; synchronous pure
 domain calculation
@@ -54,8 +56,17 @@ s/p99 ≤5 s; replay/conflict p95 ≤250 ms/p99 ≤500 ms; 50 equivalent concurr
 within 10 s and create exactly one aggregate/binding
 
 **Constraints**: 2,097,152-byte request-body maximum; 500 lines; 10 payments; 15 additional entries;
-10-second overall request deadline; 5-second local write-transaction timeout; exact approved decimal
-precision/rounding; no synchronous wait or unbounded retry
+10-second overall request deadline; 5-second local write-transaction timeout; quantity and unit
+price `numeric(12,6)` with maximum `999999.999999`; all money `numeric(17,2)` with maximum
+`999999999999999.99`; percentage rates `numeric(5,2)` from `0.00` through `100.00`; exact
+`BigDecimal` calculation and approved line-level `HALF_UP` rounding; every overflow rejected as
+`BUSINESS_VALIDATION_FAILED`/`MONETARY_RANGE_EXCEEDED` before persistence; no synchronous wait or
+unbounded retry
+
+**Time Boundary**: The API boundary captures one `requestCreationInstant` per new request and derives
+the expected emission date once in `America/Guayaquil`. The derived date remains fixed when commit
+crosses midnight. `createdAt` is the confirmed commit instant, and an equivalent replay returns the
+original date without current-date revalidation.
 
 **Scale/Scope**: One Company partition and one Invoice Draft per logical command; no draft update,
 delete, fiscal issuance, other tax-document type, or Company administration
@@ -71,6 +82,7 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 | Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
 | Constitution | `.specify/memory/constitution.md` v2.0.0 | Company header, no identity/Company dependency, architecture, persistence, testing, operations |
 | Specification | `specs/001-create-invoice-draft/spec.md`, clarification session 2026-07-12 | Actor, inputs, calculations, validation, failure precedence, acceptance |
+| Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Official buyer-type, IVA-rule, and payment-method candidates; row-level evidence and target-UUID approval gate |
 | Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
 | Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
 | Legacy evidence | `docs/legacy/as-is/` paths listed in the spec | Historical discovery only |
@@ -78,9 +90,21 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 **Source Conflicts and Resolutions**: Historical and superseded feature artifacts required
 Keycloak, tenant-derived Company context, a Company client/port, status/eligibility checks, and
 fiscal snapshots. Constitution v2.0.0 and the clarified spec have higher authority. All such
-components/outcomes are removed or explicitly prohibited.
+components/outcomes are removed or explicitly prohibited. Current SRI IVA guidance reports `13%`,
+while Circular NAC-DGECCGC25-00000006 states that `15%` remains effective until modified and the
+approved feature vector uses `15%`. No effective-date resolution is inferred; PFV-002 records the
+conflict and blocks a percentage-rate seed row until authoritative reconciliation is approved.
 
-**Pending Functional Validation**: None.
+**Pending Functional Validation**:
+
+- `PFV-001`: approve every buyer-identification baseline row and its official validation evidence;
+- `PFV-002`: reconcile the effective percentage-rate IVA row, including the current official-rate
+  source conflict, effective interval, and stable target UUID;
+- `PFV-003`: approve every payment-method row and stable target UUID mapping.
+
+`reference-data-baseline.md` records the row-level evidence and approval state. Planning MUST NOT
+promote an unverified row into a Flyway seed, quickstart request, or fixture. These PFVs block
+`$speckit-tasks` but do not require inventing an answer during this Phase 0/1 design pass.
 
 **Terminology Mapping Impact**: `Company Identifier`/`CompanyId` remains the canonical opaque
 ownership value from `X-Company-Id`. `Fiscal Context Snapshot` remains reserved for a later
@@ -94,13 +118,14 @@ artifacts.
 | Gate | Pre-Research evidence | Post-Design evidence |
 |------|-----------------------|----------------------|
 | Greenfield bounded outcome | PASS — one target create/review outcome | PASS — no legacy compatibility or unrelated lifecycle |
-| Authority/versioned evidence | PASS — Constitution v2.0.0 and SRI v2.32 identified | PASS — research links official technology/SRI sources and resolves conflicts |
+| Authority/versioned evidence | PASS — Constitution v2.0.0 and SRI v2.32 identified | BLOCKED FOR TASKS — research and the baseline register exact evidence, but PFV-001–PFV-003 remain pending |
 | English terminology | PASS — target terms are English | PASS — all generated artifacts use canonical English with exact SRI exceptions |
 | Required baseline | PASS — Java/Quarkus/Mutiny/PostgreSQL/Panache/Flyway fixed | PASS — Quarkus 3.33.2.1 LTS and PostgreSQL 18.4 justified |
+| Reference-data evidence | PFV-001–PFV-003 registered; inference prohibited | BLOCKED FOR TASKS — candidate rows are inventoried, but zero rows are seed-authorized |
 | Clean Architecture | PASS — four boundaries required | PASS — explicit API→application→domain/infrastructure mapping below |
 | Domain purity | PASS — synchronous deterministic fiscal model | PASS — no transport/framework/persistence/security/Mutiny types in domain |
 | Reactive safety | PASS — no blocking external operation in scope | PASS — reactive PostgreSQL only; bounded domain work and evidence budget |
-| Fiscal correctness | PASS — approved IVA/buyer/date/decimal rules | PASS — model/contract/test vectors preserve exact rules |
+| Fiscal correctness | PASS — approved IVA/buyer/date/decimal rules | BLOCKED FOR TASKS — numeric/date behavior is complete; unverified catalog rows cannot be seeded or tested as authoritative |
 | Internal caller boundary | PASS — no identity/security state | PASS — OpenAPI/dependencies/config/tests contain no security behavior |
 | Company boundary | PASS — mandatory header, no lookup/snapshot | PASS — CompanyId mapping/storage/scoping and negative architecture evidence explicit |
 | Sensitive data | PASS — buyer/fiscal data identified | PASS — fingerprint-only binding and observability redaction defined |
@@ -108,12 +133,15 @@ artifacts.
 | Boundary consistency | PASS — idempotency/failure precedence approved | PASS — fingerprint, race arbitration, timeout/recovery outcomes complete |
 | API/async quality | PASS — synchronous observable result, stable errors | PASS — strict OpenAPI, Problem Details, correlation, no opaque job |
 | External adapters | PASS — none applicable | PASS — no Company/SRI/security port/client/health destination |
-| Testing | PASS — 48 scenarios and 28 success criteria | PASS — traceability and risk-based evidence cover every coherent group |
+| Testing | PASS — 58 scenarios and 33 success criteria | PASS — traceability maps every FR-001–FR-047, DR-001–DR-024, and SC-001–SC-033 |
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
 
-No constitutional deviation or complexity exception is requested.
+No constitutional deviation or complexity exception is requested. Phase 1 design may complete with
+the explicitly registered evidence gate, but task generation and implementation MUST remain blocked
+until every row required by `reference-data-baseline.md` is approved and the research status can be
+changed to complete.
 
 ## Clean Architecture Mapping
 
@@ -142,7 +170,7 @@ introduced.
 
 | Operation | Adapter/port boundary | Classification | Execution context | Timeout/resource bound | Required evidence |
 |-----------|-----------------------|----------------|-------------------|------------------------|-------------------|
-| Header/body mapping and normalization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections | Header matrix, max payload, blocked-thread check |
+| Header/body mapping, correlation, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one request instant | Header/correlation matrix, midnight vector, max payload, blocked-thread check |
 | Fingerprint generation | Application normalization service | Bounded CPU, no I/O | Calling context | ≤2 MiB, SHA-256, version 1 | Vectors and maximum-payload benchmark |
 | Monetary/domain calculation | Pure domain | Synchronous deterministic bounded CPU | Calling context | ≤500 lines | Exact vectors, p99 budget, no event-loop warning |
 | Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query bound below 10 s | Unavailable, timeout, replay/conflict tests |
@@ -160,6 +188,12 @@ OpenAPI contract defines no security scheme/requirement, Authorization header, `
 **Company Header Contract**: Exactly one `X-Company-Id` is required. Trim; reject blank/missing as
 `COMPANY_CONTEXT_REQUIRED`; reject repeated/malformed/nil as `COMPANY_CONTEXT_INVALID`; normalize
 accepted UUID to lowercase hyphenated form. CompanyId never appears in path/query/body.
+
+**Correlation Contract**: Initialize correlation at the HTTP boundary after Company validation and
+before idempotency-key validation. Preserve one trimmed safe value of 1–64 approved ASCII
+characters; generate a UUID when absent. Blank, repeated, over-length, or unsafe supplied values
+MUST NOT be echoed; generate a safe replacement UUID and return `INVALID_REQUEST` when correlation
+validation governs. Correlation never affects idempotency equivalence.
 
 **Company Ownership Scoping**: API maps to application `CompanyId`; the command carries it; the
 aggregate stores it immutably; response returns it. Existing-draft repository reads/mutations use
@@ -182,14 +216,17 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Effective operation: `POST /api/v1/invoice-drafts` (`/api/v1` server base plus
   `/invoice-drafts` resource path).
 - Required headers: `X-Company-Id`, `Idempotency-Key`.
-- Optional `X-Correlation-Id`: preserve one valid supplied value; generate a UUID when absent;
-  return it on every success/safe failure.
+- Optional `X-Correlation-Id`: preserve one valid supplied value; generate a UUID when absent; for
+  invalid input, never echo it, generate a safe replacement UUID, and return `INVALID_REQUEST` when
+  that validation step governs.
 - Strict body schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown properties, and
   calculated fields.
 - Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
   commercial/calculated draft, `createdAt`, and `updatedAt`.
 - New commit returns `201`; equivalent replay returns `200`; both identify replay state.
 - Stable statuses/codes are defined in `error-catalog.md` and represented in OpenAPI.
+- Monetary envelope violations use `BUSINESS_VALIDATION_FAILED` with violation code
+  `MONETARY_RANGE_EXCEEDED`; API, calculation, persistence, response, and test limits are identical.
 - Failure evaluation follows FR-041 exactly.
 
 The contract contains no Company-not-found/inactive/unavailable/timeout/authorization result and
@@ -199,7 +236,7 @@ no authentication or authorization result.
 
 | Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
 |------------------|---------------------|-------------------|--------------------|---------|-------------------------|--------------------|
-| Header/body acceptance | No durable state | Key syntax checked before body business validation | N/A | Overall 10 s begins at acceptance | Correct request | 400/413 or continue |
+| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | Overall 10 s begins at acceptance; one request instant captured | Correct request | 400/413 or continue |
 | Binding lookup | No new durable state | CompanyId + key hash; fingerprint/version compare | Equivalent replay; different content conflict | Bounded query | Same key safely retried | 200/409 or continue |
 | New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | 5-second write tx | Loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
 | Response delivery | Commit already authoritative | Same equivalent retry | Returns original | 10-second request deadline | Binding reconciles response loss | Original draft observable |
@@ -215,6 +252,8 @@ Detailed schema/constraint/transaction decisions are in `data-model.md` and
 Key invariants:
 
 - root `company_id uuid NOT NULL` and non-nil;
+- quantity/unit price columns use `numeric(12,6)`; monetary columns use `numeric(17,2)`; tax-rate
+  columns use `numeric(5,2)` with range checks mirrored by pre-persistence validation;
 - local children reference only the draft/line;
 - existing-root operations use CompanyId + draftId;
 - binding uniqueness is `UNIQUE (company_id, idempotency_key_hash)`;
@@ -244,6 +283,7 @@ specs/001-create-invoice-draft/
 ├── spec.md
 ├── plan.md
 ├── research.md
+├── reference-data-baseline.md
 ├── data-model.md
 ├── persistence-design.md
 ├── idempotency-design.md
@@ -287,10 +327,10 @@ is planned.
 | Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company body/path/query rejected |
 | Clean layer handoff | Architecture + application | Command has explicit CompanyId; aggregate immutable CompanyId | no HTTP/security/thread-local/Gateway types below API |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
-| Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | invalid/unsupported/calculated input vectors |
+| Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | numeric maxima/overflow, invalid/unsupported/calculated input, and midnight/replay vectors |
 | Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
-| API errors/correlation | Contract/integration | exact code/status, safe Problem Details, supplied/generated correlation | 400/409/413/422/503/504/500; no 401/403 |
+| API errors/correlation | Contract/integration | exact code/status, safe Problem Details, supplied/generated/replacement correlation | blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
 | Performance/resources | Warmed packaged JVM + PostgreSQL | all budgets in operational requirements | max payload, 50-way contention, pool recovery, no blocked event loop |
@@ -323,7 +363,8 @@ database, second datastore, generic repository hierarchy, or custom authenticati
 
 ## Phase 0 and Phase 1 Outputs
 
-- Phase 0 research: `research.md` — all planning decisions resolved.
+- Phase 0 research: `research.md` — status reflects any material reference-data evidence gate.
+- Reference baseline and row-level approval register: `reference-data-baseline.md`.
 - Phase 1 model: `data-model.md`.
 - Phase 1 API contract: `contracts/invoice-draft-api.openapi.yaml`.
 - Phase 1 validation guide: `quickstart.md`.

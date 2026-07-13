@@ -25,8 +25,9 @@ Logical persistence name: `invoice_draft`.
 | `id` | `UUID` | `uuid` | Yes | Local primary key; not a fiscal identifier |
 | `companyId` | `CompanyId` | `uuid` | Yes | Canonical non-nil UUID; immutable ownership partition |
 | `emissionPointId` | `UUID` | `uuid` | Yes | Canonical non-nil opaque external reference; no ownership/status inference |
-| `emissionDate` | `LocalDate` | `date` | Yes | Current Ecuadorian civil date at original creation |
+| `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from `requestCreationInstant` in `America/Guayaquil` |
 | `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
+| `buyerIdentificationCatalogVersion` | approved version | `varchar(64)` | Yes | Version of the identification rule used for validation |
 | `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation |
 | `buyerLegalName` | validated text | `varchar(300)` | Yes | Trimmed, nonblank, no control characters |
 | `buyerAddress` | optional text | `varchar(300)` | No | Trimmed and valid when present |
@@ -34,9 +35,9 @@ Logical persistence name: `invoice_draft`.
 | `buyerTelephone` | optional text | `varchar(20)` | No | Approved character and digit-count rules |
 | `status` | `DraftStatus` | `varchar(16)` | Yes | Exactly `DRAFT` |
 | `currency` | `CurrencyCode` | `char(3)` | Yes | Exactly `USD` |
-| `subtotalBeforeTaxes` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
-| `totalDiscount` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
-| `grandTotal` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
+| `subtotalBeforeTaxes` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
+| `totalDiscount` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
+| `grandTotal` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
 | `createdAt` | `Instant` | `timestamptz` | Yes | Unambiguous commit-time audit instant |
 | `updatedAt` | `Instant` | `timestamptz` | Yes | Initially equal to or after `createdAt` |
 
@@ -47,6 +48,8 @@ Mandatory root constraints:
 - equivalent non-nil check for `emission_point_id`;
 - fixed `DRAFT` and `USD` checks;
 - non-negative stored totals;
+- a local composite reference from buyer identification code and catalog version to the approved
+  identification-type catalog row;
 - `updated_at >= created_at`;
 - `UNIQUE (company_id, id)` to support local Company-consistent composite references.
 
@@ -68,12 +71,12 @@ Logical persistence name: `invoice_line`.
 | `position` | `integer` | 1–500; unique within the draft; business-significant order |
 | `productCode` | `varchar(25)` | Trimmed approved alphanumeric value |
 | `description` | `varchar(300)` | Trimmed, nonblank text |
-| `quantity` | `numeric(18,6)` | Greater than zero |
-| `unitPrice` | `numeric(18,6)` | Non-negative |
-| `discount` | `numeric(14,2)` | Non-negative; no greater than gross amount |
-| `grossAmount` | `numeric(14,2)` | System-calculated |
-| `netAmount` | `numeric(14,2)` | System-calculated, non-negative |
-| `lineTotal` | `numeric(14,2)` | Net amount plus tax amount |
+| `quantity` | `numeric(12,6)` | `0.000001`–`999999.999999` |
+| `unitPrice` | `numeric(12,6)` | `0.000000`–`999999.999999` |
+| `discount` | `numeric(17,2)` | `0.00`–`999999999999999.99`; no greater than gross amount |
+| `grossAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
+| `netAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
+| `lineTotal` | `numeric(17,2)` | Net plus tax; `0.00`–`999999999999999.99` |
 
 Constraints include `UNIQUE (invoice_draft_id, position)` and row-local non-negative/scale checks.
 The maximum collection count is enforced before persistence and verified after aggregate loading;
@@ -95,8 +98,8 @@ Each line has exactly one persisted IVA selection and calculated result.
 | `officialTaxCode` | `varchar(8)` | Versioned catalog value |
 | `officialPercentageCode` | `varchar(8)` | Versioned catalog value |
 | `rate` | `numeric(5,2)` | Percentage points from `0.00` through `100.00` |
-| `taxBase` | `numeric(14,2)` | Rounded line net amount |
-| `taxAmount` | `numeric(14,2)` | System-calculated, non-negative |
+| `taxBase` | `numeric(17,2)` | Rounded line net amount; `0.00`–`999999999999999.99` |
+| `taxAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
 | `catalogVersion` | `varchar(64)` | Rule version applied at creation |
 
 `UNIQUE (invoice_line_id)` prevents more than one simultaneous line tax.
@@ -114,8 +117,8 @@ Logical persistence name: `invoice_tax_total`.
 | `officialTaxCode` | `varchar(8)` | Versioned catalog value |
 | `officialPercentageCode` | `varchar(8)` | Versioned catalog value |
 | `rate` | `numeric(5,2)` | Applicable percentage points |
-| `taxBase` | `numeric(14,2)` | Sum of grouped rounded bases |
-| `taxAmount` | `numeric(14,2)` | Sum of grouped rounded taxes |
+| `taxBase` | `numeric(17,2)` | Sum of grouped rounded bases; `0.00`–`999999999999999.99` |
+| `taxAmount` | `numeric(17,2)` | Sum of grouped rounded taxes; `0.00`–`999999999999999.99` |
 | `catalogVersion` | `varchar(64)` | Applied catalog version |
 
 The unique group key is `(invoice_draft_id, treatment, official_tax_code,
@@ -133,7 +136,7 @@ Logical persistence name: `invoice_payment`.
 | `paymentMethodId` | `uuid` | Selected local catalog method |
 | `officialCode` | `varchar(8)` | Versioned catalog value |
 | `name` | `varchar(100)` | English target display name |
-| `amount` | `numeric(14,2)` | Approved positive/zero behavior |
+| `amount` | `numeric(17,2)` | Approved positive/zero behavior; maximum `999999999999999.99` |
 | `catalogVersion` | `varchar(64)` | Applied catalog version |
 
 `UNIQUE (invoice_draft_id, payment_method_id)` prevents duplicate payment methods. Cross-row
@@ -184,14 +187,104 @@ CompanyId because CompanyId is the explicit binding scope. It also excludes `Ide
 
 ## Local Reference Catalogs
 
-Versioned, active, effective-dated local tables provide:
+The candidate baseline and its unresolved approval state are defined in
+`reference-data-baseline.md`. No row may be seeded until that artifact marks the row approved and
+records every field required by FR-045 through FR-047.
 
-- buyer identification types and validation-rule version metadata;
-- IVA tax categories/rules, treatment, official codes, percentage rates, and effective periods;
-- payment methods and official codes.
+### Buyer Identification Type Catalog
 
-Flyway owns baseline and change migrations. Production code does not hard-code catalog codes or
-rates. These catalogs are tax-document reference data, not Company master data.
+Logical persistence name: `buyer_identification_type_catalog`.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `officialCode` | `varchar(2)` | Official SRI code; exactly two ASCII digits |
+| `displayName` | `varchar(100)` | Approved English target display name |
+| `validationStrategy` | `varchar(64)` | Approved named validation behavior; never an unevidenced regex or algorithm |
+| `validationRuleVersion` | `varchar(64)` | Exact approved rule-set version |
+| `validFrom` | `date` | Inclusive official/approved effective start |
+| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `active` | `boolean` | Approved baseline state; not inferred by production code |
+| `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
+| `officialSourceUri` | `text` | Exact authoritative SRI source |
+| `officialSourceLocator` | `varchar(128)` | Exact table, section, schema, or rule locator |
+
+The primary key is `(official_code, catalog_version)`. `valid_to` must be null or not precede
+`valid_from`. An active row must have a complete validation strategy and evidence locator. A
+Flyway verification statement MUST reject overlapping active intervals for the same official code.
+`invoice_draft` references `(buyer_identification_type_code,
+buyer_identification_catalog_version)` locally.
+
+Every column is `NOT NULL` except `valid_to`.
+
+### IVA Tax Rule Catalog
+
+Logical persistence name: `iva_tax_rule_catalog`.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Approved, published stable target `taxRuleId`; never startup-generated |
+| `family` | `varchar(16)` | Exactly `IVA` |
+| `officialTaxCode` | `varchar(8)` | Exact official SRI tax code; `2` for the approved family |
+| `officialPercentageCode` | `varchar(8)` | Exact official percentage/treatment code |
+| `displayName` | `varchar(100)` | Approved English target display name |
+| `treatment` | `varchar(32)` | `PERCENTAGE_RATE`, `ZERO_RATE`, `NOT_SUBJECT`, or `EXEMPT` |
+| `rate` | `numeric(5,2)` | `0.00`–`100.00`; exact configured percentage points |
+| `validFrom` | `date` | Inclusive official/approved effective start |
+| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `active` | `boolean` | Approved baseline state |
+| `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
+| `officialSourceUri` | `text` | Exact authoritative SRI source |
+| `officialSourceLocator` | `varchar(128)` | Exact source table/row or legal rule locator |
+
+The primary key is `(id, catalog_version)` and required natural uniqueness is
+`(official_tax_code, official_percentage_code, valid_from, catalog_version)`. The family must be
+`IVA`; percentage-rate rows must have a positive approved
+rate; the other three treatments must have rate `0.00`. `valid_to` must be null or not precede
+`valid_from`. Flyway verification MUST reject overlapping active intervals for the same official
+tax/percentage code. `(invoice_line_tax.tax_rule_id, invoice_line_tax.catalog_version)` is a
+required local composite foreign key to this table.
+
+Every column is `NOT NULL` except `valid_to`.
+
+### Payment Method Catalog
+
+Logical persistence name: `payment_method_catalog`.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Approved, published stable target `paymentMethodId`; never startup-generated |
+| `officialCode` | `varchar(8)` | Exact official SRI payment code |
+| `displayName` | `varchar(100)` | Approved English target display name |
+| `validFrom` | `date` | Inclusive official/approved effective start |
+| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `active` | `boolean` | Approved baseline state |
+| `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
+| `officialSourceUri` | `text` | Exact authoritative SRI source |
+| `officialSourceLocator` | `varchar(128)` | Exact source table/row locator |
+
+The primary key is `(id, catalog_version)` and required natural uniqueness is
+`(official_code, valid_from, catalog_version)`. `valid_to` must be null or not precede
+`valid_from`, and Flyway verification MUST reject overlapping active intervals for the same
+official code. `(invoice_payment.payment_method_id, invoice_payment.catalog_version)` is a required
+local composite foreign key.
+
+Every column is `NOT NULL` except `valid_to`.
+
+Flyway alone owns schema creation, initial baseline rows, and later catalog versions. The runtime
+has no catalog administration write path. A later official change adds a new immutable migration
+and versioned rows; it does not rewrite a committed migration or silently reinterpret a row used
+by an existing draft. These catalogs are local tax-document reference data, not Company master
+data.
+
+## Numeric Storage Boundary
+
+Quantity and unit price use `numeric(12,6)`, money uses `numeric(17,2)`, and tax rates use
+`numeric(5,2)` everywhere they are persisted. Input precision, exact intermediates, rounded line
+amounts, grouped sums, payment sums, and final totals are range-checked before the write
+transaction. Any overflow or excess input precision produces `BUSINESS_VALIDATION_FAILED` with
+violation `MONETARY_RANGE_EXCEEDED`; it MUST NOT reach PostgreSQL as a numeric overflow, rounding,
+clamping, or truncation attempt. Database checks duplicate the stable row-local ranges as a final
+integrity barrier but do not replace pre-persistence validation.
 
 ## Aggregate Relationships
 
@@ -211,18 +304,25 @@ behavior is not introduced by this plan.
 
 ## Creation and Replay Lifecycle
 
-1. Map and normalize CompanyId, idempotency key, optional correlation, and request representation.
-2. Compute key hash and request fingerprint under normalization version 1.
-3. Look up a binding by CompanyId and key hash.
-4. Return the original Company-scoped draft when the stored fingerprint is equal, or return
+1. Capture `requestCreationInstant` exactly once and initialize safe correlation at the API
+   boundary.
+2. Validate and normalize CompanyId, then validate correlation, idempotency key, and request
+   representation in the FR-041 order.
+3. Derive the expected emission date once in `America/Guayaquil`, then compute the key hash and
+   request fingerprint under normalization version 1.
+4. Look up a binding by CompanyId and key hash.
+5. Return the original Company-scoped draft when the stored fingerprint is equal, or return
    `IDEMPOTENCY_CONFLICT` when different.
-5. For an unbound command, validate local catalogs/domain rules and calculate all amounts.
-6. Persist root, children, and binding in one reactive PostgreSQL transaction.
-7. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
+6. For an unbound command, validate local catalogs/domain rules and calculate all amounts using the
+   fixed expected date.
+7. Persist root, children, and binding in one reactive PostgreSQL transaction; `createdAt` is the
+   confirmed commit instant, not the emission-date source.
+8. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
    in a fresh Company-scoped read.
 
 Every pre-commit failure leaves no aggregate or binding. A committed binding remains authoritative
-after response loss and has no time-based expiration while its draft exists.
+after response loss and has no time-based expiration while its draft exists. Equivalent replay
+returns the original emission date without current-date revalidation.
 
 ## Explicitly Excluded Data
 
