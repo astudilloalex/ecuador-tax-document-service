@@ -84,9 +84,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 3+: One phase per user story (in priority order from spec.md)
    - Each phase includes: story goal, independent test criteria, every constitutionally applicable
      test category, and implementation tasks
-   - For every Company-dependent story, include tasks for application-port current-context
-     resolution, immutable document fiscal snapshots, and boundary evidence; never generate tasks
-     for local Company master-data ownership, shared persistence, caching, or replication
+   - For every Company-scoped story, include tasks for the `X-Company-Id` contract,
+     application-level Company UUID mapping, ownership/idempotency scoping, and boundary evidence;
+     never generate tasks for authentication, authorization, Company lookup ports or clients,
+     local Company master-data ownership, shared persistence, caching, replication, or draft-time
+     fiscal snapshots
    - Final Phase: Definition of Done validation and cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation Rules below)
    - Clear file paths for each task
@@ -177,7 +179,7 @@ Every task MUST strictly follow this format:
 **Examples**:
 
 - ✅ CORRECT: `- [ ] T001 Configure Java 25 in build.gradle.kts`
-- ✅ CORRECT: `- [ ] T005 [P] Configure OIDC in src/main/resources/application.properties`
+- ✅ CORRECT: `- [ ] T005 [P] Add X-Company-Id contract tests in src/test/java/com/alexastudillo/taxdocument/api/company/CompanyContextHeaderTest.java`
 - ✅ CORRECT: `- [ ] T012 [P] [US1] Add FR-001 domain tests in src/test/java/com/alexastudillo/taxdocument/domain/document/TaxDocumentTest.java`
 - ✅ CORRECT: `- [ ] T014 [US1] Implement FR-001 use case in src/main/java/com/alexastudillo/taxdocument/application/document/CreateTaxDocument.java`
 - ❌ WRONG: `- [ ] Create User model` (missing ID and Story label)
@@ -209,8 +211,9 @@ Every task MUST strictly follow this format:
    - Shared infrastructure → Setup phase (Phase 1)
    - Foundational/blocking tasks → Foundational phase (Phase 2)
    - Story-specific setup → within that story's phase
-   - Company context → outbound application port and infrastructure adapter only; no Company table,
-     cross-service foreign key/repository/transaction, cache, or replication task
+   - Company context → inbound header mapping and local ownership scoping only; no authentication,
+     authorization, Company port/client/table, cross-service foreign key/repository/transaction,
+     cache, replication, or draft-time fiscal-snapshot task
 
 ### Phase Structure
 

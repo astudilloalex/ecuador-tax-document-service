@@ -69,7 +69,7 @@ the authority and evidence review above.
 <!--
   Prioritize user journeys by stakeholder value. Every story MUST contribute to the single bounded
   outcome and MUST be independently testable. Acceptance scenarios MUST cover the primary path and
-  applicable authorization, failure, boundary, duplicate, or recovery paths.
+  applicable Company-context, failure, boundary, duplicate, or recovery paths.
 -->
 
 ### User Story 1 - [Brief Title] (Priority: P1)
@@ -83,8 +83,8 @@ own.]
 
 **Acceptance Scenarios**:
 
-1. **Given** [authorized initial state], **When** [actor action], **Then** [observable outcome]
-2. **Given** [applicable invalid, forbidden, duplicate, or failure state], **When** [action],
+1. **Given** [valid initial state], **When** [actor action], **Then** [observable outcome]
+2. **Given** [applicable invalid, duplicate, or failure state], **When** [action],
    **Then** [safe observable outcome]
 
 ---
@@ -112,10 +112,12 @@ Address each applicable category with a required outcome; do not answer an unkno
 
 - What happens at monetary precision, rounding, date, identifier, or catalog boundaries?
 - What happens for impossible dates, inconsistent totals, or invalid catalog combinations?
-- What happens when a caller attempts cross-tenant or wrong-issuer access?
+- What happens when `X-Company-Id` is missing, repeated, blank, malformed, or nil?
+- Does any Company-scoped operation accept Company identifier in a path, query, body, token, or
+  session instead of the mandatory header?
 - What happens for a duplicate command, retry, timeout, partial external failure, or reconciliation?
-- When Company fiscal context is used, what remains current external master data and what becomes
-  immutable document-owned historical evidence?
+- Does the feature accidentally introduce Company lookup, Company-client availability, local
+  master data, or a draft-time fiscal snapshot?
 - What caller-visible outcome exists for asynchronous failure or expiration?
 - What sensitive information could appear in an error, log, trace, metric, or retained payload?
 
@@ -131,15 +133,17 @@ Address each applicable category with a required outcome; do not answer an unkno
 
 - **FR-001**: The service MUST [specific target capability and observable result].
 - **FR-002**: The service MUST [specific validation, rejection, or state-transition behavior].
-- **FR-003**: An authorized [actor] MUST be able to [bounded action and result].
-- **FR-004**: The service MUST deny [unauthorized or cross-tenant behavior] when [condition], if
-  tenant-owned information is in scope.
+- **FR-003**: A caller providing valid required business context MUST be able to [bounded action and
+  result].
+- **FR-004**: Every Company-scoped operation MUST validate exactly one non-nil UUID in
+  `X-Company-Id`, map it to an application-level Company identifier, and scope owned data by that
+  value without performing caller authorization or Company lookup.
 - **FR-005**: The service MUST [idempotency, duplicate, timeout, recovery, or terminal-outcome rule
   when an external or asynchronous boundary is in scope].
-- **FR-006**: When Company fiscal context is in scope, the service MUST [resolve current context from
-  the Company bounded context, store only the external Company ownership identifier, preserve the
-  exact immutable document fiscal snapshot, and exclude Company master-data administration or
-  replication].
+- **FR-006**: When Company context is in scope, the service MUST [require `X-Company-Id`, exclude the
+  identifier from path/query/body/token/session, define stable header failures, scope owned data and
+  idempotency by the normalized UUID, and exclude authentication, authorization, Company lookup or
+  dependency, Company master-data administration or replication, and draft-time fiscal snapshots].
 
 ### Domain Rules and Invariants *(include when fiscal or monetary behavior is in scope)*
 
@@ -152,18 +156,18 @@ Address each applicable category with a required outcome; do not answer an unkno
 
 ### Asynchronous Outcome Requirements *(include when asynchronous work is in scope)*
 
-- **AR-001**: An authorized caller MUST be able to observe status through [query or delivery
+- **AR-001**: A caller MUST be able to observe status through [query or delivery
   behavior].
 - **AR-002**: The operation MUST define correlation identifiers, terminal states, caller-safe
-  errors, retry semantics, retention, idempotency, and authorization for result access.
+  errors, retry semantics, retention, idempotency, and Company ownership scope for result access.
 
 ### Key Entities *(include when the feature involves data)*
 
 Describe business meaning, identity, ownership, lifecycle, and invariants without API, database,
-or persistence-model design. Distinguish an externally owned Company identifier and current master
-data from immutable fiscal evidence owned by a tax document.
+or persistence-model design. Distinguish the opaque external Company identifier from Company
+master data, authentication, authorization, and fiscal evidence that a draft does not yet own.
 
-- **[Entity 1]**: [Meaning, identity, tenant/issuer ownership, lifecycle, and critical invariants]
+- **[Entity 1]**: [Meaning, identity, Company ownership reference, lifecycle, and critical invariants]
 - **[Entity 2]**: [Meaning and relationship to other business concepts]
 
 ## Success Criteria *(mandatory)*
@@ -176,7 +180,7 @@ coverage percentage.
 
 - **SC-001**: [Actor completes the primary outcome within a measurable limit.]
 - **SC-002**: [A measurable correctness or rejection rate for governing fiscal scenarios.]
-- **SC-003**: [A measurable authorization, tenant-isolation, or sensitive-data outcome.]
+- **SC-003**: [A measurable Company-header, ownership-scoping, or sensitive-data outcome.]
 - **SC-004**: [A measurable timeout, retry, recovery, or terminal-observability outcome when
   external/asynchronous work is in scope.]
 

@@ -7,25 +7,23 @@ info:
     does not preserve a legacy route or trigger any SRI/fiscal side effect.
 servers:
   - url: /
-security:
-  - bearerAuth: []
 tags:
   - name: Invoice Drafts
 
 paths:
-  /api/v1/companies/{companyId}/invoice-drafts:
+  /api/v1/invoice-drafts:
     post:
       tags: [Invoice Drafts]
       operationId: createInvoiceDraft
       summary: Create and return a complete invoice draft
       description: >-
-        Requires the Keycloak client role billing_operator. The company path value is untrusted
-        until authoritative Company authorization succeeds. The request must contain commercial
-        inputs only; calculated values, tax codes, and tax rates are rejected. The Company bounded
-        context remains the current master-data authority; this operation persists only the
-        external Company ownership identifier and immutable document fiscal evidence.
+        Requires exactly one syntactically valid, non-nil Company UUID in X-Company-Id. The value
+        is opaque business context and is not authentication or authorization. This operation
+        performs no Company lookup and persists no Company or fiscal master-data snapshot. The
+        request contains commercial inputs only; calculated values, tax codes, and tax rates are
+        rejected.
       parameters:
-        - $ref: '#/components/parameters/CompanyId'
+        - $ref: '#/components/parameters/CompanyContext'
         - $ref: '#/components/parameters/IdempotencyKey'
         - $ref: '#/components/parameters/CorrelationId'
       requestBody:
@@ -63,49 +61,34 @@ paths:
                 $ref: '#/components/schemas/InvoiceDraftResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/IdempotencyConflict'
         '422':
           $ref: '#/components/responses/BusinessValidation'
         '500':
           $ref: '#/components/responses/InternalFailure'
-        '503':
-          $ref: '#/components/responses/DependencyUnavailable'
-        '504':
-          $ref: '#/components/responses/DependencyTimeout'
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: >-
-        Keycloak access token with the configured issuer, invoice-service and company-capability
-        audiences, authorized party, subject, and billing_operator service-client role.
-
   parameters:
-    CompanyId:
-      name: companyId
-      in: path
+    CompanyContext:
+      name: X-Company-Id
+      in: header
       required: true
-      description: Requested Company; authorization is resolved server-side.
+      description: >-
+        Exactly one nonblank, non-nil UUID. The API may normalize it to canonical lowercase
+        hyphenated form. This is opaque business-context metadata, not an authentication or
+        authorization credential. Repeated values are COMPANY_CONTEXT_INVALID.
       schema:
         type: string
         format: uuid
+        pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
       description: >-
-        Caller-generated printable ASCII key, trimmed and scoped by effective tenant when
-        applicable plus Company. It remains bound for the draft lifetime.
+        Caller-generated printable ASCII key, trimmed and scoped by normalized Company UUID plus
+        key. It remains bound for the draft lifetime.
       schema:
         type: string
         minLength: 1
@@ -135,21 +118,16 @@ components:
       type: object
       additionalProperties: false
       required:
-        - issuerId
         - emissionPointId
         - emissionDate
         - buyer
         - lines
         - payments
       properties:
-        issuerId:
-          type: string
-          format: uuid
-          description: Must be the effective Company's single Issuer.
         emissionPointId:
           type: string
           format: uuid
-          description: Must be active and belong to the selected Issuer.
+          description: Opaque external reference retained for later fiscal processing.
         emissionDate:
           type: string
           format: date
@@ -271,8 +249,7 @@ components:
       required:
         - draftId
         - companyId
-        - issuer
-        - emissionPoint
+        - emissionPointId
         - emissionDate
         - status
         - currency
@@ -294,10 +271,10 @@ components:
           type: string
           format: uuid
           description: Sole external Company ownership reference for this document.
-        issuer:
-          $ref: '#/components/schemas/IssuerSnapshot'
-        emissionPoint:
-          $ref: '#/components/schemas/EmissionPointSnapshot'
+        emissionPointId:
+          type: string
+          format: uuid
+          description: Opaque external reference captured in the draft.
         emissionDate:
           type: string
           format: date
@@ -343,66 +320,6 @@ components:
         lastModifiedAt:
           type: string
           format: date-time
-
-    IssuerSnapshot:
-      type: object
-      additionalProperties: false
-      description: >-
-        Immutable document-owned historical evidence captured at creation; not current Company
-        master data and never refreshed during replay.
-      required: [issuerId, ruc, legalName, headOfficeAddress, accountingRequired, contextVersion]
-      properties:
-        issuerId:
-          type: string
-          format: uuid
-        ruc:
-          type: string
-          pattern: '^[0-9]{13}$'
-        legalName:
-          type: string
-          maxLength: 300
-        tradeName:
-          type: string
-          maxLength: 300
-        headOfficeAddress:
-          type: string
-          maxLength: 300
-        accountingRequired:
-          type: boolean
-        specialTaxpayerCode:
-          type: string
-          maxLength: 32
-        withholdingAgentCode:
-          type: string
-          maxLength: 32
-        regimeCode:
-          type: string
-          maxLength: 32
-        contextVersion:
-          type: string
-          maxLength: 64
-
-    EmissionPointSnapshot:
-      type: object
-      additionalProperties: false
-      description: >-
-        Immutable document-owned establishment and emission-point evidence captured at creation;
-        not a local master-data representation.
-      required: [emissionPointId, establishmentCode, emissionPointCode, establishmentAddress]
-      properties:
-        emissionPointId:
-          type: string
-          format: uuid
-        establishmentCode:
-          type: string
-          pattern: '^[0-9]{3}$'
-        emissionPointCode:
-          type: string
-          pattern: '^[0-9]{3}$'
-        establishmentAddress:
-          type: string
-          minLength: 1
-          maxLength: 300
 
     BuyerResult:
       allOf:
@@ -618,37 +535,10 @@ components:
 
   responses:
     BadRequest:
-      description: Malformed JSON, missing header, unknown/calculated field, or invalid representation.
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    Unauthorized:
-      description: Missing or invalid bearer token.
-      headers:
-        WWW-Authenticate:
-          schema:
-            type: string
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    Forbidden:
-      description: Authenticated principal lacks billing_operator.
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    NotFound:
-      description: Requested Company, Issuer, or emission point is absent or inaccessible.
+      description: >-
+        Malformed JSON; missing, repeated, blank, malformed, or nil Company header; unknown or
+        calculated field; or another invalid representation. Company-header failures use
+        COMPANY_CONTEXT_REQUIRED or COMPANY_CONTEXT_INVALID.
       headers:
         X-Correlation-ID:
           $ref: '#/components/headers/CorrelationId'
@@ -676,28 +566,6 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     InternalFailure:
       description: Safe generic failure; no partial draft or binding remains.
-      headers:
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    DependencyUnavailable:
-      description: A required authoritative dependency is unavailable.
-      headers:
-        Retry-After:
-          description: Included only when a safe retry interval is known.
-          schema:
-            type: string
-        X-Correlation-ID:
-          $ref: '#/components/headers/CorrelationId'
-      content:
-        application/problem+json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    DependencyTimeout:
-      description: A required authoritative dependency exceeded its configured timeout.
       headers:
         X-Correlation-ID:
           $ref: '#/components/headers/CorrelationId'

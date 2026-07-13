@@ -6,13 +6,20 @@
 
 **Status**: Draft
 
-**Input**: User description: "Create and persist a complete, tenant-isolated electronic invoice
-draft for review before any fiscal identifier allocation or SRI interaction."
+**Input**: User description: "Create and persist a complete Company-scoped electronic invoice draft
+for review before any fiscal identifier allocation or SRI interaction."
 
 ## Clarifications
 
 ### Session 2026-07-12
 
+- Q: What is the definitive Company context, identity, Company-dependency, and draft-snapshot model?
+  → A: Every request supplies exactly one nonblank, syntactically valid non-nil Company UUID in
+  `X-Company-Id`; the service normalizes it to canonical lowercase hyphenated form, performs no
+  authentication, authorization, tenant, or Company lookup, calls no Company capability, and
+  stores no Company/Issuer/establishment/emission-point snapshot. CompanyId is prohibited from the
+  path, query, and request body; idempotency is scoped by normalized CompanyId plus key; fiscal
+  context is deferred to a later issuance specification.
 - Q: Which monetary precision and rounding policy should govern invoice drafts? → A: Line-level
   `HALF_UP` with six-decimal quantity/unit-price inputs, two-decimal tax-rate precision,
   two-decimal discounts/payments, rejected excess precision, rounded line values, and totals
@@ -29,10 +36,9 @@ draft for review before any fiscal identifier allocation or SRI interaction."
   remain subject to all line and tax rules and require exactly one active payment method with
   amount `0.00`; positive-total drafts require every payment amount to be greater than `0.00`.
 - Q: How must duplicate and concurrent draft-creation commands behave? → A: Every command requires
-  a caller-generated idempotency key scoped to the authenticated effective company and tenant when
-  applicable. Equivalent retries return the original committed draft; different content conflicts;
-  concurrent equivalent commands create exactly one draft; failed or rolled-back commands do not
-  bind the key.
+  a caller-generated idempotency key scoped by normalized Company UUID plus key. Equivalent retries
+  return the original committed draft; different content conflicts; concurrent equivalent commands
+  create exactly one draft; failed or rolled-back commands do not bind the key.
 - Q: What emission-date window should draft creation allow? → A: The emission date must equal the
   current Ecuadorian civil date at creation. Fiscal dates remain date-only values; creation and
   last-modification timestamps remain unambiguous instants.
@@ -45,9 +51,9 @@ draft for review before any fiscal identifier allocation or SRI interaction."
   product codes; 300-character descriptions, buyer names, addresses, and additional-information
   names/values; 254-character email; 20-character telephone; and 128-character idempotency keys,
   with explicit format, trimming, uniqueness, and control-character rules.
-- Q: What is the Company-to-Issuer cardinality for invoice drafts? → A: One Company has exactly one
-  Issuer fiscal profile, and each Issuer belongs to exactly one Company. Establishments and
-  emission points remain beneath the Issuer.
+- Q: What Company-to-Issuer relationship does invoice-draft creation validate? → A: None. The
+  service treats Company and emission-point identifiers as opaque inputs; authoritative fiscal
+  relationships are outside draft creation and belong to a separately approved issuance workflow.
 - Q: How long must a successful company-scoped idempotency binding remain valid? → A: For the
   lifetime of the created draft; the binding must not expire on a time-based schedule.
 - Q: Which collection order should affect idempotency equivalence? → A: Invoice-line order only.
@@ -59,25 +65,29 @@ draft for review before any fiscal identifier allocation or SRI interaction."
 
 ### Bounded Outcome
 
-An authenticated billing operator can create one complete invoice draft for an active company,
-issuer, and emission point within the operator's effective tenant where applicable. The operator
-receives the persisted buyer, line, tax, payment, and system-calculated total information for review
-without creating an issued electronic invoice or triggering any fiscal side effect.
+An internal billing client can create one complete invoice draft scoped by the opaque Company UUID
+supplied in `X-Company-Id` and can review the persisted emission-point reference, buyer, line, tax,
+payment, and system-calculated total information without resolving fiscal master data, creating an
+issued electronic invoice, or triggering any SRI side effect.
 
 ### In Scope
 
-- Create a new invoice draft for one authorized active company, its single authoritative issuer
-  fiscal profile, and one active emission point belonging to that issuer.
+- Receive Company context exclusively through `X-Company-Id`, receive idempotency through
+  `Idempotency-Key`, and create a new invoice draft through `POST /invoice-drafts` under the
+  project's API base and version prefix.
+- Create the draft for one canonicalized Company UUID and one client-supplied opaque
+  emission-point external identifier.
 - Capture buyer identity and optional contact information.
 - Capture one or more invoice lines, exactly one applicable active IVA tax treatment per line, one
   or more payments, and optional additional information.
 - Calculate line amounts, tax bases, tax amounts, grouped tax totals, discounts, and invoice totals.
-- Validate company authorization, tenant ownership where applicable, active reference data, buyer
-  identification, monetary boundaries, and payment reconciliation before persistence.
+- Validate the Company header contract, active tax-document reference data, buyer identification,
+  monetary boundaries, and payment reconciliation before persistence.
 - Persist the complete draft with internal status `DRAFT` and return its captured and calculated
   information, identifier, and timestamps.
-- Resolve current Company fiscal context from the Company bounded context and preserve the exact
-  Issuer, establishment, and emission-point values used as immutable draft evidence.
+- Scope ownership, repository access, mutations, and idempotency by the normalized Company UUID.
+- Reject CompanyId in the resource path, query string, or request body; strict request-body
+  validation treats it as an unknown or prohibited property.
 
 ### Exclusions and Non-Goals
 
@@ -100,6 +110,13 @@ without creating an issued electronic invoice or triggering any fiscal side effe
 - Managing loyalty-point balances, authorizing point redemption, or validating loyalty accounts.
 - Owning, administering, searching, exposing, caching, or replicating current Company, Issuer,
   establishment, or emission-point master data.
+- Calling the Company capability or validating Company existence, state, fiscal eligibility,
+  tenant membership, caller entitlement, or Company/Issuer/establishment/emission-point
+  relationships.
+- Authentication, authorization, user or permission management, tenant authorization, API gateway,
+  or BFF responsibilities.
+- Persisting Company-context versions or observation timestamps, Issuer fiscal snapshots,
+  establishment snapshots, or emission-point fiscal snapshots during draft creation.
 - Preserving any legacy NestJS route, payload, response, table, status, authentication mechanism,
   asynchronous behavior, or operational behavior.
 - Defining the later transition from `DRAFT` to a fiscally issued document.
@@ -110,7 +127,7 @@ without creating an issued electronic invoice or triggering any fiscal side effe
 |-----------|-------------------------|---------------------------|
 | Applicable Ecuadorian legislation | [Regulation for Sales, Withholding, and Complementary Documents, SRI consolidated copy dated 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf), together with [later amendments listed by the SRI](https://www.sri.gob.ec/facturacion-electronica) | Establishes invoices as sales documents and governs issuer responsibility and required invoice information. This feature creates only an internal pre-issuance draft. |
 | Official SRI technical documentation | [Electronic Tax Documents Offline Scheme Technical Sheet v2.32, updated 2025-10-08](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/29562323-2e76-42f5-abb6-cb7ac542c3c6/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.32.pdf) and the [SRI electronic invoicing page](https://www.sri.gob.ec/facturacion-electronica), which lists invoice XSD/XML versions 1.0.0 through 2.1.0 updated in 2022-02 | Governs official catalogs, invoice fields, tax and payment representations, and the later generation/authorization process. XML generation and XSD selection are excluded here. |
-| Project constitution | `.specify/memory/constitution.md` v1.1.0 | Governs authority, target-first scope, terminology, fiscal arithmetic, tenant isolation, Company master-data ownership, immutable document snapshots, atomic persistence, testing, and workflow. |
+| Project constitution | `.specify/memory/constitution.md` v2.0.0 | Governs authority, target-first scope, `X-Company-Id`, caller-agnostic Company scoping, Company master-data exclusion, fiscal-stage separation, atomic persistence, testing, and workflow. |
 | Approved target requirements | This specification and its future clarification session | Governs the internal `DRAFT` behavior and the explicit absence of fiscal side effects. |
 | Legacy evidence | `docs/legacy/as-is/04-data-model.md`; `docs/legacy/as-is/05-business-rules.md`; `docs/legacy/as-is/06-validation-rules.md`; `docs/legacy/as-is/07-process-flows.md`; `docs/legacy/as-is/10-security-access-control.md`; `docs/legacy/as-is/14-pending-functional-validation.md` | Supplies historical scenarios for invoice graphs, calculations, validation gaps, persistence, side effects, and tenant risks. It is not target authority. |
 
@@ -119,10 +136,10 @@ without creating an issued electronic invoice or triggering any fiscal side effe
 - Legacy evidence BR-002, BR-006, BR-007, VR-009, VR-020, and legacy PFV-021 shows that historical
   processing accepted tax rates, bases, values, and payment totals from the client. The approved
   target requirement governs: the service calculates and reconciles these values.
-- Legacy evidence BR-001, SEC-002, VR-025, and legacy PFV-036 documents selection by RUC with incomplete
-  tenant enforcement. The constitution and this specification govern: the authorized effective
-  company and its tenant scope where applicable are mandatory for issuer, emission-point, and draft
-  access.
+- Legacy evidence BR-001, SEC-002, VR-025, and legacy PFV-036 documents RUC-based selection and
+  application-level access behavior. The constitution and this specification govern: one opaque
+  Company UUID from `X-Company-Id` scopes the draft without authentication, authorization, tenant
+  resolution, or Company lookup.
 - The legacy invoice flow reserved a sequence, generated an access key and XML, signed it, called
   the SRI, and then persisted results. This target feature explicitly stops before all those
   activities.
@@ -141,26 +158,28 @@ Category`, `Tax Rate`, `Tax Rule`, `Payment Method`, `Payment`, `Additional Info
 
 ### User Story 1 - Create and Review an Invoice Draft (Priority: P1)
 
-As an authenticated billing operator, I create an invoice draft for an authorized company and an
-issuer in that company's tenant scope so I can review validated commercial, tax, payment, and
-calculated total information before any fiscal issuance occurs.
+As an internal billing client, I want to create an invoice draft under a supplied Company context,
+so that commercial, buyer, tax, payment, and calculated information can be reviewed before fiscal
+issuance.
+
+The internal billing client has no identity, role, permission, tenant, or authentication state
+inside this feature.
 
 **Why this priority**: It is the smallest independently valuable billing outcome. It captures and
 validates invoice intent while isolating later fiscal numbering, XML, signature, and SRI risks.
 
-**Independent Test**: Supply an authorized active company, an issuer belonging to that company, an
-emission point, valid buyer data, one or more valid lines, active tax and payment references, and
-matching payment amounts. The returned persisted draft can be reviewed in full, while sequence,
-access-key, XML, certificate, notification, and SRI evidence remain absent.
+**Independent Test**: Supply one valid `X-Company-Id`, an opaque emission-point identifier, valid
+buyer data, one or more valid lines, active tax and payment references, and matching payment
+amounts. The returned persisted draft can be reviewed in full, while Company/Issuer fiscal
+snapshots, sequence, access-key, XML, certificate, notification, and SRI evidence remain absent.
 
 **Acceptance Scenarios**:
 
-1. **Given** an authenticated billing operator authorized for an active company, an active issuer
-   belonging to that company and its tenant where applicable, an active emission point belonging to
-   that issuer, valid buyer data, at least one valid line, and payments equal to the calculated grand
-   total, **when** the operator creates the draft, **then** exactly one complete draft is persisted
-   with status `DRAFT`, a unique draft identifier, calculated amounts, and creation and
-   last-modification timestamps.
+1. **Given** exactly one syntactically valid non-nil Company UUID in `X-Company-Id`, one opaque
+   emission-point identifier, valid buyer data, at least one valid line, and payments equal to the
+   calculated grand total, **when** the internal billing client creates the draft, **then** exactly
+   one complete draft is persisted with status `DRAFT`, the normalized Company UUID, a unique draft identifier,
+   calculated amounts, and creation and last-modification timestamps.
 2. **Given** a line with quantity `2`, unit price `10.00`, discount `5.00`, and an applicable
    percentage tax rate of `15%`, **when** the draft is calculated, **then** gross amount is `20.00`,
    net amount is `15.00`, tax is `2.25`, and that line contributes `17.25` to the grand total.
@@ -172,22 +191,23 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 5. **Given** a calculated grand total of `100.00` and payments totaling `90.00`, **when** draft
    creation is attempted, **then** a payment-total validation error is returned and no draft is
    persisted.
-6. **Given** an operator in Tenant A and an issuer in Tenant B, **when** draft creation is
-   attempted, **then** access is denied, no Tenant B data is exposed, and no draft is persisted.
+6. **Given** `X-Company-Id` is missing or contains no usable value after trimming, **when** draft
+   creation is attempted, **then** `COMPANY_CONTEXT_REQUIRED` is returned in a safe English error
+   response with a correlation identifier and no draft, child, or idempotency binding is persisted.
 7. **Given** buyer identification that fails the approved rule for its active identification type,
    **when** draft creation is attempted, **then** a buyer-identification validation error is
    returned and no draft is persisted.
 8. **Given** a valid draft request, **when** creation succeeds, **then** no official sequential
    number is reserved, no access key is generated, no XML is generated or signed, no certificate
    is required, no notification is sent, and no SRI communication occurs.
-9. **Given** an inactive issuer, emission point, buyer identification type, tax rule, tax category,
-   or payment method, **when** draft creation is attempted, **then** the request is rejected and no
-   draft is persisted.
-10. **Given** a request that attempts to override registered issuer legal identity, **when** draft
-    creation is attempted, **then** the override is not accepted and no unregistered issuer legal
-    identity is persisted or returned as authoritative.
+9. **Given** an inactive buyer identification type, tax rule, tax category, or payment method,
+   **when** draft creation is attempted, **then** the request is rejected and no draft is persisted.
+10. **Given** a request body supplies `companyId`, **when** strict
+    request-body validation is performed, **then** the property is rejected as unknown or
+    prohibited and no draft, child, or idempotency binding is persisted.
 11. **Given** a persistence failure after validation begins, **when** draft creation cannot finish,
-    **then** the operator receives a safe failure outcome and no partial draft, line, tax, payment,
+    **then** the internal billing client receives a safe failure outcome and no partial draft, line,
+    tax, payment,
     or additional-information data remains persisted.
 12. **Given** a line selects ICE, IRBPNR, another non-IVA tax, no tax treatment, or more than one
     simultaneous tax treatment, **when** draft creation is attempted, **then** the request is
@@ -215,24 +235,26 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
     draft is persisted.
 19. **Given** a rounded grand total greater than `0.00`, **when** any payment amount is `0.00`,
     **then** the request is rejected and no draft is persisted.
-20. **Given** a successfully committed creation command, **when** the same authorized company,
-    scoped idempotency key, and semantically equivalent normalized business content are submitted
-    again, **then** the original draft is returned and no new draft is created or modified.
+20. **Given** a successfully committed creation command, **when** the same Company UUID,
+    idempotency key, and semantically equivalent normalized business content are submitted
+    again through the current `X-Company-Id` header, **then** the original draft is returned and no
+    new draft is created or modified.
 21. **Given** a scoped idempotency key already bound by a successful command, **when** the same
-    authorized company and key are submitted with different business content, **then** a stable
-    idempotency conflict error is returned and no draft is created or modified.
-22. **Given** concurrent equivalent commands for the same authorized company and idempotency key,
+    Company UUID and key are submitted with different business content, **then** a stable
+    `IDEMPOTENCY_CONFLICT` error is returned and no draft is created or modified.
+22. **Given** concurrent equivalent commands for the same Company UUID and idempotency key,
     **when** they are processed, **then** exactly one draft is committed and every successful
     outcome resolves to that same persisted draft.
-23. **Given** a command fails business validation, company resolution or authorization, or a
-    persistence operation that fully rolls back, **when** the key is retried, **then** the prior
-    failure has not bound the scoped idempotency key.
+23. **Given** a command fails Company-header validation, business validation, or a persistence
+    operation that fully rolls back, **when** the key is retried, **then** the prior failure has not
+    bound the scoped idempotency key.
 24. **Given** a draft committed successfully but its response was not delivered, **when** the same
-    authorized company, key, and equivalent content are retried, **then** the committed binding
-    returns the existing draft without executing the original creation operation again.
-25. **Given** the same idempotency key is used for two independently authorized companies, **when**
-    each company submits a valid command, **then** the keys are independent and neither company can
-    observe or deduplicate against the other's draft.
+    Company UUID, key, and equivalent content are retried, **then** the committed binding returns
+    the existing draft without calling a Company capability or executing creation again.
+25. **Given** the same idempotency key is used with two different Company UUIDs, **when** each
+    command has equivalent business content and is otherwise valid, **then** the scopes are
+    independent, separate drafts MAY be created, and neither Company deduplicates against the
+    other's draft.
 26. **Given** an emission date equal to the current Ecuadorian civil date at creation, **when** all
     other draft data is valid, **then** the emission date is accepted as a date-only value.
 27. **Given** an emission date before or after the current Ecuadorian civil date at creation,
@@ -258,19 +280,20 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
     character, an invalid email or telephone, or a duplicate additional-information name after
     trimming, **when** draft creation is attempted, **then** the request is rejected and no draft or
     child data is persisted.
-34. **Given** an authorized active company with its single active Issuer fiscal profile and an
-    active emission point beneath that Issuer, **when** otherwise valid draft creation is attempted,
-    **then** the draft is associated with that Company and Issuer.
-35. **Given** a request references an Issuer that is not the effective Company's single Issuer,
-    **when** draft creation is attempted, **then** the request is rejected without exposing the
-    referenced Issuer and no draft is persisted.
+34. **Given** a valid Company header and opaque emission-point identifier, **when** otherwise valid
+    draft creation succeeds, **then** the draft is owned by that immutable Company UUID and retains
+    the emission-point identifier without resolving Company fiscal context.
+35. **Given** a syntactically valid Company UUID that is nonexistent, inactive, ineligible, or not
+    permitted for the reachable process, **when** the request is otherwise valid, **then** this
+    service performs no external lookup, does not reject those external conditions, and creates the
+    draft under that Company UUID when all local draft rules pass.
 36. **Given** a draft and its scoped idempotency binding still exist, regardless of elapsed time,
-    **when** an authorized equivalent retry uses that key, **then** the original draft is returned
+    **when** an equivalent retry uses that Company UUID and key, **then** the original draft is returned
     and no new draft is created.
-37. **Given** an authorized retry uses the same scoped key and business content but reorders only
+37. **Given** a retry uses the same scoped key and business content but reorders only
     payments or additional-information entries, **when** idempotency equivalence is evaluated,
     **then** the original draft is returned and no new draft is created.
-38. **Given** an authorized retry uses the same scoped key but changes the invoice-line order,
+38. **Given** a retry uses the same scoped key but changes the invoice-line order,
     **when** idempotency equivalence is evaluated, **then** an idempotency conflict is returned and
     no draft is created or modified.
 39. **Given** a positive-total draft contains two or more payments selecting the same payment
@@ -279,20 +302,44 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 40. **Given** a line supplies a tax code or rate instead of selecting the applicable effective tax
     rule, **when** draft creation is attempted, **then** the request is rejected and no draft or
     child data is persisted.
-41. **Given** a valid logically new command, **when** the Company bounded context supplies the
-    current authorized fiscal context, **then** the draft uses the external Company identifier as
-    its ownership reference and preserves the exact Issuer, establishment, and emission-point
-    values used as immutable fiscal evidence.
-42. **Given** an existing committed draft and unchanged equivalent command content, **when** current
-    Company, Issuer, establishment, or emission-point master data has changed but the caller remains
-    authorized, **then** the replay returns the original persisted fiscal snapshot without updating
-    it from current master data.
-43. **Given** draft creation requires Company fiscal context, **when** the feature boundary is
-    reviewed, **then** the Tax Document Service exposes no Company master-data administration or
-    search capability and maintains no Company master-data replica or cache.
+41. **Given** a valid logically new Company-scoped command, **when** creation is attempted, **then**
+    the service uses the supplied normalized Company UUID without calling a Company capability and
+    persists no Company-context version, observation time, or fiscal master-data snapshot; it also
+    reserves no official sequence, generates no access key, XML, signature, or certificate
+    operation, and performs no SRI communication.
+42. **Given** an existing committed draft and equivalent Company-scoped command, **when** Company,
+    Issuer, establishment, or emission-point master data has changed elsewhere, **then** replay
+    returns the original draft without a Company call or mutation.
+43. **Given** the Create Invoice Draft boundary is reviewed, **then** it contains no Company client,
+    port, repository, entity, table, cache, replication, direct database access, dependency health
+    check, authentication, authorization, tenant, user, role, or permission requirement.
+44. **Given** a request supplies `issuerId`, Issuer RUC, legal name, trade name, address, another
+    Issuer fiscal attribute, establishment fiscal data, or an emission-point fiscal snapshot,
+    **when** strict request-body validation is performed, **then** every such property is rejected as
+    unknown or prohibited and no draft, child, or idempotency binding is persisted.
+45. **Given** the request body exceeds `2 MiB` (`2,097,152` bytes), **when** the create operation
+    receives it, **then** the request is rejected with a stable safe payload-size error before
+    Company-header evaluation and no draft, child, or idempotency binding is persisted.
+46. **Given** local persistence times out or fails unexpectedly before a successful commit,
+    **when** draft creation terminates, **then** a stable safe error with a correlation identifier is
+    returned and no draft, child, or idempotency binding remains persisted.
+47. **Given** `X-Company-Id` is malformed or is the nil UUID, **when** draft creation is attempted,
+    **then** `COMPANY_CONTEXT_INVALID` is returned in a safe English error response with a
+    correlation identifier and no draft, child, or idempotency binding is persisted.
+48. **Given** multiple `X-Company-Id` values are supplied, **when** draft creation is attempted,
+    **then** `COMPANY_CONTEXT_INVALID` rejects the ambiguous context in a safe English error response
+    with a correlation identifier and no draft, child, or idempotency binding is persisted.
 
 ### Edge Cases
 
+- Uppercase or noncanonical but syntactically valid UUID text in the single `X-Company-Id` value
+  MUST be normalized to canonical lowercase hyphenated form before ownership, persistence,
+  response, or idempotency scoping. Nil UUID text MUST be rejected rather than normalized into an
+  accepted CompanyId.
+- Failure evaluation MUST follow FR-041. In particular, an oversized payload MUST be rejected
+  before Company-header evaluation; invalid Company context MUST be rejected before idempotency-key
+  or body-field validation; and an existing equivalent local binding MUST return the original
+  result before current business rules are reevaluated.
 - An impossible calendar date and any date other than the current Ecuadorian civil date at creation
   MUST be rejected rather than normalized.
 - Quantity zero or negative, negative unit price, and negative discount MUST be rejected.
@@ -324,17 +371,21 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   or additional-information entries, MUST NOT make otherwise equivalent creation commands
   different for idempotency purposes. Invoice-line order is business-significant and MUST be
   preserved.
-- A retry of a committed command MUST still enforce current caller authorization, MUST NOT expose a
-  draft outside the authorized company and tenant scope, and MUST NOT repeat creation even if
-  mutable company information has changed.
-- Current Company, Issuer, establishment, and emission-point data MUST remain externally owned.
-  Creation MUST preserve only the external Company ownership identifier plus the immutable fiscal
-  snapshot actually used; replay MUST return that snapshot without refreshing it.
+- A committed replay MUST be scoped by the normalized `X-Company-Id` value and idempotency key and
+  MUST return only the original draft in that exact scope. The service MUST NOT perform caller
+  authorization or contact a Company capability during the replay.
+- A syntactically valid Company UUID MUST be accepted as opaque business context without checking
+  Company existence, status, fiscal eligibility, tenant ownership, or caller entitlement.
+- The selected emission-point external identifier MUST be stored as opaque draft input. Draft
+  creation MUST NOT resolve an Issuer, establishment, emission point, or fiscal snapshot.
 - A successful idempotency binding MUST NOT expire because a time interval elapsed while its draft
   still exists.
-- A Company with no Issuer or more than one Issuer violates the required cardinality and MUST NOT
-  be accepted for draft creation. An Issuer associated with another Company MUST remain
-  indistinguishable from an inaccessible Issuer.
+- A missing, repeated, blank, malformed, or nil `X-Company-Id` value MUST be rejected before draft
+  persistence or idempotency binding. Company identifiers in a path, query, body, token, or session
+  MUST NOT substitute for the required header.
+- A syntactically valid non-nil Company UUID MUST remain acceptable even when an external Company
+  system would consider it unknown, inactive, nonexistent, ineligible, or unauthorized; no external
+  check exists in this feature.
 - A request containing any system-calculated monetary field MUST be rejected. The supplied value
   MUST NOT be ignored, compared with a calculated result, or persisted.
 - Identification code `05` MUST satisfy the official Ecuadorian identity-card numeric format and
@@ -362,21 +413,39 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 
 ### Functional Requirements
 
-- **FR-001**: Only an authenticated principal authorized as a billing operator MUST be able to
-  create an invoice draft.
-- **FR-002**: The service MUST resolve the effective company, and the effective tenant when the
-  company belongs to a broader tenant, from authenticated and authorized business context. A
-  company or tenant identifier supplied by the request MUST NOT be trusted without verifying the
-  caller's authorization for that company.
-- **FR-003**: The effective company MUST exist and be active. The selected issuer MUST exist, be
-  active, be the effective Company's single authoritative Issuer fiscal profile, and belong to its
-  effective tenant where applicable. A Company with no Issuer or more than one Issuer MUST be
-  rejected. A foreign-company or foreign-tenant Issuer MUST be indistinguishable from an
-  inaccessible Issuer to the caller.
-- **FR-004**: The selected emission point MUST exist, be active, and belong to the selected issuer.
-- **FR-005**: Issuer legal identity and fiscal information MUST be obtained from the registered
-  issuer record and captured as the draft's creation-time issuer information. A caller MUST NOT
-  override those values.
+- **FR-001**: Every create request MUST contain exactly one `X-Company-Id` HTTP request-header value.
+  The value MUST be nonblank, syntactically valid as one UUID, and different from the nil UUID. A
+  missing or blank value MUST produce `COMPANY_CONTEXT_REQUIRED`; a repeated, malformed, or nil
+  value MUST produce `COMPANY_CONTEXT_INVALID`. Either result MUST use a safe English error response,
+  include or return a correlation identifier, and leave no draft, child data, or idempotency
+  binding.
+- **FR-002**: The API boundary MUST validate only the presence, single-value cardinality, UUID
+  syntax, and non-nil value of `X-Company-Id` and MUST normalize every accepted UUID to canonical
+  lowercase hyphenated form. The Company identifier MUST NOT appear in the resource path, query
+  string, request body, authentication token, or user-session context. `companyId` in the request
+  body MUST be rejected as an unknown or prohibited property under strict unknown-property
+  validation. The create resource operation MUST be `POST /invoice-drafts`, subject only to the
+  project's API base and version prefix.
+- **FR-003**: The service MUST treat an accepted Company UUID as opaque business-context metadata.
+  It MUST NOT determine Company existence, active state, fiscal eligibility, tenant ownership,
+  caller entitlement, or Company-to-Issuer, establishment, or emission-point relationships. It
+  MUST NOT define `COMPANY_NOT_FOUND`, `COMPANY_INACTIVE`,
+  `COMPANY_NOT_FISCALLY_ELIGIBLE`, `COMPANY_NOT_AUTHORIZED`,
+  `COMPANY_CONTEXT_UNAVAILABLE`, `COMPANY_CONTEXT_TIMEOUT`,
+  `COMPANY_ISSUER_CONFIGURATION_INVALID`, `EMISSION_POINT_COMPANY_MISMATCH`, authentication
+  failures, authorization failures, `401` responses, or `403` responses for draft creation. A
+  syntactically valid non-nil UUID MUST NOT be rejected because it is unknown, inactive, or
+  nonexistent in an external Company system.
+- **FR-004**: The create command MUST include one emission-point external identifier as business
+  input. It MUST be nonblank after trimming, syntactically valid as a non-nil UUID, and normalized
+  to canonical lowercase hyphenated form. The service MUST persist it as an opaque external
+  reference, but MUST NOT resolve or validate its Company, Issuer, establishment, active, or
+  effective relationship.
+- **FR-005**: A caller MUST NOT provide Issuer fiscal data, establishment fiscal data,
+  emission-point fiscal data, Company-context versions, observation timestamps, or fiscal
+  snapshots. This prohibition includes `issuerId`, Issuer RUC, legal name, trade name, address, and
+  every other Issuer fiscal attribute. Strict request-body validation MUST reject these properties
+  as unknown or prohibited. Draft creation MUST neither resolve nor persist those values.
 - **FR-006**: The emission date MUST be a real date equal to the current Ecuadorian civil date at
   creation and MUST be represented without a time-of-day component. A past, future, or impossible
   date MUST be rejected rather than normalized.
@@ -422,73 +491,107 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   The last-modification timestamp MUST NOT precede the creation timestamp.
 - **FR-020**: The complete draft, its invoice lines, tax selections and calculated amounts,
   payments, and additional information MUST be persisted as one all-or-nothing outcome.
-- **FR-021**: A validation, authorization, reference-data, or persistence failure MUST leave no
-  partial draft or child data.
+- **FR-021**: A request-contract, business-validation, reference-data, or persistence failure MUST
+  leave no partial draft, child data, or idempotency binding.
 - **FR-022**: A successful response MUST include the draft identifier, `DRAFT` status, captured
-  issuer and buyer information, emission date, lines, payments, additional information, every
-  calculated line amount, grouped tax totals, invoice totals, and both timestamps.
+  normalized Company identifier, opaque emission-point identifier, buyer information, emission
+  date, lines, payments, additional information, every calculated line amount, grouped tax totals,
+  invoice totals, and both timestamps. It MUST NOT include a Company, Issuer, establishment, or
+  emission-point master-data snapshot.
 - **FR-023**: Draft creation MUST NOT reserve an official sequential number; generate an SRI access
   key, XML, signature, PDF, or RIDE; load a certificate; call the SRI; publish an asynchronous
   integration job or notification event; or send a notification. This prohibition does not exclude
   sanitized audit records required by the constitution.
-- **FR-024**: Cross-company or cross-tenant denial MUST NOT expose whether the requested company,
-  issuer, emission point, draft, or related data exists outside the caller's effective scope.
+- **FR-024**: Every repository query, mutation, and idempotency lookup for this feature MUST be
+  scoped by the normalized Company UUID. This scoping is a business ownership-partitioning rule
+  and MUST NOT be described as authentication, caller authorization, or proof of entitlement.
 - **FR-025**: Validation and failure outcomes MUST use stable machine-readable English error
   categories and safe English messages. They MUST NOT expose buyer identification, issuer secrets,
   internal paths, persistence errors, stack traces, or other sensitive implementation details.
 - **FR-026**: Every creation attempt MUST carry or receive a correlation identifier that can be
   used to correlate its safe operational records.
-- **FR-027**: Every creation command MUST provide a non-blank caller-generated idempotency key. When
-  a company belongs to a broader tenant, the effective idempotency scope MUST be tenant identifier,
-  company identifier, and key. When the company itself is the tenant boundary, the scope MAY omit
-  a separate tenant identifier and MUST contain the company identifier and key. After trimming, the
-  key MUST contain 1 to 128 printable ASCII characters.
+- **FR-027**: Every creation command MUST provide a non-blank caller-generated idempotency key. Its
+  scope MUST be the normalized Company UUID plus the key, with no tenant component. After trimming,
+  the key MUST contain 1 to 128 printable ASCII characters. Changing the normalized Company UUID
+  MUST change the idempotency scope even when the key and normalized business content are unchanged.
 - **FR-028**: Buyer validation MUST validate only the approved type-specific syntax, length, exact
   special values, and officially applicable checksum rules. Draft creation MUST NOT perform an
   online SRI registry existence check or verify the supplied buyer name against an external
   registry.
-- **FR-029**: Idempotency equivalence MUST include company, issuer, emission point, emission date,
-  buyer information, invoice lines, tax treatments, payments, and additional information affecting
-  the resulting draft. Representation-only differences, including JSON property ordering, MUST NOT
-  make semantically equivalent normalized business content different. Invoice-line order MUST be
-  included in business-content comparison. Payment and additional-information ordering MUST be
-  ignored while their entries and values remain part of the comparison.
-- **FR-030**: The first creation command that commits successfully MUST bind its scoped idempotency
-  key to the effective tenant when applicable, effective company, created draft, and normalized
-  business content as one atomic committed outcome. An equivalent retry MUST return the original
-  draft without creating or modifying another draft. A retry with different business content MUST
-  return a stable idempotency conflict error and MUST NOT create or modify a draft. The binding MUST
-  remain valid for the lifetime of the created draft and MUST NOT use time-based expiration.
+- **FR-029**: Idempotency equivalence MUST include emission-point identifier, emission date, buyer
+  information, invoice lines, tax treatments, payments, and additional information affecting the
+  resulting draft. Company identifier MUST participate in the scope and MUST NOT be duplicated in
+  the normalized request-content fingerprint. Idempotency keys, correlation identifiers, and all
+  other transport-only headers MUST NOT affect that fingerprint. Representation-only differences,
+  including JSON property ordering, MUST NOT make semantically equivalent normalized business
+  content different. Invoice-line order MUST be included in business-content comparison. Payment
+  and additional-information ordering MUST be ignored while their entries and values remain part
+  of the comparison.
+- **FR-030**: The first creation command that commits successfully MUST atomically bind the
+  normalized Company UUID, a hash of the idempotency key, the created draft, and the normalized
+  business content. The persistence uniqueness boundary MUST be `company_id +
+  idempotency_key_hash`. An equivalent retry MUST return the original draft without creating or
+  modifying another draft. A retry with different business content MUST return the stable
+  `IDEMPOTENCY_CONFLICT` error and MUST NOT create or modify a draft. The binding MUST remain valid
+  for the lifetime of the created draft and MUST NOT use time-based expiration.
 - **FR-031**: Concurrent equivalent commands in the same idempotency scope MUST create exactly one
   draft and resolve to the same persisted result. The same key MAY be used independently by
   different companies and MUST NOT deduplicate across company boundaries.
-- **FR-032**: Business validation, company resolution, company authorization, and fully rolled-back
-  persistence failures MUST NOT bind the idempotency key. A successful commit MUST remain bound
-  after any response timeout, connection loss, or response-delivery failure.
-- **FR-033**: A retry of a committed command MUST enforce current caller authorization before
-  returning the existing draft. It MUST NOT re-execute the original creation operation because
-  mutable company information changed, bypass authorization, expose another company's or tenant's
-  draft, or treat the idempotency key as an authentication credential.
-- **FR-034**: The invoice-draft capability MUST own the idempotency binding. The company capability
-  remains authoritative for company existence, active status, tenant ownership, and caller access
-  and MUST NOT be responsible for invoice-draft idempotency bindings.
+- **FR-032**: Header-contract failure, business validation, reference-data failure, and every fully
+  rolled-back persistence failure MUST NOT bind the idempotency key. A successful commit MUST
+  remain bound after any response timeout, connection loss, or response-delivery failure.
+- **FR-033**: A committed equivalent replay MUST return the original persisted draft in the same
+  Company-and-key scope selected by the CompanyId in the current `X-Company-Id` header. It MUST
+  resolve only the local Company-scoped binding and MUST NOT repeat creation, call a Company
+  capability, authenticate or authorize the client, validate current Company, Issuer, or
+  emission-point state, refresh external data, or apply current Company data. An idempotency key
+  MUST NOT be treated as an authentication or authorization credential.
+- **FR-034**: The invoice-draft capability MUST own its idempotency binding and MUST NOT delegate
+  that responsibility to a Company capability, gateway, BFF, or other external service.
 - **FR-035**: Buyer legal name MUST contain 1 to 300 characters. Leading and trailing whitespace
   MUST be removed from every caller-supplied text value before validation, persistence, and
   idempotency-equivalence evaluation. A required or supplied optional text value that is blank after
   trimming, or any text containing a control character, MUST be rejected without persistence.
-- **FR-036**: The Company bounded context MUST remain the sole source of truth for Company master
-  data, current Company state, Issuer fiscal configuration, establishments, and emission points.
-  Draft creation MUST resolve the current authorized fiscal context through the approved
-  application boundary.
-- **FR-037**: An invoice draft MUST use only the external Company identifier as its document
-  ownership reference. It MUST preserve an immutable document-owned fiscal snapshot of the Issuer,
-  establishment, and emission-point information actually used for creation. That snapshot MUST NOT
-  be treated or exposed as current Company master data and MUST NOT change when the external master
-  data changes.
-- **FR-038**: The Tax Document Service MUST NOT own, administer, replicate, cache, or expose Company
-  master data and MUST NOT share persistence, repositories, cross-service foreign keys, or database
-  transactions with the Company service. Existing committed drafts and idempotent replays MUST use
-  their persisted fiscal snapshot rather than refresh it from current Company data.
+- **FR-036**: Create Invoice Draft MUST NOT call a Company Service or introduce a Company-context
+  port, client, repository, entity, validation or authorization adapter, eligibility lookup, status
+  cache, master-data replica, direct Company-database access, cross-service foreign key, shared
+  repository, or cross-service transaction. A Company dependency failure, timeout, retry,
+  availability check, or readiness check MUST NOT exist for this feature.
+- **FR-037**: An invoice draft MUST store the normalized Company UUID as its only Company ownership
+  reference. The value MUST be immutable after creation and MUST be used to scope ownership,
+  repository queries, mutations, and idempotency. Child data MUST belong through local draft
+  aggregate relationships rather than independently representing Company master data.
+- **FR-038**: Create Invoice Draft MUST NOT resolve or persist Company master-data snapshots,
+  Company-context versions or observation timestamps, Issuer fiscal snapshots, establishment
+  snapshots, or emission-point fiscal snapshots. Those concerns, together with fiscal eligibility,
+  sequencing, access-key generation, XML, signing, and SRI submission, MUST be defined only by a
+  separately approved fiscal-issuance specification.
+- **FR-039**: The service MUST NOT implement, require, parse, propagate, persist, or interpret
+  Keycloak, OpenID Connect, OAuth, JWTs, access tokens, API keys, user sessions, authenticated
+  principals, user identifiers, roles, permissions, tenant authorization, user-to-Company
+  authorization, or application-level service authentication. Its API contract MUST define no
+  security scheme, security requirement, Authorization header, `401` response, or `403` response.
+- **FR-040**: The API adapter MUST map the accepted `X-Company-Id` value to an application-level
+  Company identifier. HTTP headers MUST NOT enter the domain model, and application or domain logic
+  MUST NOT depend on HTTP request objects, security contexts, thread-local request context, gateway
+  implementations, or Company Service clients.
+- **FR-041**: Observable failure evaluation MUST use this precedence: (1) request payload-size
+  enforcement; (2) `X-Company-Id` presence, cardinality, trimming, UUID syntax, and nil validation;
+  (3) `Idempotency-Key` syntax validation; (4) request representation and unknown or prohibited
+  property validation; (5) normalized business-content generation; (6) local Company-scoped
+  idempotency lookup; (7) equivalent binding returns the original persisted draft; (8) a binding
+  with different content returns `IDEMPOTENCY_CONFLICT`; (9) buyer, line, tax-selection, payment,
+  text, and collection validation; (10) monetary and tax calculation; and (11) atomic aggregate and
+  idempotency-binding persistence. No authentication, authorization, tenant resolution, Company
+  lookup, Issuer lookup, or emission-point ownership validation step may be inserted.
+- **FR-042**: The create operation MUST reject a request body larger than `2 MiB` (`2,097,152`
+  bytes) with a stable safe English payload-size error before Company-header evaluation. The error
+  MUST include or return a correlation identifier and MUST leave no draft, child data, or
+  idempotency binding.
+- **FR-043**: A local persistence timeout or unexpected failure before successful commit MUST
+  return a stable safe English error with a correlation identifier and MUST leave no draft, child
+  data, or idempotency binding. A timeout or response-delivery failure after successful commit MUST
+  preserve the binding and be recoverable through the replay behavior in FR-032 and FR-033.
 
 ### Domain Rules and Invariants
 
@@ -529,7 +632,7 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   Ecuadorian civil date at the creation instant. Creation and last-modification timestamps MUST be
   unambiguous instants.
 - **DR-013**: Impossible dates, inconsistent totals, inactive or temporally inapplicable catalog
-  combinations, unsupported identification types, and unauthorized ownership combinations MUST
+  combinations, unsupported identification types, and invalid local aggregate relationships MUST
   be rejected without normalization or partial persistence.
 - **DR-014**: An Ecuadorian identity card (`05`) MUST satisfy the official numeric format and
   check-digit rule. A RUC (`04`) MUST satisfy the official RUC format and an official checksum only
@@ -546,42 +649,38 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   amount. Deemed taxable bases and special gratuitous-transfer treatments are unsupported.
 - **DR-017**: A scoped idempotency key becomes bound only by a successful atomic commit. Once
   bound, equivalent normalized business content identifies the original draft and different
-  business content is an idempotency conflict. The binding MUST exist for as long as the draft
+  business content produces `IDEMPOTENCY_CONFLICT`. The binding MUST exist for as long as the draft
   exists and MUST NOT expire because of elapsed time.
-- **DR-018**: Idempotency scope and authorization scope MUST remain aligned to the effective
-  company and effective tenant where applicable. An idempotency key MUST NOT grant access or reveal
-  whether a binding exists outside that scope.
+- **DR-018**: Idempotency scope MUST be exactly normalized Company UUID plus idempotency key. A
+  Company UUID is business context, and neither it nor an idempotency key authenticates a caller,
+  authorizes access, or proves entitlement.
 - **DR-019**: The trimmed text values governed by FR-008, FR-010, FR-015, FR-027, and FR-035 are the
   canonical values used for persistence and idempotency equivalence. Lengths MUST be measured after
   trimming and before persistence.
-- **DR-020**: A Company MUST have exactly one Issuer fiscal profile, and an Issuer MUST belong to
-  exactly one Company. Establishments and emission points MUST remain subordinate to that Issuer.
+- **DR-020**: Every draft MUST have exactly one immutable normalized Company UUID. Every line,
+  payment, tax selection, tax total, and additional-information entry MUST belong to that draft;
+  accidental mixing of child data between Company-scoped drafts is prohibited.
 - **DR-021**: Invoice-line order is part of a creation command's normalized business content.
   Payment and additional-information collections are order-insensitive for idempotency equivalence.
 - **DR-022**: Payments MUST be unique by payment-method identity within one draft.
-- **DR-023**: A tenant identifier used to authorize a command or scope an idempotency binding MUST
-  NOT become a tax-document aggregate ownership reference. Issuer, establishment, or emission-point
-  identifiers inside the immutable fiscal snapshot are historical evidence and MUST NOT be treated
-  as locally owned master-data identifiers.
+- **DR-023**: The opaque emission-point identifier captured by a draft is unverified commercial
+  input for later processing. It MUST NOT be represented as an Issuer, establishment, emission
+  point, Company master-data snapshot, or proof of a validated external relationship.
 
 ### Key Entities
 
 - **Invoice Draft**: Internal pre-issuance record identified by a unique draft identifier and owned
   through one external Company identifier. It is fixed to USD and `DRAFT`, contains captured
-  commercial inputs, calculated totals, audit timestamps, and an immutable fiscal-context snapshot,
-  and has no official fiscal identity.
-- **Company**: Effective legal entity for which the draft is created. It exists within an
-  authorization boundary, MAY itself be the tenant boundary or belong to a broader tenant, and is
-  externally owned by the Company bounded context. Only its external identifier is a draft
-  ownership reference.
-- **Issuer**: Externally owned single active fiscal profile belonging to exactly one Company. Its
-  current registered fiscal data is authoritative at creation and cannot be overridden by the
-  operator.
-- **Emission Point**: Externally owned active point belonging to the selected issuer and intended
-  for later fiscal issuance without reserving a sequence during draft creation.
-- **Fiscal Context Snapshot**: Immutable, document-owned historical evidence containing the Issuer,
-  establishment, and emission-point information actually used to create the draft. It is not
-  current Company master data and is never refreshed after commit.
+  emission-point reference, emission date, buyer data, lines, selected tax-rule references,
+  calculated monetary and tax values, payments, additional information, creation and modification
+  timestamps, and Company-scoped idempotency association. It has no fiscal-context snapshot or
+  official fiscal identity.
+- **Company Identifier**: Immutable, normalized, opaque external UUID received through
+  `X-Company-Id`. It partitions draft ownership, repository operations, and idempotency, but is not
+  locally owned Company master data or proof of caller entitlement.
+- **Emission-Point Identifier**: Opaque external identifier selected as draft input and retained for
+  later processing. Draft creation does not resolve its Company, Issuer, establishment, status, or
+  fiscal configuration.
 - **Buyer**: Named recipient with an active identification type, validated identification value,
   and optional contact information. Final consumer is the exact SRI-defined special identity and
   name rather than a registry-verified person.
@@ -600,9 +699,10 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **Additional Information**: Optional named textual entry captured for later review. A draft has
   at most 15 entries; each trimmed name and value has 1 to 300 characters, and trimmed names are
   unique within the draft.
-- **Idempotency Binding**: Company-scoped association among a caller-generated key, effective tenant
-  where applicable, normalized creation-command business content, and the successfully committed
-  invoice draft. Its lifetime equals the draft's lifetime and has no time-based expiration.
+- **Idempotency Binding**: Company-scoped association among a hash of a caller-generated key,
+  normalized creation-command business content, and the successfully committed invoice draft. Its
+  uniqueness boundary is Company identifier plus key hash; its lifetime equals the draft's lifetime
+  and has no time-based expiration.
 
 ## Success Criteria *(mandatory)*
 
@@ -611,7 +711,7 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **SC-001**: In the approved acceptance suite, 100% of logically new valid create commands persist
   exactly one complete invoice draft and return all fields required by FR-022.
 - **SC-002**: In the approved validation and failure suite, 100% of rejected requests leave zero
-  draft and child records.
+  draft, child, and idempotency-binding records.
 - **SC-003**: The same commercial inputs, emission date, and catalog-rule versions always produce
   identical line amounts, grouped taxes, payment comparison, and invoice totals.
 - **SC-004**: The calculation vector `2 × 10.00 − 5.00` with a `15%` percentage tax produces gross
@@ -619,11 +719,12 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **SC-005**: Every successful or failed draft-creation test records zero official sequential
   reservations, access keys, XML artifacts, signature operations, certificate reads, SRI calls,
   asynchronous integration jobs, notification events, PDFs, and notifications.
-- **SC-006**: All cross-company and cross-tenant test attempts are denied, expose zero foreign-scope
-  fields, and persist zero data.
+- **SC-006**: Every tested missing, repeated, blank, malformed, or nil `X-Company-Id` is rejected with
+  `COMPANY_CONTEXT_REQUIRED` or `COMPANY_CONTEXT_INVALID` as applicable and leaves zero draft,
+  child, or idempotency records.
 - **SC-007**: All accepted drafts expose enough persisted captured and calculated information for a
-  billing operator to review issuer, emission point, buyer, lines, taxes, payments, totals, status,
-  and timestamps without invoking any later authorization capability.
+  billing client to review Company identifier, opaque emission-point identifier, buyer, lines,
+  taxes, payments, totals, status, and timestamps without invoking any fiscal-issuance capability.
 - **SC-008**: The feature's acceptance scenarios can be validated independently of draft update,
   deletion, fiscal numbering, XML, signature, SRI authorization, PDF, and notification features.
 - **SC-009**: Every accepted invoice line has exactly one active IVA tax rule effective on the
@@ -637,7 +738,7 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   data.
 - **SC-012**: Every idempotency acceptance and concurrency vector commits at most one draft for one
   scoped key and equivalent content; conflict and failure vectors create or modify no draft and
-  expose no cross-company or cross-tenant data.
+  every lookup remains scoped by Company UUID plus idempotency key.
 - **SC-013**: Every accepted draft uses the current Ecuadorian civil date at creation as its
   date-only emission date, and every past, future, or impossible date is rejected without persisted
   draft data.
@@ -650,11 +751,12 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **SC-016**: Every text field at its approved length and format boundary is accepted when otherwise
   valid, and every over-limit, blank-after-trimming, control-character, invalid-contact, or
   duplicate-additional-name vector is rejected without persisted draft data.
-- **SC-017**: Every accepted draft is associated with one effective Company and that Company's
-  single Issuer; every missing, multiple, foreign-company, or foreign-tenant Issuer case is rejected
-  without persisted draft data or foreign-scope disclosure.
-- **SC-018**: Every authorized equivalent retry returns the original draft while that draft exists,
-  regardless of elapsed time, and no time-based idempotency expiration permits a duplicate draft.
+- **SC-017**: Every accepted draft stores exactly one normalized immutable Company UUID and every
+  persisted child belongs through that draft; test vectors produce zero accidental cross-Company
+  child-data mixing.
+- **SC-018**: Every equivalent replay in the same Company-and-key scope returns the original draft
+  while that draft exists, regardless of elapsed time, and no time-based idempotency expiration
+  permits a duplicate draft.
 - **SC-019**: Reordering only payments or additional-information entries preserves idempotency
   equivalence, while changing invoice-line order produces a conflict for an already bound scoped
   key; neither case creates a duplicate draft.
@@ -664,11 +766,26 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   rule, and every request supplying a line tax code or rate is rejected without persisted draft
   data.
 - **SC-022**: Every accepted draft contains exactly one external Company ownership identifier and
-  one immutable fiscal snapshot of the Issuer, establishment, and emission point used at creation;
-  it contains no alternative tenant or Issuer document ownership reference.
-- **SC-023**: Every authorized equivalent replay returns the original persisted fiscal snapshot
-  after current Company master data changes and performs zero snapshot updates or Company
-  master-data replication.
+  one opaque emission-point identifier, and contains zero Company-context versions, observation
+  timestamps, Issuer snapshots, establishment snapshots, or emission-point fiscal snapshots.
+- **SC-023**: Every create and replay acceptance vector performs zero Company Service calls,
+  authentication or authorization processing, Company availability checks, Company cache access,
+  or Company master-data replication.
+- **SC-024**: The published API contract defines `X-Company-Id` only as a required single UUID
+  request header, defines no Company path/query/body field, and contains zero security schemes,
+  security requirements, Authorization headers, `401` responses, or `403` responses.
+- **SC-025**: Every request body containing `companyId`, `issuerId`, or an Issuer, establishment, or
+  emission-point fiscal attribute is rejected as unknown or prohibited and leaves zero draft,
+  child, and idempotency-binding records.
+- **SC-026**: Every failure-precedence test produces the outcome of the earliest applicable FR-041
+  step; later validation, calculation, lookup, or persistence behavior is not executed after that
+  terminal outcome.
+- **SC-027**: Every request body of `2,097,152` bytes or less proceeds to the next applicable
+  validation step, while every larger body is rejected before Company-header evaluation and leaves
+  zero draft, child, and idempotency-binding records.
+- **SC-028**: Every simulated local persistence timeout or unexpected pre-commit failure leaves zero
+  draft, child, and idempotency-binding records and returns a correlated safe error; every simulated
+  post-commit response failure remains recoverable as the original draft by equivalent replay.
 
 ## Assumptions and Dependencies
 
@@ -681,15 +798,18 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **Assumption**: Draft creation is a directly observable create operation, not an asynchronous SRI
   command. — **Basis**: The requested response contains the newly persisted draft and every SRI,
   queue, and notification interaction is excluded.
-- **Dependency**: Authentication and authorization context must provide the billing-operator grant
-  and the authorized effective company and tenant scope without trusting request-only identifiers.
-- **Dependency**: The company capability must provide authoritative company existence, active
-  status, tenant ownership, caller-access decisions, and the single Company-to-Issuer association;
-  invoice-draft idempotency remains owned by this feature. The Company bounded context remains the
-  sole owner of current Company, Issuer, establishment, and emission-point master data.
-- **Dependency**: The Company fiscal-context capability must provide Company and tenant ownership,
-  Issuer and emission-point hierarchy, active state, and authoritative fiscal information through
-  the approved application boundary without shared persistence or replication.
+- **Assumption**: Before a request reaches this service, an upstream Gateway or BFF has performed
+  any required authentication, authorization, Company validation, and Company-context resolution.
+  It is expected to strip every externally supplied `X-Company-Id` and inject exactly one canonical
+  validated value. The Tax Document Service does not verify those actions. This is an accepted
+  integration assumption, not a guarantee enforced by this feature. — **Basis**: Approved
+  Constitution v2.0.0 Company-context boundary.
+- **Assumption**: Any process capable of reaching this internal API can submit any syntactically
+  valid non-nil Company UUID. The service accepts that UUID without entitlement or Company-state
+  verification. — **Basis**: Approved Constitution v2.0.0 trust boundary.
+- **Dependency**: Draft creation has no Company Service, authentication, authorization, gateway,
+  BFF, or Company master-data runtime dependency. Only the required Company header contract is
+  visible at this service boundary.
 - **Dependency**: Versioned identification, tax-category, tax-rule, and payment-method catalogs must
   provide active/effective reference data aligned with the official sources cited above.
 - **Dependency**: `docs/migration/terminology-mapping.md` is authoritative for the English target

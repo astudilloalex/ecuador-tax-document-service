@@ -287,7 +287,7 @@ Sample items:
 
 - "Are error response formats specified for all failure scenarios? [Completeness]"
 - "Are rate limiting requirements quantified with specific thresholds? [Clarity]"
-- "Are authentication requirements consistent across all endpoints? [Consistency]"
+- "Are `X-Company-Id` requirements consistent across all Company-scoped endpoints? [Consistency]"
 - "Are retry/timeout requirements defined for external dependencies? [Coverage, Gap]"
 - "Is versioning strategy documented in requirements? [Gap]"
 
@@ -305,7 +305,7 @@ Sample items:
 
 Sample items:
 
-- "Are authentication requirements specified for all protected resources? [Coverage]"
+- "Are missing, repeated, malformed, blank, and nil Company headers covered? [Coverage]"
 - "Are data protection requirements defined for sensitive information? [Completeness]"
 - "Is the threat model documented and requirements aligned to it? [Traceability]"
 - "Are security requirements consistent with compliance obligations? [Consistency]"

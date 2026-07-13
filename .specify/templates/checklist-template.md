@@ -23,7 +23,7 @@ requirements; it MUST NOT test whether an implementation works or whether a task
 
 - [ ] CHK001 Are all behaviors needed for the bounded stakeholder outcome specified? [Completeness, Spec §Bounded Outcome]
 - [ ] CHK002 Are exclusions and non-goals explicit enough to prevent unrelated document types, administrative capabilities, and implicit legacy compatibility from entering scope? [Completeness, Spec §Exclusions and Non-Goals]
-- [ ] CHK003 Are required authorization, failure, duplicate, timeout, recovery, and terminal-outcome requirements documented for every applicable flow? [Gap]
+- [ ] CHK003 Are required Company-context, failure, duplicate, timeout, recovery, and terminal-outcome requirements documented for every applicable flow? [Gap]
 
 ## Authority and Evidence Quality
 
@@ -42,13 +42,13 @@ requirements; it MUST NOT test whether an implementation works or whether a task
 
 - [ ] CHK011 Does every user story define an independently observable outcome and acceptance scenarios traceable to requirements? [Measurability, Spec §User Scenarios & Testing]
 - [ ] CHK012 Are success criteria quantitative or otherwise objectively verifiable without selecting implementation technology? [Measurability, Spec §Measurable Outcomes]
-- [ ] CHK013 Are critical fiscal, security, tenant-isolation, and failure outcomes represented in acceptance criteria where applicable? [Coverage, Gap]
+- [ ] CHK013 Are critical fiscal, Company-scoping, sensitive-data, and failure outcomes represented in acceptance criteria where applicable? [Coverage, Gap]
 
 ## Scenario and Edge-Case Coverage
 
 - [ ] CHK014 Are primary, alternate, exception, recovery, and non-functional scenario requirements complete for the bounded outcome? [Coverage, Spec §User Scenarios & Testing]
 - [ ] CHK015 Are impossible dates, inconsistent totals, invalid catalogs, precision boundaries, and unsupported identifiers addressed where applicable? [Edge Case, Spec §Edge Cases]
-- [ ] CHK016 Are cross-tenant attempts, duplicate commands, retries, timeouts, partial external failures, and reconciliation outcomes addressed where applicable? [Edge Case, Spec §Edge Cases]
+- [ ] CHK016 Are invalid or conflicting Company headers, duplicate commands, retries, timeouts, partial external failures, and reconciliation outcomes addressed where applicable? [Edge Case, Spec §Edge Cases]
 
 ## Dependencies and Assumptions
 
@@ -57,9 +57,9 @@ requirements; it MUST NOT test whether an implementation works or whether a task
 
 ## Service Data Ownership
 
-- [ ] CHK019 When Company fiscal context is in scope, is the Company bounded context explicitly identified as the sole current master-data authority? [Completeness, Spec §Assumptions and Dependencies]
-- [ ] CHK020 Are the external Company ownership identifier and immutable document fiscal snapshot clearly distinguished from a local Company master-data replica? [Clarity, Spec §Key Entities]
-- [ ] CHK021 Are Company administration, shared persistence, cross-service foreign keys or transactions, caching, and background replication explicitly excluded? [Coverage, Spec §Exclusions and Non-Goals]
+- [ ] CHK019 Is `X-Company-Id` the sole Company-context input, with exact cardinality, UUID, nil-value, normalization, placement, and stable-error rules? [Completeness, Spec §Functional Requirements]
+- [ ] CHK020 Is the immutable external Company UUID clearly distinguished from authentication, authorization, Company master data, and a fiscal snapshot, with draft-time snapshots excluded? [Clarity, Spec §Key Entities]
+- [ ] CHK021 Are Company lookup/dependencies, authentication/authorization, Company administration, shared persistence, cross-service foreign keys or transactions, caching, background replication, and draft-time fiscal snapshots explicitly excluded? [Coverage, Spec §Exclusions and Non-Goals]
 
 ## Notes
 

@@ -1,21 +1,27 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 -> 1.1.0
+- Version change: 1.1.0 -> 2.0.0
 - Modified principles:
-  - XIV. Mandatory Spec Kit Delivery Workflow (Company master-data ownership added to critical
-    analysis gates)
-- Added sections:
-  - XVI. Company Master Data Ownership and Immutable Fiscal Snapshots
+  - III. Required Technology Baseline and JVM Safety (Keycloak/OIDC removed)
+  - VII. Zero-Trust Identity and Tenant Isolation -> VII. Internal Company Context Without Identity
+  - X. Target-First APIs and Observable Asynchronous Work (application authorization removed)
+  - XI. Port-Bound SRI and External Integrations (Keycloak removed)
+  - XII. Risk-Based Testing and Evidence (Company-header/scoping evidence replaces auth evidence)
+  - XIV. Mandatory Spec Kit Delivery Workflow (Company-context boundary added to critical gates)
+  - XVI. Company Master Data Ownership and Immutable Fiscal Snapshots -> XVI. Definitive Company Context and Draft Boundary
+- Added sections: None
 - Modified sections:
-  - Definition of Done (Company boundary compliance added)
-- Removed sections: None
+  - Definition of Done (header, scoping, no-auth, and no-Company-dependency evidence)
+- Removed sections:
+  - Mandatory Keycloak/OIDC/JWT authentication and application authorization governance
+  - Tenant-derived Company context and cross-tenant authorization governance
+  - Create-draft Company Service resolution and fiscal-snapshot requirements
 - Consistency updates:
   - ✅ .specify/templates/spec-template.md
   - ✅ .specify/templates/plan-template.md
   - ✅ .specify/templates/tasks-template.md
   - ✅ .specify/templates/checklist-template.md
   - ✅ .specify/workflows/speckit/workflow.yml
-  - ✅ .specify/workflows/workflow-registry.json
   - ✅ .agents/skills/speckit-specify/SKILL.md
   - ✅ .agents/skills/speckit-clarify/SKILL.md
   - ✅ .agents/skills/speckit-tasks/SKILL.md
@@ -26,7 +32,7 @@ Sync Impact Report
   - ✅ specs/001-create-invoice-draft/plan.md
   - ✅ specs/001-create-invoice-draft/research.md
   - ✅ specs/001-create-invoice-draft/data-model.md
-  - ✅ specs/001-create-invoice-draft/contracts/company-context-port.md
+  - ✅ specs/001-create-invoice-draft/contracts/company-context-port.md (removed)
   - ✅ specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml
   - ✅ specs/001-create-invoice-draft/quickstart.md
   - ✅ specs/001-create-invoice-draft/checklists/requirements.md
@@ -34,6 +40,8 @@ Sync Impact Report
 - Reviewed without changes:
   - .specify/templates/constitution-template.md remains the upstream placeholder template
   - README.md contains runtime commands but no conflicting governance requirements
+  - .specify/workflows/workflow-registry.json contains workflow registration metadata only
+  - specs/001-create-invoice-draft/tasks.md does not exist; no task artifact was available to update
   - No .specify/templates/commands directory exists in this installation
   - .agents/skills/speckit-plan/SKILL.md and .agents/skills/speckit-checklist/SKILL.md load the
     constitution and their updated templates dynamically
@@ -136,7 +144,6 @@ The target implementation MUST use:
 - PostgreSQL.
 - Hibernate Reactive with Panache for reactive persistence.
 - Flyway as the only authoritative database schema migration mechanism.
-- Keycloak through OpenID Connect for authentication.
 
 The service MUST support JVM execution. Native compilation is a desired capability, not a
 mandatory production outcome. Every implementation plan involving native-sensitive behavior
@@ -232,39 +239,47 @@ combinations, or unsupported identification types.
 **Rationale**: Fiscal validity depends on versioned official rules, deterministic arithmetic,
 and explicit time semantics rather than incidental legacy behavior.
 
-### VII. Zero-Trust Identity and Tenant Isolation
+### VII. Internal Company Context Without Identity
 
-Keycloak MUST be the authentication authority through OIDC. The service MUST NOT store local user
-passwords, implement a replacement login mechanism, issue proprietary user JWTs, or trust
-unsigned or unvalidated token content.
+This repository MUST NOT own user management, authentication, authorization, user-to-Company
+permission decisions, an API gateway, or a backend-for-frontend. The Tax Document Service MUST NOT
+implement, require, parse, propagate, persist, or interpret Keycloak, OpenID Connect, OAuth, JWTs,
+access tokens, API keys, user sessions, authenticated principals, user identifiers, roles,
+permissions, tenant authorization, user-to-Company authorization, or application-level service
+authentication.
 
-Protected endpoints MUST validate, when applicable to the configured client and token type, the
-token signature, issuer, audience, expiration, authorized party, and required scopes or roles.
-Access MUST be denied by default. Every public endpoint MUST be explicitly identified and
-justified in its approved feature specification or plan. Authentication at a gateway MUST NOT
-replace authorization inside this service.
+The internal API explicitly accepts that any process capable of reaching it MAY submit any
+syntactically valid Company UUID. The service MUST NOT determine whether that process is entitled
+to use the Company identifier. Network, firewall, ingress, gateway, BFF, authentication, and
+authorization controls belong outside this repository.
 
-Application use cases MUST enforce tenant, company, issuer, emission-point, certificate, and tax
-document ownership from the authenticated identity and effective authorization scope. The
-service MUST NOT trust a tenant or issuer identifier solely because it appears in a request
-payload, header, or path parameter. Every query and mutation involving tenant-owned data MUST
-apply the effective authorization scope. Every tenant-aware feature MUST include cross-tenant
-access-denial tests.
+The upstream Gateway or BFF is responsible for platform authentication when required,
+user-to-Company authorization when required, validation against the authoritative Company
+capability, and validation of Company/Issuer/establishment/emission-point relationships when the
+upstream workflow requires them. Before forwarding a Company-scoped request, it MUST remove every
+externally supplied `X-Company-Id` value and MUST inject exactly one canonical, previously validated
+`X-Company-Id` value. Those upstream responsibilities remain outside this repository and MUST NOT
+become Tax Document Service dependencies, error outcomes, or claims of enforcement. The Tax
+Document Service MUST NOT verify whether the upstream component fulfilled them.
 
-**Rationale**: Server-side scope enforcement prevents authenticated callers from crossing fiscal
-ownership boundaries through manipulated transport data.
+The OpenAPI contract MUST NOT define a security scheme, security requirement, Authorization
+header, `401` authentication response, or `403` authorization response.
+
+**Rationale**: An explicit caller-agnostic internal boundary prevents accidental duplication of
+platform identity concerns and keeps Company context as business metadata rather than a security
+credential.
 
 ### VIII. Sensitive Data and Certificate Security
 
 PKCS#12 files, certificate passwords, signing keys, tax documents, personal identification,
-webhook secrets, tokens, and fiscal payloads MUST be treated as sensitive information. Sensitive
+webhook secrets, and fiscal payloads MUST be treated as sensitive information. Sensitive
 values MUST NOT appear in source control, examples containing real values, logs, exception
 messages, metric labels, traces, queue metadata without an approved retention requirement, or
 test fixtures derived from production data.
 
 Certificate passwords and webhook secrets MUST NOT be stored in plaintext. Before certificate
 management implementation begins, its approved specification or plan MUST define certificate
-storage, encryption, rotation, expiration, revocation, deletion, backup, and tenant ownership.
+storage, encryption, rotation, expiration, revocation, deletion, backup, and Company ownership.
 Cryptographic failures MUST fail closed.
 
 **Rationale**: Fiscal documents and signing material can create legal and identity harm; this risk
@@ -297,7 +312,7 @@ contract implicitly. API DTOs MUST be distinct from domain objects and persisten
 Validation ownership MUST be explicit:
 
 - Transport validation MUST check structure and representation.
-- Application validation MUST check use-case preconditions and authorization.
+- Application validation MUST check use-case preconditions and Company-scoped business invariants.
 - Domain validation MUST protect business invariants.
 - Infrastructure validation MUST handle external-system constraints.
 
@@ -309,14 +324,14 @@ is propagated through logs and external integrations.
 An asynchronous command MUST NOT return only an opaque job identifier without an approved method
 to observe its final result. Every asynchronous operation MUST define status query or delivery,
 correlation identifiers, terminal states, caller-safe error details, retry semantics, retention,
-idempotency, and authorization for result access.
+idempotency, and Company-scoped result access when applicable.
 
 **Rationale**: Explicit contracts and observable outcomes let callers recover safely without
 coupling the target service to legacy representations.
 
 ### XI. Port-Bound SRI and External Integrations
 
-SOAP, XML, certificate, rendering, notification, storage, and Keycloak integrations MUST be
+SOAP, XML, certificate, rendering, notification, and storage integrations MUST be
 infrastructure adapters behind application ports. Official SRI names and payload structures MUST
 remain confined to the SRI adapter when they are not canonical target-domain concepts.
 
@@ -340,7 +355,7 @@ authoritative. The testing strategy MUST include every applicable category below
 
 - Pure domain unit tests.
 - Application use-case tests.
-- Authorization and tenant-isolation tests.
+- `X-Company-Id` contract and Company-scoping tests.
 - Reactive persistence integration tests using PostgreSQL.
 - Flyway migration tests from an empty database.
 - API contract tests.
@@ -404,8 +419,8 @@ items MUST be evaluated honestly and MUST NOT be marked complete merely to unblo
 
 `$speckit-analyze` MUST run after task generation and before implementation. Implementation MUST
 NOT begin while analysis has an unresolved critical inconsistency involving fiscal correctness,
-security, tenant isolation, Company master-data ownership, data loss, idempotency, external
-integration contracts, certificate management, or database evolution.
+Company context, Company master-data ownership, data loss, idempotency, external integration
+contracts, certificate management, or database evolution.
 
 **Rationale**: Ordered, reviewable artifacts expose ambiguity and governance violations before
 they become expensive or legally significant code.
@@ -432,45 +447,84 @@ insufficient, and the testing and operational consequences.
 **Rationale**: Requiring a current use case and recorded alternatives keeps the greenfield system
 focused on fiscal value instead of speculative infrastructure.
 
-### XVI. Company Master Data Ownership and Immutable Fiscal Snapshots
+### XVI. Definitive Company Context and Draft Boundary
 
-The Company bounded context MUST be the sole source of truth for Company master data, current
-Company state, Issuer fiscal configuration, establishments, and emission points. The Tax Document
-Service MUST NOT own, administer, replicate, or expose current Company master data. It MUST NOT
-provide Company, Issuer, establishment, or emission-point master-data CRUD, search, catalog, or
-administration operations.
+This repository MUST implement only the Ecuador Tax Document and Billing bounded context. It owns
+Invoice Draft aggregates, invoice lines, buyer information captured in a draft, tax selections and
+calculated tax amounts, payments, additional information, deterministic monetary calculations,
+Company-scoped idempotency, and tax-document lifecycle capabilities introduced through separately
+approved specifications.
 
-The Tax Document Service MUST persist only the external Company identifier as a tax document's
-ownership reference. A tenant identifier required by an approved authorization or idempotency
-scope MUST NOT be stored on the tax-document aggregate or treated as an alternative document
-ownership reference.
+It MUST NOT own Company master data, Company administration, Company status, Issuer
+administration, establishment administration, emission-point administration, user management,
+authentication, authorization, user-to-Company permission decisions, API gateway behavior, or BFF
+behavior. The Company bounded context remains the sole authority for Company master data and
+relationships.
 
-Every tax-document aggregate MUST preserve an immutable fiscal snapshot of the Issuer,
-establishment, and emission-point information actually used to create that document. The snapshot
-MAY contain the external identifiers and fiscal attributes required as document evidence. It MUST
-remain owned by the document, MUST NOT be updated when Company master data changes, and MUST NOT be
-treated, queried, or exposed as a current local Company master-data replica. A document API MAY
-return its own persisted snapshot only as historical document evidence.
+Every Company-scoped HTTP operation MUST receive the Company identifier in exactly one mandatory
+`X-Company-Id` request header. The identifier MUST NOT appear in a resource path, query string,
+request body, authentication token, or user-session context. Company-scoped paths MUST name only
+resources owned by this bounded context; for example, `POST /invoice-drafts` MUST be used instead
+of `POST /companies/{companyId}/invoice-drafts`. A global API or version prefix MAY precede the
+resource path.
 
-New document creation MUST resolve the current authorized fiscal context through an application
-port implemented by an infrastructure adapter. Existing committed documents and idempotent replays
-MUST use their persisted snapshot; they MUST NOT refresh or replace that snapshot from current
-Company data. A current authorization check MAY still be required before an existing document is
-returned, but it MUST NOT change the persisted fiscal evidence.
+`X-Company-Id` MUST contain exactly one nonblank, non-null, non-nil UUID. The API boundary MUST
+validate only header presence, single-value cardinality, UUID syntax, and non-nil value. It MAY
+normalize an accepted UUID to lowercase hyphenated form. Missing, repeated, blank, malformed, and
+nil values MUST fail with stable codes equivalent to `COMPANY_CONTEXT_REQUIRED` or
+`COMPANY_CONTEXT_INVALID` and MUST create no aggregate, child, or idempotency binding.
 
-The Company service and Tax Document Service MUST NOT share a database, database schema,
-cross-service foreign key, repository, persistence entity, or database transaction. A Company
-identifier stored by the Tax Document Service MUST NOT have a database foreign key to Company-owned
-storage. A database transaction in either service MUST NOT span the other service.
+`X-Company-Id` is business-context metadata. It MUST NOT be treated as an authentication or
+authorization credential, API key, token, or proof of entitlement. The service MUST NOT validate
+Company existence, active state, fiscal eligibility, tenant membership, caller entitlement, or
+Company/Issuer/establishment/emission-point relationships. It MUST NOT define
+`COMPANY_NOT_FOUND`, `COMPANY_INACTIVE`, `COMPANY_NOT_AUTHORIZED`,
+`COMPANY_CONTEXT_UNAVAILABLE`, `COMPANY_CONTEXT_TIMEOUT`, or
+`ISSUER_COMPANY_MISMATCH` outcomes.
 
-The Tax Document Service MUST NOT maintain a Company cache, materialized Company view, synchronized
-Company table, change-data-capture consumer, or background Company-data replication process.
-Company context MAY exist only as bounded in-memory data for the active application-port call and
-as the immutable fiscal snapshot inside the resulting tax-document aggregate.
+The API adapter MUST map the header value to an application-level `CompanyId`. HTTP header objects,
+security contexts, thread-local request state, Gateway implementations, BFF implementations, and
+Company Service clients MUST NOT enter the application or domain model.
 
-**Rationale**: Exclusive master-data ownership prevents divergent Company state and cross-service
-coupling, while immutable document-owned snapshots preserve the exact fiscal evidence required for
-historical review and idempotent replay.
+An Invoice Draft MUST store the normalized Company UUID as its immutable external ownership
+reference. `CompanyId` MUST scope repository queries, mutations, idempotency, and safe operational
+correlation. It MUST NOT be described as caller authorization or security isolation. Every child
+record MUST belong to its Invoice Draft through local aggregate relationships and MUST NOT
+independently represent Company master data.
+
+Company-scoped idempotency MUST use `CompanyId + Idempotency-Key`. Persistence uniqueness MUST use
+`company_id + idempotency_key_hash`. The same key MAY be used independently by different Companies.
+For one Company, equivalent normalized content MUST return the original committed aggregate,
+different content MUST return a stable conflict, and concurrent equivalent commands MUST create
+exactly one aggregate. `CompanyId`, correlation identifiers, and transport-only headers MUST NOT be
+duplicated inside or affect the normalized request-content fingerprint.
+
+Create Invoice Draft MUST NOT call the Company Service or introduce a `CompanyContextPort`,
+Company client, Company repository, Company entity, Company validation or authorization adapter,
+Company eligibility lookup, Company status cache, Company master-data replication, direct Company
+database access, cross-service foreign key, or cross-service transaction. Company dependency
+failure, timeout, availability, and readiness outcomes MUST NOT exist for this feature.
+
+Create Invoice Draft MUST persist only the opaque Company identifier and other caller-supplied or
+system-calculated draft data approved by its specification. It MUST NOT resolve or persist Company
+master-data snapshots, Company-context versions or observation timestamps, Issuer fiscal
+snapshots, establishment snapshots, or emission-point fiscal snapshots. An Invoice Draft is not an
+issued fiscal document.
+
+A later, separately approved fiscal-issuance specification MUST define how authoritative Company
+and Issuer fiscal data is obtained, when Company and fiscal eligibility are revalidated, which
+immutable fiscal snapshot is persisted, how the official sequence and access key are allocated,
+how XML is generated and signed, and how the document is submitted to the SRI. Those concerns MUST
+NOT enter Create Invoice Draft.
+
+The Tax Document Service MUST NOT create a Company aggregate, Company repository, local Company
+master table, current Company status replica, Company user or permission model, Company cache,
+direct Company database access, cross-service foreign key, or cross-service database transaction.
+It MUST NOT use an application cache.
+
+**Rationale**: A single syntactic Company header gives the internal billing boundary deterministic
+partitioning and idempotency without duplicating platform identity, Company master data, or later
+fiscal-issuance responsibilities.
 
 ## Definition of Done
 
@@ -480,10 +534,15 @@ A feature is complete only when all of these conditions are satisfied:
 - Constitution compliance has been reviewed and recorded.
 - All required tests pass, and static analysis and formatting checks pass.
 - Database migrations are repeatable from an empty database.
-- Security and tenant-isolation requirements are verified.
-- Company master-data ownership is verified: the feature stores only the external Company
-  ownership identifier and immutable document fiscal snapshots, with no Company replica, cache,
-  shared persistence, or cross-service transaction.
+- Company context is verified: exactly one valid `X-Company-Id` scopes every Company operation,
+  invalid headers create no state, and Company identifiers do not enter paths, query strings,
+  bodies, identity artifacts, or normalized content fingerprints.
+- The no-authentication boundary is verified: no identity, token, security scheme, `401`, `403`,
+  tenant authorization, or user-to-Company permission behavior is introduced.
+- Company master-data exclusion is verified: no Company aggregate, repository, table, client,
+  port, lookup, snapshot, cache, replication, shared persistence, or Company dependency health
+  check exists unless a later approved fiscal-issuance specification requires an applicable
+  boundary.
 - Failure, timeout, retry, duplicate, and reconciliation behavior required by the feature is
   tested.
 - Documentation and `docs/migration/terminology-mapping.md` are updated when affected.
@@ -522,4 +581,4 @@ MUST be corrected. A perceived need to change a principle MUST be handled throug
 explicit constitution amendment and MUST NOT be resolved by diluting or silently reinterpreting
 the principle during feature work.
 
-**Version**: 1.1.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12
+**Version**: 2.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12

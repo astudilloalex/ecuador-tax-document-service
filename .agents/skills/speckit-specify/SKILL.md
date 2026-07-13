@@ -112,8 +112,8 @@ Given that feature description, do this:
 4. Load the resolved active `spec-template` file to understand required sections.
 
 5. **REQUIRED FOR THIS PROJECT**: Load `.specify/memory/constitution.md` and apply its authority,
-   greenfield scope, language, terminology, evidence, feature-bounding, Company master-data
-   ownership, and immutable fiscal-snapshot rules. Stop if the constitution is absent or still
+   greenfield scope, language, terminology, evidence, feature-bounding, definitive Company-header
+   boundary, and prohibition of draft-time fiscal snapshots. Stop if the constitution is absent or still
    contains unresolved template placeholders.
 
 6. Follow this execution flow:
@@ -125,7 +125,7 @@ Given that feature description, do this:
        - Make an informed assumption only when an approved source or harmless, reversible default
          supports it
        - Do NOT infer unknown or contradictory legacy behavior, fiscal behavior, naming,
-         authorization, tenant ownership, Company master-data ownership, fiscal-snapshot scope,
+         Company-context placement, Company master-data ownership, fiscal-snapshot scope,
          certificate lifecycle, retention, idempotency, or external failure behavior
        - Register those unresolved matters as Pending Functional Validation and record the evidence
          needed; absence of legacy evidence is not evidence that behavior is unnecessary
@@ -177,7 +177,7 @@ Given that feature description, do this:
       - [ ] Applicable legislation and official SRI sources are cited with versions
       - [ ] Legacy evidence is referenced only as historical evidence
       - [ ] Source conflicts and Pending Functional Validation items are explicitly recorded
-      - [ ] Company master-data authority and immutable document snapshot boundaries are explicit when applicable
+      - [ ] Company header, no-Company-dependency, master-data, and draft-time snapshot boundaries are explicit when applicable
       - [ ] Target terminology is English and consistent with the terminology mapping
       - [ ] Requirements are testable and unambiguous
       - [ ] Success criteria are measurable
@@ -333,9 +333,9 @@ When creating this spec from a user prompt:
 **Examples of decisions that are NOT reasonable defaults in this project**:
 
 - Data retention or deletion for tax documents, certificates, tokens, or fiscal payloads
-- Authentication or authorization behavior beyond the constitutional Keycloak/OIDC baseline
-- Tenant, issuer, certificate, or tax-document ownership derivation
-- Company master-data authority, document fiscal-snapshot contents, or permission to cache or replicate Company data
+- Any authentication, authorization, identity, token, role, permission, or service-security behavior
+- Company-context placement, Company, issuer, certificate, or tax-document ownership derivation
+- Company lookup dependencies, master-data authority, fiscal-snapshot timing or contents, or permission to cache or replicate Company data
 - Official SRI algorithm, catalog, XML, signature, status, or rounding behavior
 - Retry, idempotency, timeout, or reconciliation semantics for external fiscal operations
 - Preservation of a legacy route, payload, response, table, status, or operational behavior

@@ -25,9 +25,10 @@
 
 **Schema Migration**: Flyway only
 
-**Authentication**: Keycloak through OIDC [realm/client assumptions and validated claims]
+**Caller Security**: None inside this repository. [Confirm that authentication, authorization,
+tokens, principals, roles, permissions, and service authentication remain out of scope.]
 
-**Testing**: [test libraries plus applicable domain, use-case, authorization, persistence,
+**Testing**: [test libraries plus applicable domain, use-case, Company-header/scoping, persistence,
 migration, API, SRI, XML, signature, monetary, resilience, security, JVM, and native evidence]
 
 **Target Execution**: JVM execution MUST be supported on [target platform]
@@ -35,19 +36,20 @@ migration, API, SRI, XML, signature, monetary, resilience, security, JVM, and na
 **Native Compatibility**: [claimed, deferred, unsupported, or not applicable; reference the
 evidence table below]
 
-**External Integrations**: [SRI SOAP/XML, Keycloak, certificate, storage, rendering,
+**External Integrations**: [SRI SOAP/XML, certificate, storage, rendering,
 notification, or other adapters in scope]
 
-**Company Context Ownership**: [Company bounded-context source, external Company identifier,
-document-owned immutable fiscal snapshot, and explicit absence of local Company master data,
-shared persistence, cache, or replication]
+**Company Context Boundary**: [How `X-Company-Id` is validated and mapped to an opaque immutable
+Company UUID; confirm absence of Company lookup, Company client/port, authentication,
+authorization, local Company master data, cache, replication, shared persistence, and draft-time
+fiscal snapshots]
 
 **Performance Goals**: [measurable latency, throughput, concurrency, and resource targets]
 
 **Constraints**: [timeouts, payload limits, executor bounds, retention, availability, and other
 measurable limits]
 
-**Scale/Scope**: [tenant, issuer, document, request, and data-volume assumptions]
+**Scale/Scope**: [Company, document, request, and data-volume assumptions]
 
 **Sensitive Data**: [sensitive values in scope and their approved storage, redaction, retention,
 and deletion controls]
@@ -87,11 +89,11 @@ design. A deviation requires recorded approval under the constitution before imp
 | Language: target names are English and terminology mapping decisions are respected | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Baseline: required technologies are fixed; Quarkus version research is identified pre-research and resolved with justification post-design | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Architecture: `api`, `application`, `domain`, and `infrastructure` dependencies and mappings comply | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
-| Domain purity: no framework, transport, persistence, JSON, OIDC, or Mutiny types in `domain` | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Domain purity: no framework, transport, persistence, JSON, security, or Mutiny types in `domain` | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Reactive safety: every blocking or CPU-intensive operation is isolated, bounded, timed out, and testable | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Fiscal correctness: official rules, `BigDecimal` policies, time semantics, and invalid-data behavior are explicit | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
-| Security: deny-by-default authorization, token validation, ownership enforcement, and cross-tenant tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
-| Company boundary: Company master data remains externally owned; documents store only the external Company ownership identifier and immutable fiscal snapshots; no shared persistence, cache, or replication exists | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Internal caller boundary: no authentication, authorization, identity, token, security scheme, `401`, or `403` behavior is introduced | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Company boundary: Company context is the mandatory single `X-Company-Id` UUID header; owned-resource paths exclude Company; the service stores the immutable external UUID but performs no Company lookup and creates no draft-time fiscal snapshot, shared persistence, cache, or replication | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Boundary consistency: states, retries, idempotency, duplicates, timeouts, recovery, reconciliation, and terminal outcomes are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
@@ -113,27 +115,25 @@ non-blocking.
 
 Reactive wrappers MUST NOT be accepted as evidence that an underlying operation is non-blocking.
 
-## Security and Ownership Design
+## Company Context and Sensitive-Data Design
 
-**Protected and Public Operations**: [List protected operations and explicitly justified public
-operations.]
+**Internal Caller Boundary**: [Confirm that the service does not authenticate or authorize callers,
+interpret identity, or define security schemes, Authorization headers, `401`, or `403` responses.]
 
-**Token Validation**: [Signature, issuer, audience, expiration, authorized party, and scope/role
-rules that apply.]
+**Company Header Contract**: [Presence, single-value cardinality, UUID syntax, non-nil validation,
+canonicalization, stable errors, and prohibition from resource paths, query strings, bodies,
+tokens, or sessions.]
 
-**Effective Authorization Scope**: [How tenant, company, issuer, emission point, certificate, and
-document ownership are derived and applied to every query and mutation.]
+**Company Ownership Scoping**: [How the application-level Company identifier scopes every owned
+query, mutation, child relationship, and idempotency lookup without being described as caller
+authorization or security isolation.]
 
-**Company Master-Data Boundary**: [How current Company/Issuer/establishment/emission-point data is
-resolved through an application port; how only the external Company identifier is used as the
-document ownership reference; which immutable fiscal snapshot fields the document owns; and how
-shared databases, cross-service foreign keys/repositories/transactions, Company caches, and
-background replication are excluded.]
-
-**Cross-Tenant Evidence**: [Required denial scenarios and test locations.]
+**Company Master-Data Boundary**: [Confirm no Company/Issuer/establishment/emission-point lookup,
+port, client, repository, table, cache, replication, shared persistence, cross-service foreign key
+or transaction, readiness dependency, or draft-time fiscal snapshot.]
 
 **Sensitive Data and Certificate Lifecycle**: [Storage, encryption, rotation, expiration,
-revocation, deletion, backup, tenant ownership, redaction, and fail-closed behavior applicable to
+revocation, deletion, backup, Company ownership, redaction, and fail-closed behavior applicable to
 this feature.]
 
 ## Data and External Consistency Design
@@ -143,7 +143,7 @@ transaction is atomic with an external operation.
 
 | Boundary or logical command | Intermediate states | Retry and idempotency | Duplicate handling | Timeout | Failure recovery and reconciliation | Observable terminal outcomes |
 |-----------------------------|---------------------|-----------------------|--------------------|---------|-------------------------------------|------------------------------|
-| [boundary/command] | [states] | [rules and stable key] | [rules] | [limit/outcome] | [procedure] | [states visible to authorized caller/operator] |
+| [boundary/command] | [states] | [rules and stable key] | [rules] | [limit/outcome] | [procedure] | [caller-visible states] |
 
 ## Native Compatibility Evaluation
 

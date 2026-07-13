@@ -31,10 +31,11 @@ independently testable increment of the single bounded feature outcome.
   documented risk identifier in its description.
 - All target names, paths, comments, fixtures, and documentation MUST use approved English
   terminology.
-- A Company-dependent feature MUST include tasks for application-port context resolution,
-  immutable document fiscal snapshots, and boundary tests. It MUST NOT include Company master-data
-  CRUD, local Company tables, cross-service foreign keys/repositories/transactions, Company caches,
-  or background Company-data replication.
+- A Company-scoped API feature MUST include tasks for the `X-Company-Id` header contract,
+  application-level Company UUID mapping, ownership/idempotency scoping, and boundary tests. It
+  MUST NOT include Company lookup ports or clients, authentication or authorization, Company
+  master-data CRUD or tables, cross-service foreign keys/repositories/transactions, Company caches,
+  background replication, or draft-time fiscal snapshots.
 
 ## Path Conventions
 
@@ -77,13 +78,13 @@ src/test/resources/
 
 - [ ] T006 Configure Flyway as the only schema evolution mechanism in `src/main/resources/application.properties`
 - [ ] T007 Create the first repeatable target migration in `src/main/resources/db/migration/[version]__[english_description].sql`
-- [ ] T008 [P] Configure Keycloak OIDC authentication defaults in `src/main/resources/application.properties`
+- [ ] T008 [P] Define the mandatory `X-Company-Id` request-header contract in `src/main/java/com/alexastudillo/taxdocument/api/company/[CompanyContextHeader].java`
 - [ ] T009 [P] Define the stable target error contract in `src/main/java/com/alexastudillo/taxdocument/api/error/[ErrorContract].java`
 - [ ] T010 [P] Implement correlation propagation in `src/main/java/com/alexastudillo/taxdocument/api/observability/[CorrelationFilter].java`
 - [ ] T011 [P] Define distinct liveness and readiness behavior in `src/main/java/com/alexastudillo/taxdocument/infrastructure/health/[HealthChecks].java`
 - [ ] T012 Create PostgreSQL and Flyway integration-test support in `src/test/java/com/alexastudillo/taxdocument/infrastructure/persistence/[DatabaseTestSupport].java`
 
-**Checkpoint**: The architectural, migration, authentication, error, correlation, health, and test
+**Checkpoint**: The architectural, migration, Company-context, error, correlation, health, and test
 foundations required by the approved plan are ready.
 
 ---
@@ -99,7 +100,7 @@ foundations required by the approved plan are ready.
 Include every applicable category from the plan. These examples are not a fixed test list.
 
 - [ ] T013 [P] [US1] Add pure domain tests for [FR/DR IDs] in `src/test/java/com/alexastudillo/taxdocument/domain/[capability]/[DomainType]Test.java`
-- [ ] T014 [P] [US1] Add application authorization and tenant-isolation tests for [FR IDs] in `src/test/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase]Test.java`
+- [ ] T014 [P] [US1] Add Company-header and ownership-scoping tests for [FR IDs] in `src/test/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase]Test.java`
 - [ ] T015 [P] [US1] Add PostgreSQL persistence and Flyway invariant tests for [FR IDs] in `src/test/java/com/alexastudillo/taxdocument/infrastructure/persistence/[RepositoryAdapter]Test.java`
 - [ ] T016 [P] [US1] Add API contract and safe-error tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/api/[capability]/[Resource]Test.java`
 - [ ] T017 [P] [US1] Add external-adapter timeout, retry, idempotency, and reconciliation tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/infrastructure/[adapter]/[Adapter]Test.java`
@@ -109,14 +110,14 @@ Include every applicable category from the plan. These examples are not a fixed 
 
 - [ ] T019 [P] [US1] Implement synchronous domain behavior for [FR/DR IDs] in `src/main/java/com/alexastudillo/taxdocument/domain/[capability]/[DomainType].java`
 - [ ] T020 [P] [US1] Define the outbound application port for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/port/[Port].java`
-- [ ] T021 [US1] Implement the authorized application use case for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase].java`
+- [ ] T021 [US1] Implement the Company-scoped application use case for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/application/[capability]/[UseCase].java`
 - [ ] T022 [P] [US1] Implement the explicit API DTO mappings for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/api/[capability]/[Mapper].java`
 - [ ] T023 [P] [US1] Implement the Panache persistence model and domain mapping for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/infrastructure/persistence/[capability]/[PersistenceModel].java`
 - [ ] T024 [US1] Implement the outbound infrastructure adapter with approved timeouts and bounds for [FR IDs] in `src/main/java/com/alexastudillo/taxdocument/infrastructure/[adapter]/[Adapter].java`
 - [ ] T025 [US1] Expose the target-first operation and correlation-safe errors for [FR/SC IDs] in `src/main/java/com/alexastudillo/taxdocument/api/[capability]/[Resource].java`
 
-**Checkpoint**: User Story 1 satisfies its acceptance scenarios and applicable failure, security,
-tenant-isolation, persistence, integration, and observability evidence independently.
+**Checkpoint**: User Story 1 satisfies its acceptance scenarios and applicable failure,
+Company-scoping, persistence, integration, and observability evidence independently.
 
 ---
 
@@ -129,7 +130,7 @@ tenant-isolation, persistence, integration, and observability evidence independe
 ### Required Evidence for User Story 2
 
 - [ ] T026 [P] [US2] Add applicable domain and use-case tests for [FR/DR IDs] in `src/test/java/com/alexastudillo/taxdocument/[boundary]/[capability]/[Test].java`
-- [ ] T027 [P] [US2] Add applicable API, persistence, authorization, and adapter tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/[boundary]/[capability]/[Test].java`
+- [ ] T027 [P] [US2] Add applicable API, persistence, Company-scoping, and adapter tests for [FR/SC IDs] in `src/test/java/com/alexastudillo/taxdocument/[boundary]/[capability]/[Test].java`
 
 ### Production Implementation for User Story 2
 
@@ -197,23 +198,25 @@ production tasks and MUST use exact paths and requirement references.]
 
 1. Complete Setup and Foundational Controls.
 2. Complete all required evidence and production tasks for User Story 1.
-3. Validate User Story 1 independently, including failure and authorization boundaries.
+3. Validate User Story 1 independently, including failure and Company-context boundaries.
 4. Verify JVM execution and update the plan with evidence.
 5. Add later stories only after the MVP remains compliant and independently valuable.
 
 ### Incremental Delivery
 
-Each increment MUST preserve prior acceptance scenarios, database evolution, tenant isolation,
+Each increment MUST preserve prior acceptance scenarios, database evolution, Company scoping,
 idempotency, sensitive-data controls, and observable terminal outcomes. A later story MUST NOT be
 required to make an earlier story safe or testable.
 
 ## Notes
 
 - Historical files under `docs/legacy/` MUST NOT be edited.
-- Company master data MUST remain in the Company bounded context; tax-document tasks MAY persist
-  only the external Company ownership identifier and immutable document fiscal snapshots.
-- Tasks MUST NOT introduce shared Company persistence, cross-service foreign keys, Company
-  repositories, Company caches, or background Company-data replication.
+- Company master data remains outside this bounded context. Draft tasks MAY persist only the
+  immutable external Company UUID supplied by `X-Company-Id`; draft creation MUST NOT create a
+  Company or fiscal snapshot.
+- Tasks MUST NOT introduce authentication, authorization, Company Service calls, shared Company
+  persistence, cross-service foreign keys, Company repositories, Company caches, or Company-data
+  replication.
 - Panache persistence models MUST NOT become domain or transport models.
 - Blocking and CPU-intensive adapter work MUST use the plan's bounded execution context.
 - Retries MUST preserve the logical fiscal operation, access key, sequence, and persisted document.
