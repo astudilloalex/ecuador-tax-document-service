@@ -4,11 +4,14 @@
 
 **Created**: 2026-07-12
 
-**Status**: Draft — reference data is approved; task generation remains blocked only because
-Constitution v2.0.0 is not yet present on local `main` or `origin/main`
+**Status**: Approved for Task Generation
 
 **Input**: User description: "Create and persist a complete Company-scoped electronic invoice draft
 for review before any fiscal identifier allocation or SRI interaction."
+
+**Approval Note**: Constitution v2.0.0 is approved on `main` and `origin/main`; the requirements
+checklist is complete; the reference-data baseline is approved; no material Pending Functional
+Validation remains; and this feature may proceed to task generation.
 
 ## Clarifications
 

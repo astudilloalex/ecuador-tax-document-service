@@ -4,8 +4,7 @@
 **Date**: 2026-07-12
 **Constitution**: v2.0.0
 **Status**: Complete — official evidence and target mappings are approved in
-`reference-data-baseline.md`; the separate Constitution-on-main governance gate remains outside
-this research status
+`reference-data-baseline.md`, and no material research Pending Functional Validation remains
 
 ## 1. Runtime and Framework Baseline
 

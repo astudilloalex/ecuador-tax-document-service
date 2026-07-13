@@ -5,6 +5,9 @@ traceability before task generation
 
 **Created**: 2026-07-12
 
+**Regenerated**: 2026-07-13 against Constitution v2.0.0 and the reconciled specification, plan,
+contract, reference baseline, data model, and supporting design artifacts
+
 **Feature**: [`spec.md`](../spec.md) and [`plan.md`](../plan.md)
 
 **Audience/Timing**: Owner and peer reviewer; formal pre-task gate
@@ -17,8 +20,9 @@ not assert that code, migrations, or runtime evidence already exist.
 
 - [x] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
   feature task generation? [Dependency, Governance]
-  - Evidence: `plan.md` §Constitution Check records local `main` and `origin/main` at v1.0.0;
-    `.specify/memory/constitution.md` on `6-ft-1` is v2.0.0.
+  - Evidence: authoritative `main` and `origin/main` commit
+    `137d1c8c59cc98402f0a1fed211a6caccad4c883` contains `.specify/memory/constitution.md` v2.0.0;
+    `spec.md` is Approved for Task Generation; `plan.md` §Constitution Check records PASS.
 - [x] CHK002 Is the source-authority order applied and are official facts distinguished from
   target-service decisions? [Consistency, Evidence]
   - Evidence: `spec.md` §Authority and Evidence/Source Conflicts;
@@ -233,9 +237,9 @@ not assert that code, migrations, or runtime evidence already exist.
 ## Gate Result
 
 - Total items: 48
-- Checked items: 47
-- Unchecked items: 1
-- Remaining material item: CHK001 — Constitution v2.0.0 is not yet approved on `main`.
+- Checked items: 48
+- Unchecked items: 0
+- Remaining material items: 0
 
-The checklist MUST NOT be fully checked until the owner merges Constitution v2.0.0 to `main` and
-rebases `6-ft-1`. No other material requirements-quality gap is recorded.
+**Result**: PASS — every item was re-evaluated against current objective evidence; no material
+requirements-quality gap or task-generation prohibition remains.

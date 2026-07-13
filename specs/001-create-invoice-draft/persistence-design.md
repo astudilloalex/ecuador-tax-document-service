@@ -206,5 +206,5 @@ Liveness remains independent of PostgreSQL availability.
 The reference-data planning gate is complete. `reference-data-baseline.md` separates official
 facts from target decisions, publishes UUIDv5 namespace
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`, and approves every initial row. Flyway remains the sole
-future schema/seed owner. Task generation is still governed by the independent Constitution-on-main
-gate recorded in `plan.md`.
+future schema/seed owner. Constitution v2.0.0 is approved on `main`, the reconciled plan passes its
+Constitution Check, and no persistence-design blocker remains for pre-task checklist evaluation.

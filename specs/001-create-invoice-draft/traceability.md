@@ -5,8 +5,8 @@ design evidence and an observable verification target. It does not create implem
 
 **Reference-data status**: Complete. `reference-data-baseline.md` approves 5 buyer rows, 6 IVA
 rows, and 8 payment rows under `SRI-OFFLINE-2.32-TARGET-1`, using deterministic UUIDv5 namespace
-`32576bbf-b70d-5c24-98ff-d5f9b48e8826`. The independent Constitution-on-main gate remains blocked
-as recorded in `plan.md`.
+`32576bbf-b70d-5c24-98ff-d5f9b48e8826`. Constitution v2.0.0 is approved on `main`, and the
+reconciled specification and plan contain no active governance blocker.
 
 ## Functional Requirements
 
