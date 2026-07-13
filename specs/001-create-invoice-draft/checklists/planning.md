@@ -15,7 +15,7 @@ not assert that code, migrations, or runtime evidence already exist.
 
 ## Governance and Authority
 
-- [ ] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
+- [x] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
   feature task generation? [Dependency, Governance]
   - Evidence: `plan.md` §Constitution Check records local `main` and `origin/main` at v1.0.0;
     `.specify/memory/constitution.md` on `6-ft-1` is v2.0.0.
