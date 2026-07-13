@@ -21,7 +21,9 @@ paths:
       description: >-
         Requires the Keycloak client role billing_operator. The company path value is untrusted
         until authoritative Company authorization succeeds. The request must contain commercial
-        inputs only; calculated values, tax codes, and tax rates are rejected.
+        inputs only; calculated values, tax codes, and tax rates are rejected. The Company bounded
+        context remains the current master-data authority; this operation persists only the
+        external Company ownership identifier and immutable document fiscal evidence.
       parameters:
         - $ref: '#/components/parameters/CompanyId'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -291,6 +293,7 @@ components:
         companyId:
           type: string
           format: uuid
+          description: Sole external Company ownership reference for this document.
         issuer:
           $ref: '#/components/schemas/IssuerSnapshot'
         emissionPoint:
@@ -344,6 +347,9 @@ components:
     IssuerSnapshot:
       type: object
       additionalProperties: false
+      description: >-
+        Immutable document-owned historical evidence captured at creation; not current Company
+        master data and never refreshed during replay.
       required: [issuerId, ruc, legalName, headOfficeAddress, accountingRequired, contextVersion]
       properties:
         issuerId:
@@ -379,6 +385,9 @@ components:
     EmissionPointSnapshot:
       type: object
       additionalProperties: false
+      description: >-
+        Immutable document-owned establishment and emission-point evidence captured at creation;
+        not a local master-data representation.
       required: [emissionPointId, establishmentCode, emissionPointCode, establishmentAddress]
       properties:
         emissionPointId:

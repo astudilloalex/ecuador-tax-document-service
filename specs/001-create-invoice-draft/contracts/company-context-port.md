@@ -9,6 +9,10 @@ Company/Issuer/emission-point combination before any local draft transaction beg
 results separate allows an authorized replay to return its immutable original draft even when
 Issuer or emission-point data changed after creation.
 
+The Company bounded context is the sole source of truth for current Company, Issuer,
+establishment, and emission-point master data. This contract transfers a request-bounded fiscal
+context; it does not transfer master-data ownership to the Tax Document Service.
+
 ## Application Port
 
 The application boundary is transport-independent and conceptually exposes:
@@ -39,6 +43,11 @@ resolveAuthorizedInvoiceContext(
 The port MUST NOT expose whether an inaccessible Company, Issuer, or emission point exists. It MUST
 NOT persist, cache, or become authoritative for company data. It MUST NOT create an invoice
 idempotency binding.
+
+The adapter and provider MUST NOT share a database, schema, repository, persistence entity,
+cross-service foreign key, or database transaction. No response may be written to a Company cache,
+replica table, materialized view, or background synchronization stream. Only an eligible new
+creation copies the approved fields into the document-owned immutable fiscal snapshot.
 
 ## Required Authorization Scope
 
@@ -83,6 +92,8 @@ The application MUST first use the authorization scope to check an existing loca
 binding exists, it compares normalized command content and returns the original draft or an
 idempotency conflict without requiring `Eligible` and without revalidating mutable creation data.
 If no binding exists, `Eligible` is mandatory before fiscal/catalog validation and persistence.
+The replay response uses the original persisted document snapshot and MUST NOT replace it with
+fields from this response.
 
 ## Selected REST Adapter Contract
 

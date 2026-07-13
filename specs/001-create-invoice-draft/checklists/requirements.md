@@ -21,6 +21,7 @@
 - [x] Applicable legislation and official SRI sources are cited with versions
 - [x] Legacy evidence is referenced only as historical evidence
 - [x] Source conflicts and Pending Functional Validation items are explicitly recorded
+- [x] Company master-data authority and immutable document snapshot boundaries are explicit
 - [x] Target terminology is English and consistent with the terminology mapping
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
@@ -39,11 +40,6 @@
 
 ## Notes
 
-- After two specification refinement and validation passes, 20 of 22 items pass.
-- The requirements are intentionally not marked fully unambiguous while PFV-001 through PFV-008
-  remain unresolved. These items cover fiscal rounding, emission-date range, identification
-  authority, tax cardinality, zero-value behavior, duplicate commands, size limits, and attempted
-  client-calculated values.
-- Functional acceptance coverage remains incomplete for the same PFV decisions. Run
-  `$speckit-clarify` before `$speckit-plan`; checklist items MUST NOT be marked complete merely to
-  unblock planning.
+- After clarification and the Constitution v1.1.0 ownership amendment, 23 of 23 items pass.
+- Fiscal, date, identification, tax, zero-value, idempotency, size, calculated-field, and Company
+  master-data ownership ambiguities are resolved in the specification.

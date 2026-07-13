@@ -58,9 +58,10 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 2. **Analysis gate**: Establish that `$speckit-analyze` ran against the current versions of
    `spec.md`, `plan.md`, and `tasks.md`. If it did not run, or any critical fiscal correctness,
-   security, tenant-isolation, data-loss, idempotency, external-contract, certificate-management,
-   or database-evolution finding remains unresolved, STOP and instruct the user to resolve the
-   findings and rerun `$speckit-analyze`. A user override MUST NOT bypass this constitutional gate.
+   security, tenant-isolation, Company-master-data ownership, fiscal-snapshot boundary, data-loss,
+   idempotency, external-contract, certificate-management, or database-evolution finding remains
+   unresolved, STOP and instruct the user to resolve the findings and rerun `$speckit-analyze`. A
+   user override MUST NOT bypass this constitutional gate.
 
 3. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
    - Scan all checklist files in the checklists/ directory
@@ -183,7 +184,8 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Confirm the implementation follows the technical plan
    - Re-run the plan's final constitution and Definition of Done review
    - Verify empty-database Flyway migration, JVM execution, tenant isolation, failure/retry
-     behavior, terminology/documentation updates, native evidence status, and sensitive-data safety
+     behavior, Company master-data boundary and immutable fiscal snapshots,
+     terminology/documentation updates, native evidence status, and sensitive-data safety
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit-tasks` first to regenerate the task list.
 

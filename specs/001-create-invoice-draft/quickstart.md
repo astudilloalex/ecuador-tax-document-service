@@ -174,6 +174,11 @@ After the first commit, change a mutable Issuer or emission-point attribute in t
 while preserving the caller's current Company access. The equivalent retry must still return the
 original persisted snapshot. Revoking current Company access must instead conceal the replay.
 
+Persistence and architecture evidence must also show that the draft stores only the external
+Company identifier as its ownership reference; the tenant scope remains outside the draft
+aggregate; and no Company master-data table, cross-service foreign key/repository/transaction,
+cache, materialized view, or background replication exists.
+
 The committed-concurrency test must send equivalent requests simultaneously and prove one `201`,
 replay outcomes resolving to the same draft, and exactly one aggregate in PostgreSQL.
 

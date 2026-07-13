@@ -76,6 +76,8 @@ without creating an issued electronic invoice or triggering any fiscal side effe
   identification, monetary boundaries, and payment reconciliation before persistence.
 - Persist the complete draft with internal status `DRAFT` and return its captured and calculated
   information, identifier, and timestamps.
+- Resolve current Company fiscal context from the Company bounded context and preserve the exact
+  Issuer, establishment, and emission-point values used as immutable draft evidence.
 
 ### Exclusions and Non-Goals
 
@@ -96,6 +98,8 @@ without creating an issued electronic invoice or triggering any fiscal side effe
 - Applying a deemed taxable base or special gratuitous-transfer treatment not defined by this
   specification.
 - Managing loyalty-point balances, authorizing point redemption, or validating loyalty accounts.
+- Owning, administering, searching, exposing, caching, or replicating current Company, Issuer,
+  establishment, or emission-point master data.
 - Preserving any legacy NestJS route, payload, response, table, status, authentication mechanism,
   asynchronous behavior, or operational behavior.
 - Defining the later transition from `DRAFT` to a fiscally issued document.
@@ -106,7 +110,7 @@ without creating an issued electronic invoice or triggering any fiscal side effe
 |-----------|-------------------------|---------------------------|
 | Applicable Ecuadorian legislation | [Regulation for Sales, Withholding, and Complementary Documents, SRI consolidated copy dated 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf), together with [later amendments listed by the SRI](https://www.sri.gob.ec/facturacion-electronica) | Establishes invoices as sales documents and governs issuer responsibility and required invoice information. This feature creates only an internal pre-issuance draft. |
 | Official SRI technical documentation | [Electronic Tax Documents Offline Scheme Technical Sheet v2.32, updated 2025-10-08](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/29562323-2e76-42f5-abb6-cb7ac542c3c6/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.32.pdf) and the [SRI electronic invoicing page](https://www.sri.gob.ec/facturacion-electronica), which lists invoice XSD/XML versions 1.0.0 through 2.1.0 updated in 2022-02 | Governs official catalogs, invoice fields, tax and payment representations, and the later generation/authorization process. XML generation and XSD selection are excluded here. |
-| Project constitution | `.specify/memory/constitution.md` v1.0.0 | Governs authority, target-first scope, terminology, fiscal arithmetic, tenant isolation, atomic persistence, testing, and workflow. |
+| Project constitution | `.specify/memory/constitution.md` v1.1.0 | Governs authority, target-first scope, terminology, fiscal arithmetic, tenant isolation, Company master-data ownership, immutable document snapshots, atomic persistence, testing, and workflow. |
 | Approved target requirements | This specification and its future clarification session | Governs the internal `DRAFT` behavior and the explicit absence of fiscal side effects. |
 | Legacy evidence | `docs/legacy/as-is/04-data-model.md`; `docs/legacy/as-is/05-business-rules.md`; `docs/legacy/as-is/06-validation-rules.md`; `docs/legacy/as-is/07-process-flows.md`; `docs/legacy/as-is/10-security-access-control.md`; `docs/legacy/as-is/14-pending-functional-validation.md` | Supplies historical scenarios for invoice graphs, calculations, validation gaps, persistence, side effects, and tenant risks. It is not target authority. |
 
@@ -127,8 +131,9 @@ without creating an issued electronic invoice or triggering any fiscal side effe
   electronic document.
 
 **Terminology Mapping**: The approved terms `Invoice Draft`, `Invoice`, `Company`, `Issuer`,
-`Emission Point`, `Buyer`, `Invoice Line`, `Tax Category`, `Tax Rate`, `Tax Rule`, `Payment Method`,
-`Payment`, `Additional Information`, and `Idempotency Key` are recorded in
+`Establishment`, `Emission Point`, `Fiscal Context Snapshot`, `Buyer`, `Invoice Line`, `Tax
+Category`, `Tax Rate`, `Tax Rule`, `Payment Method`, `Payment`, `Additional Information`, and
+`Idempotency Key` are recorded in
 `docs/migration/terminology-mapping.md`. Exact official terms such as `RUC`, SRI catalog codes,
 `Access Key`, and `Official Sequential Number` retain their mapped scope.
 
@@ -274,6 +279,17 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 40. **Given** a line supplies a tax code or rate instead of selecting the applicable effective tax
     rule, **when** draft creation is attempted, **then** the request is rejected and no draft or
     child data is persisted.
+41. **Given** a valid logically new command, **when** the Company bounded context supplies the
+    current authorized fiscal context, **then** the draft uses the external Company identifier as
+    its ownership reference and preserves the exact Issuer, establishment, and emission-point
+    values used as immutable fiscal evidence.
+42. **Given** an existing committed draft and unchanged equivalent command content, **when** current
+    Company, Issuer, establishment, or emission-point master data has changed but the caller remains
+    authorized, **then** the replay returns the original persisted fiscal snapshot without updating
+    it from current master data.
+43. **Given** draft creation requires Company fiscal context, **when** the feature boundary is
+    reviewed, **then** the Tax Document Service exposes no Company master-data administration or
+    search capability and maintains no Company master-data replica or cache.
 
 ### Edge Cases
 
@@ -311,6 +327,9 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - A retry of a committed command MUST still enforce current caller authorization, MUST NOT expose a
   draft outside the authorized company and tenant scope, and MUST NOT repeat creation even if
   mutable company information has changed.
+- Current Company, Issuer, establishment, and emission-point data MUST remain externally owned.
+  Creation MUST preserve only the external Company ownership identifier plus the immutable fiscal
+  snapshot actually used; replay MUST return that snapshot without refreshing it.
 - A successful idempotency binding MUST NOT expire because a time interval elapsed while its draft
   still exists.
 - A Company with no Issuer or more than one Issuer violates the required cardinality and MUST NOT
@@ -457,6 +476,19 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   MUST be removed from every caller-supplied text value before validation, persistence, and
   idempotency-equivalence evaluation. A required or supplied optional text value that is blank after
   trimming, or any text containing a control character, MUST be rejected without persistence.
+- **FR-036**: The Company bounded context MUST remain the sole source of truth for Company master
+  data, current Company state, Issuer fiscal configuration, establishments, and emission points.
+  Draft creation MUST resolve the current authorized fiscal context through the approved
+  application boundary.
+- **FR-037**: An invoice draft MUST use only the external Company identifier as its document
+  ownership reference. It MUST preserve an immutable document-owned fiscal snapshot of the Issuer,
+  establishment, and emission-point information actually used for creation. That snapshot MUST NOT
+  be treated or exposed as current Company master data and MUST NOT change when the external master
+  data changes.
+- **FR-038**: The Tax Document Service MUST NOT own, administer, replicate, cache, or expose Company
+  master data and MUST NOT share persistence, repositories, cross-service foreign keys, or database
+  transactions with the Company service. Existing committed drafts and idempotent replays MUST use
+  their persisted fiscal snapshot rather than refresh it from current Company data.
 
 ### Domain Rules and Invariants
 
@@ -527,20 +559,29 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **DR-021**: Invoice-line order is part of a creation command's normalized business content.
   Payment and additional-information collections are order-insensitive for idempotency equivalence.
 - **DR-022**: Payments MUST be unique by payment-method identity within one draft.
+- **DR-023**: A tenant identifier used to authorize a command or scope an idempotency binding MUST
+  NOT become a tax-document aggregate ownership reference. Issuer, establishment, or emission-point
+  identifiers inside the immutable fiscal snapshot are historical evidence and MUST NOT be treated
+  as locally owned master-data identifiers.
 
 ### Key Entities
 
-- **Invoice Draft**: Internal pre-issuance record identified by a unique draft identifier, owned by
-  one company, its tenant where applicable, and one issuer, fixed to USD and `DRAFT`, and containing
-  captured commercial inputs, calculated totals, and audit timestamps. It has no official fiscal
-  identity.
+- **Invoice Draft**: Internal pre-issuance record identified by a unique draft identifier and owned
+  through one external Company identifier. It is fixed to USD and `DRAFT`, contains captured
+  commercial inputs, calculated totals, audit timestamps, and an immutable fiscal-context snapshot,
+  and has no official fiscal identity.
 - **Company**: Effective legal entity for which the draft is created. It exists within an
-  authorization boundary, MAY itself be the tenant boundary or belong to a broader tenant, and has
-  exactly one Issuer fiscal profile.
-- **Issuer**: The single active fiscal profile belonging to exactly one Company. Its registered
-  fiscal data is authoritative for the draft and cannot be overridden by the operator.
-- **Emission Point**: Active point belonging to the selected issuer and intended for later fiscal
-  issuance without reserving a sequence during draft creation.
+  authorization boundary, MAY itself be the tenant boundary or belong to a broader tenant, and is
+  externally owned by the Company bounded context. Only its external identifier is a draft
+  ownership reference.
+- **Issuer**: Externally owned single active fiscal profile belonging to exactly one Company. Its
+  current registered fiscal data is authoritative at creation and cannot be overridden by the
+  operator.
+- **Emission Point**: Externally owned active point belonging to the selected issuer and intended
+  for later fiscal issuance without reserving a sequence during draft creation.
+- **Fiscal Context Snapshot**: Immutable, document-owned historical evidence containing the Issuer,
+  establishment, and emission-point information actually used to create the draft. It is not
+  current Company master data and is never refreshed after commit.
 - **Buyer**: Named recipient with an active identification type, validated identification value,
   and optional contact information. Final consumer is the exact SRI-defined special identity and
   name rather than a registry-verified person.
@@ -622,6 +663,12 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
 - **SC-021**: Every accepted line derives its tax code and rate from its selected effective catalog
   rule, and every request supplying a line tax code or rate is rejected without persisted draft
   data.
+- **SC-022**: Every accepted draft contains exactly one external Company ownership identifier and
+  one immutable fiscal snapshot of the Issuer, establishment, and emission point used at creation;
+  it contains no alternative tenant or Issuer document ownership reference.
+- **SC-023**: Every authorized equivalent replay returns the original persisted fiscal snapshot
+  after current Company master data changes and performs zero snapshot updates or Company
+  master-data replication.
 
 ## Assumptions and Dependencies
 
@@ -638,9 +685,11 @@ access-key, XML, certificate, notification, and SRI evidence remain absent.
   and the authorized effective company and tenant scope without trusting request-only identifiers.
 - **Dependency**: The company capability must provide authoritative company existence, active
   status, tenant ownership, caller-access decisions, and the single Company-to-Issuer association;
-  invoice-draft idempotency remains owned by this feature.
-- **Dependency**: Registered issuer and emission-point capabilities must provide company and tenant
-  ownership, hierarchy, active state, and authoritative issuer fiscal information.
+  invoice-draft idempotency remains owned by this feature. The Company bounded context remains the
+  sole owner of current Company, Issuer, establishment, and emission-point master data.
+- **Dependency**: The Company fiscal-context capability must provide Company and tenant ownership,
+  Issuer and emission-point hierarchy, active state, and authoritative fiscal information through
+  the approved application boundary without shared persistence or replication.
 - **Dependency**: Versioned identification, tax-category, tax-rule, and payment-method catalogs must
   provide active/effective reference data aligned with the official sources cited above.
 - **Dependency**: `docs/migration/terminology-mapping.md` is authoritative for the English target

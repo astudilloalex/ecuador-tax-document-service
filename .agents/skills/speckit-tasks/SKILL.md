@@ -84,6 +84,9 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Phase 3+: One phase per user story (in priority order from spec.md)
    - Each phase includes: story goal, independent test criteria, every constitutionally applicable
      test category, and implementation tasks
+   - For every Company-dependent story, include tasks for application-port current-context
+     resolution, immutable document fiscal snapshots, and boundary evidence; never generate tasks
+     for local Company master-data ownership, shared persistence, caching, or replication
    - Final Phase: Definition of Done validation and cross-cutting concerns
    - All tasks must follow the strict checklist format (see Task Generation Rules below)
    - Clear file paths for each task
@@ -206,6 +209,8 @@ Every task MUST strictly follow this format:
    - Shared infrastructure → Setup phase (Phase 1)
    - Foundational/blocking tasks → Foundational phase (Phase 2)
    - Story-specific setup → within that story's phase
+   - Company context → outbound application port and infrastructure adapter only; no Company table,
+     cross-service foreign key/repository/transaction, cache, or replication task
 
 ### Phase Structure
 

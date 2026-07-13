@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-12
 
-**Authority**: `.specify/memory/constitution.md` v1.0.0
+**Authority**: `.specify/memory/constitution.md` v1.1.0
 
 This file is the canonical mapping from historical or official source terminology to target
 English terminology. A target name in this table is approved only for the scope described in its
@@ -16,11 +16,13 @@ otherwise.
 | `factura` | Invoice | Target Domain | The commercial and fiscal invoice concept; this does not imply a legacy API or database contract. |
 | `borrador de factura` | Invoice Draft | Target Domain | An internal, pre-issuance record with no official fiscal identifier or SRI status. |
 | `comprobante` | Tax Document | Target Domain | Generic target concept for a document governed by Ecuadorian tax rules. |
-| `empresa` | Company | Target Domain | Authorized legal entity within a tenant boundary or acting as that boundary; it has exactly one Issuer fiscal profile. |
-| `emisor` | Issuer | Target Domain | The single authoritative fiscal profile belonging to exactly one Company and responsible for a tax document. |
+| `empresa` | Company | Target Domain | Externally owned legal entity and sole document-ownership reference; current Company master data remains authoritative only in the Company bounded context. |
+| `emisor` | Issuer | Target Domain | Externally owned fiscal profile belonging to exactly one Company; its values may be preserved only as immutable document evidence. |
+| `establecimiento` | Establishment | Target Domain | Externally owned Issuer subdivision; the Tax Document Service preserves only the establishment values used in a document snapshot. |
 | `razón social` | Legal Name | Target Domain | Registered legal identity; it is not client-overridable on an invoice draft. |
 | `RUC` | RUC | Target Domain | Legally defined Ecuadorian identifier that remains exact. |
-| `punto de emisión` | Emission Point | Target Domain | Active issuer-owned point selected for future fiscal issuance. |
+| `punto de emisión` | Emission Point | Target Domain | Externally owned active Issuer point selected for future fiscal issuance; document snapshots do not become current master data. |
+| `datos fiscales utilizados` | Fiscal Context Snapshot | Target Domain | Immutable document-owned historical evidence of the Issuer, Establishment, and Emission Point values actually used by a tax document; never a Company master-data replica. |
 | `comprador` | Buyer | Target Domain | Recipient of the goods or services represented by an invoice. |
 | `detalle de factura` | Invoice Line | Target Domain | One priced product or service entry in an invoice draft. |
 | `impuesto` | Tax Category | Target Domain | Governing tax type or code; exact SRI catalog values remain official terms. |

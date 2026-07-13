@@ -1,27 +1,14 @@
 <!--
 Sync Impact Report
-- Version change: Unratified placeholder template -> 1.0.0
+- Version change: 1.0.0 -> 1.1.0
 - Modified principles:
-  - Placeholder principles I-V -> I. Evidence-Governed Greenfield Reengineering
-  - Placeholder principles I-V -> II. English Canonical Language and Controlled Terminology
-  - Placeholder principles I-V -> III. Required Technology Baseline and JVM Safety
-  - Placeholder principles I-V -> IV. Clean Architecture and Explicit Boundaries
-  - Placeholder principles I-V -> V. Non-Blocking Reactive Execution
-  - Placeholder principles I-V -> VI. Official-Rule Fiscal Correctness
-  - Placeholder principles I-V -> VII. Zero-Trust Identity and Tenant Isolation
-  - Placeholder principles I-V -> VIII. Sensitive Data and Certificate Security
-  - Placeholder principles I-V -> IX. Flyway-Governed Persistence and Explicit Consistency
-  - Placeholder principles I-V -> X. Target-First APIs and Observable Asynchronous Work
-  - Placeholder principles I-V -> XI. Port-Bound SRI and External Integrations
-  - Placeholder principles I-V -> XII. Risk-Based Testing and Evidence
-  - Placeholder principles I-V -> XIII. Operational Observability and Auditability
-  - Placeholder principles I-V -> XIV. Mandatory Spec Kit Delivery Workflow
-  - Placeholder principles I-V -> XV. Simplicity and Justified Complexity
+  - XIV. Mandatory Spec Kit Delivery Workflow (Company master-data ownership added to critical
+    analysis gates)
 - Added sections:
-  - Definition of Done
-  - Concrete source-authority hierarchy and amendment controls
-- Removed sections:
-  - Placeholder-only additional-constraints and development-workflow slots
+  - XVI. Company Master Data Ownership and Immutable Fiscal Snapshots
+- Modified sections:
+  - Definition of Done (Company boundary compliance added)
+- Removed sections: None
 - Consistency updates:
   - ✅ .specify/templates/spec-template.md
   - ✅ .specify/templates/plan-template.md
@@ -30,14 +17,28 @@ Sync Impact Report
   - ✅ .specify/workflows/speckit/workflow.yml
   - ✅ .specify/workflows/workflow-registry.json
   - ✅ .agents/skills/speckit-specify/SKILL.md
-  - ✅ .agents/skills/speckit-plan/SKILL.md
-  - ✅ .agents/skills/speckit-checklist/SKILL.md
+  - ✅ .agents/skills/speckit-clarify/SKILL.md
   - ✅ .agents/skills/speckit-tasks/SKILL.md
+  - ✅ .agents/skills/speckit-analyze/SKILL.md
   - ✅ .agents/skills/speckit-implement/SKILL.md
+  - ✅ docs/migration/terminology-mapping.md
+  - ✅ specs/001-create-invoice-draft/spec.md
+  - ✅ specs/001-create-invoice-draft/plan.md
+  - ✅ specs/001-create-invoice-draft/research.md
+  - ✅ specs/001-create-invoice-draft/data-model.md
+  - ✅ specs/001-create-invoice-draft/contracts/company-context-port.md
+  - ✅ specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml
+  - ✅ specs/001-create-invoice-draft/quickstart.md
+  - ✅ specs/001-create-invoice-draft/checklists/requirements.md
+  - ✅ specs/001-create-invoice-draft/checklists/planning.md
 - Reviewed without changes:
   - .specify/templates/constitution-template.md remains the upstream placeholder template
   - README.md contains runtime commands but no conflicting governance requirements
   - No .specify/templates/commands directory exists in this installation
+  - .agents/skills/speckit-plan/SKILL.md and .agents/skills/speckit-checklist/SKILL.md load the
+    constitution and their updated templates dynamically
+  - .agents/skills/speckit-converge/SKILL.md extracts every constitutional MUST dynamically
+  - .agents/skills/speckit-taskstoissues/SKILL.md transfers approved tasks without redefining them
 - Follow-up TODOs: None
 -->
 # Ecuador Tax Document Service Constitution
@@ -403,8 +404,8 @@ items MUST be evaluated honestly and MUST NOT be marked complete merely to unblo
 
 `$speckit-analyze` MUST run after task generation and before implementation. Implementation MUST
 NOT begin while analysis has an unresolved critical inconsistency involving fiscal correctness,
-security, tenant isolation, data loss, idempotency, external integration contracts, certificate
-management, or database evolution.
+security, tenant isolation, Company master-data ownership, data loss, idempotency, external
+integration contracts, certificate management, or database evolution.
 
 **Rationale**: Ordered, reviewable artifacts expose ambiguity and governance violations before
 they become expensive or legally significant code.
@@ -431,6 +432,46 @@ insufficient, and the testing and operational consequences.
 **Rationale**: Requiring a current use case and recorded alternatives keeps the greenfield system
 focused on fiscal value instead of speculative infrastructure.
 
+### XVI. Company Master Data Ownership and Immutable Fiscal Snapshots
+
+The Company bounded context MUST be the sole source of truth for Company master data, current
+Company state, Issuer fiscal configuration, establishments, and emission points. The Tax Document
+Service MUST NOT own, administer, replicate, or expose current Company master data. It MUST NOT
+provide Company, Issuer, establishment, or emission-point master-data CRUD, search, catalog, or
+administration operations.
+
+The Tax Document Service MUST persist only the external Company identifier as a tax document's
+ownership reference. A tenant identifier required by an approved authorization or idempotency
+scope MUST NOT be stored on the tax-document aggregate or treated as an alternative document
+ownership reference.
+
+Every tax-document aggregate MUST preserve an immutable fiscal snapshot of the Issuer,
+establishment, and emission-point information actually used to create that document. The snapshot
+MAY contain the external identifiers and fiscal attributes required as document evidence. It MUST
+remain owned by the document, MUST NOT be updated when Company master data changes, and MUST NOT be
+treated, queried, or exposed as a current local Company master-data replica. A document API MAY
+return its own persisted snapshot only as historical document evidence.
+
+New document creation MUST resolve the current authorized fiscal context through an application
+port implemented by an infrastructure adapter. Existing committed documents and idempotent replays
+MUST use their persisted snapshot; they MUST NOT refresh or replace that snapshot from current
+Company data. A current authorization check MAY still be required before an existing document is
+returned, but it MUST NOT change the persisted fiscal evidence.
+
+The Company service and Tax Document Service MUST NOT share a database, database schema,
+cross-service foreign key, repository, persistence entity, or database transaction. A Company
+identifier stored by the Tax Document Service MUST NOT have a database foreign key to Company-owned
+storage. A database transaction in either service MUST NOT span the other service.
+
+The Tax Document Service MUST NOT maintain a Company cache, materialized Company view, synchronized
+Company table, change-data-capture consumer, or background Company-data replication process.
+Company context MAY exist only as bounded in-memory data for the active application-port call and
+as the immutable fiscal snapshot inside the resulting tax-document aggregate.
+
+**Rationale**: Exclusive master-data ownership prevents divergent Company state and cross-service
+coupling, while immutable document-owned snapshots preserve the exact fiscal evidence required for
+historical review and idempotent replay.
+
 ## Definition of Done
 
 A feature is complete only when all of these conditions are satisfied:
@@ -440,6 +481,9 @@ A feature is complete only when all of these conditions are satisfied:
 - All required tests pass, and static analysis and formatting checks pass.
 - Database migrations are repeatable from an empty database.
 - Security and tenant-isolation requirements are verified.
+- Company master-data ownership is verified: the feature stores only the external Company
+  ownership identifier and immutable document fiscal snapshots, with no Company replica, cache,
+  shared persistence, or cross-service transaction.
 - Failure, timeout, retry, duplicate, and reconciliation behavior required by the feature is
   tested.
 - Documentation and `docs/migration/terminology-mapping.md` are updated when affected.
@@ -478,4 +522,4 @@ MUST be corrected. A perceived need to change a principle MUST be handled throug
 explicit constitution amendment and MUST NOT be resolved by diluting or silently reinterpreting
 the principle during feature work.
 
-**Version**: 1.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12
+**Version**: 1.1.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12

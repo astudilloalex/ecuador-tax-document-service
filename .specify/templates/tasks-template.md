@@ -31,6 +31,10 @@ independently testable increment of the single bounded feature outcome.
   documented risk identifier in its description.
 - All target names, paths, comments, fixtures, and documentation MUST use approved English
   terminology.
+- A Company-dependent feature MUST include tasks for application-port context resolution,
+  immutable document fiscal snapshots, and boundary tests. It MUST NOT include Company master-data
+  CRUD, local Company tables, cross-service foreign keys/repositories/transactions, Company caches,
+  or background Company-data replication.
 
 ## Path Conventions
 
@@ -206,6 +210,10 @@ required to make an earlier story safe or testable.
 ## Notes
 
 - Historical files under `docs/legacy/` MUST NOT be edited.
+- Company master data MUST remain in the Company bounded context; tax-document tasks MAY persist
+  only the external Company ownership identifier and immutable document fiscal snapshots.
+- Tasks MUST NOT introduce shared Company persistence, cross-service foreign keys, Company
+  repositories, Company caches, or background Company-data replication.
 - Panache persistence models MUST NOT become domain or transport models.
 - Blocking and CPU-intensive adapter work MUST use the plan's bounded execution context.
 - Retries MUST preserve the logical fiscal operation, access key, sequence, and persisted document.

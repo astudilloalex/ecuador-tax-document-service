@@ -263,6 +263,12 @@ Configure a 1-second connect timeout, 3-second response timeout, and 5-second to
 budget, with no automatic retry. Map timeout to `504`; map connection/unavailability to `503`; no
 failure creates an idempotency binding.
 
+The Company bounded context remains the sole current master-data authority. The Tax Document
+Service persists only the external Company identifier as document ownership plus the immutable
+Issuer/establishment/emission-point snapshot used by the draft. It uses no shared database/schema,
+cross-service foreign key/repository/transaction, Company cache, materialized view, or background
+replication. Adapter responses live only for the active request.
+
 Keep versioned identification, IVA tax-rule, and payment-method catalogs as local read-only
 PostgreSQL reference tables managed by Flyway. This feature adds no catalog-management API.
 

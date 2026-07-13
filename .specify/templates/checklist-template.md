@@ -55,6 +55,12 @@ requirements; it MUST NOT test whether an implementation works or whether a task
 - [ ] CHK017 Does each assumption identify an approved basis rather than replace an unresolved functional validation? [Assumption, Spec §Assumptions and Dependencies]
 - [ ] CHK018 Are external stakeholder, official artifact, and service dependencies identified with relevant availability or version constraints? [Dependency, Spec §Assumptions and Dependencies]
 
+## Service Data Ownership
+
+- [ ] CHK019 When Company fiscal context is in scope, is the Company bounded context explicitly identified as the sole current master-data authority? [Completeness, Spec §Assumptions and Dependencies]
+- [ ] CHK020 Are the external Company ownership identifier and immutable document fiscal snapshot clearly distinguished from a local Company master-data replica? [Clarity, Spec §Key Entities]
+- [ ] CHK021 Are Company administration, shared persistence, cross-service foreign keys or transactions, caching, and background replication explicitly excluded? [Coverage, Spec §Exclusions and Non-Goals]
+
 ## Notes
 
 - Replace these examples; do not retain generic items in a generated checklist.

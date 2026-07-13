@@ -3,11 +3,11 @@
   "workflows": {
     "speckit": {
       "name": "Constitution-Governed SDD Cycle",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "description": "Requires an approved constitution, then runs specify \u2192 clarify \u2192 plan \u2192 checklist \u2192 tasks \u2192 analyze \u2192 implement with review gates",
       "source": "bundled",
       "installed_at": "2026-07-12T16:49:18.649121+00:00",
-      "updated_at": "2026-07-12T12:20:18-05:00"
+      "updated_at": "2026-07-12T18:50:58-05:00"
     }
   }
 }

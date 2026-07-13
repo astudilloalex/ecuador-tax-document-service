@@ -81,6 +81,7 @@ Execution steps:
    - Identity & uniqueness rules
    - Lifecycle/state transitions
    - Data volume / scale assumptions
+   - Bounded-context master-data ownership versus immutable document-owned snapshots
 
    Interaction & UX Flow:
    - Critical user journeys / sequences

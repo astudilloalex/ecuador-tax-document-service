@@ -15,9 +15,12 @@
 - Fiscal decimals use unconstrained PostgreSQL `numeric` plus named constraints and application
   validation. No floating-point column is permitted.
 - Emission date uses PostgreSQL `date`; audit instants use `timestamptz(6)`.
-- Company, Issuer, and emission-point identifiers reference an external authoritative capability,
-  so the draft stores verified identifiers and creation-time snapshots rather than local foreign
-  keys to copied authority tables.
+- The Company bounded context owns all current Company, Issuer, establishment, and emission-point
+  master data. The draft stores only the external Company identifier as its ownership reference.
+  Issuer, establishment, and emission-point identifiers and fiscal values exist only inside the
+  immutable document snapshot; they are historical evidence, not local master-data ownership.
+- No Company authority table, shared schema, cross-service foreign key/repository/transaction,
+  cache, materialized view, change-data-capture consumer, or background replication is permitted.
 - Versioned identification, tax, and payment catalogs are local read-only reference tables. They
   are created and evolved only through Flyway; this feature has no catalog-management operation.
 - Child collections use relational tables so ownership, uniqueness, sign, and row-local monetary
@@ -45,17 +48,16 @@ company data has changed.
 
 ## Entity: InvoiceDraft
 
-**Purpose**: Persist the complete internal pre-issuance header, ownership, buyer snapshot, totals,
-and audit context. It has no fiscal sequence, access key, authorization number, XML, signature, or
-certificate reference.
+**Purpose**: Persist the complete internal pre-issuance header, external Company ownership
+identifier, immutable fiscal-context evidence, buyer snapshot, totals, and audit context. It has no
+fiscal sequence, access key, authorization number, XML, signature, or certificate reference.
 
 | Field | Java type | PostgreSQL type | Required | Rules |
 |-------|-----------|-----------------|----------|-------|
 | `draftId` | `UUID` | `uuid` | Yes | Application-generated UUID v4; primary key; unrelated to fiscal identifiers |
-| `tenantId` | `UUID` | `uuid` | No | Null only when Company is itself the tenant boundary |
-| `companyId` | `UUID` | `uuid` | Yes | Verified authoritative Company identifier |
-| `companyContextVersion` | `String` | `varchar(64)` | Yes | Version/ETag from the authoritative snapshot |
-| `issuerId` | `UUID` | `uuid` | Yes | The Company's single verified Issuer |
+| `companyId` | `UUID` | `uuid` | Yes | Sole document ownership reference; verified external Company identifier; no cross-service FK |
+| `companyContextVersion` | `String` | `varchar(64)` | Yes | Version/ETag preserved as immutable document snapshot evidence |
+| `issuerId` | `UUID` | `uuid` | Yes | External Issuer identifier inside the immutable fiscal snapshot; not an ownership reference |
 | `issuerRuc` | `String` | `varchar(13)` | Yes | Verified creation-time RUC snapshot |
 | `issuerLegalName` | `String` | `varchar(300)` | Yes | Trimmed registered legal name |
 | `issuerTradeName` | `String` | `varchar(300)` | No | Trimmed registered trade name |
@@ -91,10 +93,10 @@ certificate reference.
 - Check status is `DRAFT`, currency is `USD`, grand/subtotal/discount are non-negative scale-2
   values within 14 total digits, and `last_modified_at >= created_at`.
 - Check buyer and snapshot text is nonblank and contains no control character where required.
-- Index `(tenant_id, company_id, created_at)` and `(company_id, issuer_id, created_at)` for scoped
-  operations; every repository query still includes effective authorization scope.
-- No local foreign key is created for Company/Issuer/emission point; the application port
-  validation and persisted snapshot are mandatory.
+- Index `(company_id, created_at)` and `(company_id, issuer_id, created_at)` for Company-authorized
+  document operations; every repository query still applies the effective authorization scope.
+- No local authority table or foreign key is created for Company, Issuer, establishment, or
+  emission point. The application-port validation and persisted immutable snapshot are mandatory.
 
 ## Entity: InvoiceLine
 
@@ -180,6 +182,9 @@ is not persisted as business state and is ignored by idempotency comparison.
 
 **Purpose**: Atomically bind one approved scope/key to one draft and its exact normalized creation
 content for the draft lifetime.
+
+`tenantId` below is an idempotency-scope discriminator only. It is not stored on `InvoiceDraft`, is
+not a document ownership reference, and is not Company master data.
 
 | Field | Java type | PostgreSQL type | Required | Rules |
 |-------|-----------|-----------------|----------|-------|
@@ -287,7 +292,8 @@ The current authorization scope is required before any binding lookup. An eligib
 snapshot is required only when no binding already exists; its necessary fiscal values are copied
 into the new draft. An authorized equivalent replay returns the original snapshot even when the
 current creation evaluation is ineligible. No remote call is made during the local database
-transaction. A failure or unavailable authorization result leaves no idempotency binding.
+transaction. The response is bounded to the active request and is never cached or replicated. A
+failure or unavailable authorization result leaves no idempotency binding.
 
 ## Validation Ownership
 

@@ -33,6 +33,8 @@ administrative capabilities.]
 - [Explicitly excluded behavior]
 - [Legacy compatibility that is not required]
 - [Related document types or administrative capabilities deferred to separate specifications]
+- [Company master-data ownership, administration, replication, caching, or exposure excluded when
+  Company fiscal context is consumed]
 
 ### Authority and Evidence
 
@@ -112,6 +114,8 @@ Address each applicable category with a required outcome; do not answer an unkno
 - What happens for impossible dates, inconsistent totals, or invalid catalog combinations?
 - What happens when a caller attempts cross-tenant or wrong-issuer access?
 - What happens for a duplicate command, retry, timeout, partial external failure, or reconciliation?
+- When Company fiscal context is used, what remains current external master data and what becomes
+  immutable document-owned historical evidence?
 - What caller-visible outcome exists for asynchronous failure or expiration?
 - What sensitive information could appear in an error, log, trace, metric, or retained payload?
 
@@ -132,6 +136,10 @@ Address each applicable category with a required outcome; do not answer an unkno
   tenant-owned information is in scope.
 - **FR-005**: The service MUST [idempotency, duplicate, timeout, recovery, or terminal-outcome rule
   when an external or asynchronous boundary is in scope].
+- **FR-006**: When Company fiscal context is in scope, the service MUST [resolve current context from
+  the Company bounded context, store only the external Company ownership identifier, preserve the
+  exact immutable document fiscal snapshot, and exclude Company master-data administration or
+  replication].
 
 ### Domain Rules and Invariants *(include when fiscal or monetary behavior is in scope)*
 
@@ -152,7 +160,8 @@ Address each applicable category with a required outcome; do not answer an unkno
 ### Key Entities *(include when the feature involves data)*
 
 Describe business meaning, identity, ownership, lifecycle, and invariants without API, database,
-or persistence-model design.
+or persistence-model design. Distinguish an externally owned Company identifier and current master
+data from immutable fiscal evidence owned by a tax document.
 
 - **[Entity 1]**: [Meaning, identity, tenant/issuer ownership, lifecycle, and critical invariants]
 - **[Entity 2]**: [Meaning and relationship to other business concepts]
@@ -179,3 +188,5 @@ evidence or approved default that makes it reasonable.
 - **Assumption**: [Target-user or operational assumption] — **Basis**: [approved evidence/default]
 - **Dependency**: [External stakeholder, official artifact, or service dependency and its
   availability/version constraint]
+- **Dependency**: [Company bounded-context authority and current fiscal-context availability when
+  Company, Issuer, establishment, or emission-point information is required]

@@ -2,7 +2,7 @@ schema_version: "1.0"
 workflow:
   id: "speckit"
   name: "Constitution-Governed SDD Cycle"
-  version: "2.0.0"
+  version: "2.1.0"
   author: "GitHub"
   description: "Requires an approved constitution, then runs specify → clarify → plan → checklist → tasks → analyze → implement with review gates"
 
@@ -72,7 +72,7 @@ steps:
 
   - id: review-plan
     type: gate
-    message: "Approve both constitution checks, source evidence, boundary failure design, security scope, and complexity justifications."
+    message: "Approve both constitution checks, source evidence, Company master-data ownership and immutable snapshot boundary, failure design, security scope, and complexity justifications."
     options: [approve, reject]
     on_reject: abort
 
@@ -80,7 +80,7 @@ steps:
     command: speckit.checklist
     integration: "{{ inputs.integration }}"
     input:
-      args: "Create a formal reviewer gate for requirement quality, emphasizing fiscal correctness, security, tenant isolation, idempotency, external contracts, certificate management, and database evolution."
+      args: "Create a formal reviewer gate for requirement quality, emphasizing fiscal correctness, security, tenant isolation, Company master-data ownership, immutable fiscal snapshots, idempotency, external contracts, certificate management, and database evolution."
 
   - id: review-checklist
     type: gate
@@ -98,11 +98,11 @@ steps:
     command: speckit.analyze
     integration: "{{ inputs.integration }}"
     input:
-      args: "Treat every constitution conflict as critical and identify requirement-to-task coverage gaps."
+      args: "Treat every constitution conflict, including Company master-data ownership or snapshot-boundary violations, as critical and identify requirement-to-task coverage gaps."
 
   - id: review-analysis
     type: gate
-    message: "Reject implementation while any critical fiscal, security, tenant-isolation, data-loss, idempotency, external-contract, certificate, or database-evolution finding remains unresolved."
+    message: "Reject implementation while any critical fiscal, security, tenant-isolation, Company-master-data, snapshot-boundary, data-loss, idempotency, external-contract, certificate, or database-evolution finding remains unresolved."
     options: [approve, reject]
     on_reject: abort
 

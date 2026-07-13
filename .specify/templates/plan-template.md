@@ -38,6 +38,10 @@ evidence table below]
 **External Integrations**: [SRI SOAP/XML, Keycloak, certificate, storage, rendering,
 notification, or other adapters in scope]
 
+**Company Context Ownership**: [Company bounded-context source, external Company identifier,
+document-owned immutable fiscal snapshot, and explicit absence of local Company master data,
+shared persistence, cache, or replication]
+
 **Performance Goals**: [measurable latency, throughput, concurrency, and resource targets]
 
 **Constraints**: [timeouts, payload limits, executor bounds, retention, availability, and other
@@ -87,6 +91,7 @@ design. A deviation requires recorded approval under the constitution before imp
 | Reactive safety: every blocking or CPU-intensive operation is isolated, bounded, timed out, and testable | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Fiscal correctness: official rules, `BigDecimal` policies, time semantics, and invalid-data behavior are explicit | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Security: deny-by-default authorization, token validation, ownership enforcement, and cross-tenant tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Company boundary: Company master data remains externally owned; documents store only the external Company ownership identifier and immutable fiscal snapshots; no shared persistence, cache, or replication exists | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Boundary consistency: states, retries, idempotency, duplicates, timeouts, recovery, reconciliation, and terminal outcomes are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
@@ -118,6 +123,12 @@ rules that apply.]
 
 **Effective Authorization Scope**: [How tenant, company, issuer, emission point, certificate, and
 document ownership are derived and applied to every query and mutation.]
+
+**Company Master-Data Boundary**: [How current Company/Issuer/establishment/emission-point data is
+resolved through an application port; how only the external Company identifier is used as the
+document ownership reference; which immutable fiscal snapshot fields the document owns; and how
+shared databases, cross-service foreign keys/repositories/transactions, Company caches, and
+background replication are excluded.]
 
 **Cross-Tenant Evidence**: [Required denial scenarios and test locations.]
 
