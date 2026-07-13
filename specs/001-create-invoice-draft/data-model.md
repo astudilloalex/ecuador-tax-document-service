@@ -2,165 +2,237 @@
 
 **Feature**: `001-create-invoice-draft`
 **Constitution**: v2.0.0
-**Status**: Reconciled with the definitive Company-context boundary
+**Source**: `specs/001-create-invoice-draft/spec.md`
 
-## Model Boundaries
+## Boundary Rules
 
-- Domain values use Java 25 language types such as `UUID`, `BigDecimal`, `LocalDate`, and
-  `Instant`; they contain no Quarkus, HTTP, JSON, persistence, security, or Mutiny types.
-- Panache models remain infrastructure persistence models and are mapped explicitly.
-- `X-Company-Id` is mapped by the API adapter to one normalized application-level `CompanyId`.
-  The HTTP header does not enter the domain model.
-- The Company UUID is opaque. No Company, Issuer, establishment, or emission-point master data is
-  resolved, validated, cached, replicated, or stored as a snapshot.
-- Every schema and reference-data change is delivered only by an immutable Flyway migration.
+- The domain uses Java values such as `UUID`, `BigDecimal`, `LocalDate`, and `Instant`; it contains
+  no HTTP, JSON, Quarkus, Panache, PostgreSQL, security, or Mutiny types.
+- The API maps `X-Company-Id` to an application `CompanyId`. The application command carries
+  CompanyId explicitly. The aggregate stores it as immutable ownership data.
+- Panache models are infrastructure persistence models and are mapped explicitly to/from domain
+  objects.
+- Flyway is the only schema and reference-data evolution mechanism.
+- No Company Service, identity provider, SRI service, cache, or other external datastore
+  participates in this model.
 
-## Aggregate: Invoice Draft
+## Aggregate Root: Invoice Draft
 
-`InvoiceDraft` is the aggregate root. It contains the complete locally owned commercial draft and
-has no fiscal sequence, access key, authorization number, XML, signature, certificate reference,
-Company snapshot, or Issuer snapshot.
+Logical persistence name: `invoice_draft`.
 
-| Field | Domain type | PostgreSQL type | Required | Invariant |
-|-------|-------------|-----------------|----------|-----------|
-| `draftId` | `UUID` | `uuid` | Yes | Unique internal identifier; not a fiscal identifier |
-| `companyId` | `CompanyId` | `uuid` | Yes | Normalized non-nil external UUID; immutable ownership partition |
-| `emissionPointId` | `UUID` | `uuid` | Yes | Opaque external reference; no relationship or status is inferred |
-| `emissionDate` | `LocalDate` | `date` | Yes | Current Ecuadorian civil date at creation |
-| `status` | `DraftStatus` | `varchar` | Yes | Exactly `DRAFT` |
-| `currency` | `CurrencyCode` | `char(3)` | Yes | Exactly `USD` |
-| `buyerIdentificationTypeCode` | official code value | `varchar(2)` | Yes | Supported active/effective code `04`–`08` |
-| `buyerIdentification` | validated text | `varchar(20)` | Yes | Canonical type-specific value |
+| Field | Domain type | PostgreSQL type | Required | Rule |
+|-------|-------------|-----------------|----------|------|
+| `id` | `UUID` | `uuid` | Yes | Local primary key; not a fiscal identifier |
+| `companyId` | `CompanyId` | `uuid` | Yes | Canonical non-nil UUID; immutable ownership partition |
+| `emissionPointId` | `UUID` | `uuid` | Yes | Canonical non-nil opaque external reference; no ownership/status inference |
+| `emissionDate` | `LocalDate` | `date` | Yes | Current Ecuadorian civil date at original creation |
+| `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
+| `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation |
 | `buyerLegalName` | validated text | `varchar(300)` | Yes | Trimmed, nonblank, no control characters |
-| `buyerAddress` | optional validated text | `varchar(300)` | No | Trimmed and valid when present |
-| `buyerEmail` | optional validated text | `varchar(254)` | No | One syntactically valid address |
-| `buyerTelephone` | optional validated text | `varchar(20)` | No | Approved representation and digit count |
-| `subtotalBeforeTaxes` | `BigDecimal` | `numeric(14,2)` | Yes | Sum of rounded line net amounts; non-negative |
-| `totalDiscount` | `BigDecimal` | `numeric(14,2)` | Yes | Sum of two-decimal discounts; non-negative |
-| `grandTotal` | `BigDecimal` | `numeric(14,2)` | Yes | Subtotal plus grouped tax amounts; non-negative |
-| `createdAt` | `Instant` | `timestamptz` | Yes | Unambiguous creation instant |
-| `lastModifiedAt` | `Instant` | `timestamptz` | Yes | Not before `createdAt` |
+| `buyerAddress` | optional text | `varchar(300)` | No | Trimmed and valid when present |
+| `buyerEmail` | optional text | `varchar(254)` | No | One syntactically valid address |
+| `buyerTelephone` | optional text | `varchar(20)` | No | Approved character and digit-count rules |
+| `status` | `DraftStatus` | `varchar(16)` | Yes | Exactly `DRAFT` |
+| `currency` | `CurrencyCode` | `char(3)` | Yes | Exactly `USD` |
+| `subtotalBeforeTaxes` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
+| `totalDiscount` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
+| `grandTotal` | `BigDecimal` | `numeric(14,2)` | Yes | System-calculated, non-negative |
+| `createdAt` | `Instant` | `timestamptz` | Yes | Unambiguous commit-time audit instant |
+| `updatedAt` | `Instant` | `timestamptz` | Yes | Initially equal to or after `createdAt` |
 
-Required persistence constraints include a primary key on `draft_id`, non-nil Company UUID check,
-fixed `DRAFT` and `USD` checks, non-negative monetary checks, and Company-scoped indexes such as
-`(company_id, created_at)`. Every repository query or mutation includes `company_id`; this is data
-partitioning, not caller authorization.
+Mandatory root constraints:
 
-### Child: Invoice Line
+- primary key on `id`;
+- `CHECK (company_id <> '00000000-0000-0000-0000-000000000000')`;
+- equivalent non-nil check for `emission_point_id`;
+- fixed `DRAFT` and `USD` checks;
+- non-negative stored totals;
+- `updated_at >= created_at`;
+- `UNIQUE (company_id, id)` to support local Company-consistent composite references.
 
-| Field | PostgreSQL type | Invariant |
-|-------|-----------------|-----------|
-| `lineId` | `uuid` | Local primary key |
-| `draftId` | `uuid` | Required local foreign key to the aggregate root with aggregate deletion behavior |
-| `position` | `integer` | 1–500; unique within the draft; order is business-significant |
-| `productCode` | `varchar(25)` | Trimmed SRI-valid alphanumeric text |
+Every repository read or mutation that addresses an existing draft carries both CompanyId and
+draftId. This is persistence partitioning and aggregate consistency, not authorization.
+
+Correlation identifiers are not persisted on the aggregate. They remain request/response,
+structured-log, trace, and operational-event evidence because no approved business requirement
+requires durable correlation data on the draft.
+
+## Child: Invoice Line
+
+Logical persistence name: `invoice_line`.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Local primary key |
+| `invoiceDraftId` | `uuid` | Required local foreign key to `invoice_draft.id` |
+| `position` | `integer` | 1–500; unique within the draft; business-significant order |
+| `productCode` | `varchar(25)` | Trimmed approved alphanumeric value |
 | `description` | `varchar(300)` | Trimmed, nonblank text |
 | `quantity` | `numeric(18,6)` | Greater than zero |
 | `unitPrice` | `numeric(18,6)` | Non-negative |
-| `discount` | `numeric(14,2)` | Non-negative and not greater than gross amount |
+| `discount` | `numeric(14,2)` | Non-negative; no greater than gross amount |
 | `grossAmount` | `numeric(14,2)` | System-calculated |
-| `netAmount` | `numeric(14,2)` | System-calculated and non-negative |
+| `netAmount` | `numeric(14,2)` | System-calculated, non-negative |
 | `lineTotal` | `numeric(14,2)` | Net amount plus tax amount |
 
-Lines do not store `company_id`; they belong to Company-owned data only through the local draft
-foreign key. This prevents children from becoming independent ownership or Company records.
+Constraints include `UNIQUE (invoice_draft_id, position)` and row-local non-negative/scale checks.
+The maximum collection count is enforced before persistence and verified after aggregate loading;
+no speculative trigger is introduced.
 
-### Child: Line Tax Selection
+## Child: Line Tax Selection
 
-Each line has exactly one tax selection with a local one-to-one constraint on `line_id`.
+Logical persistence name: `invoice_line_tax`.
 
-| Field | PostgreSQL type | Invariant |
-|-------|-----------------|-----------|
-| `lineTaxId` | `uuid` | Local primary key |
-| `lineId` | `uuid` | Unique required local foreign key |
-| `taxRuleId` | `uuid` | Selected active/effective local reference-catalog rule |
-| `family` | `varchar` | Exactly `IVA` |
-| `treatment` | `varchar` | `PERCENTAGE_RATE`, `ZERO_RATE`, `NOT_SUBJECT`, or `EXEMPT` |
+Each line has exactly one persisted IVA selection and calculated result.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Local primary key |
+| `invoiceLineId` | `uuid` | Unique required local foreign key to `invoice_line.id` |
+| `taxRuleId` | `uuid` | Selected local catalog rule |
+| `family` | `varchar(16)` | Exactly `IVA` |
+| `treatment` | `varchar(32)` | `PERCENTAGE_RATE`, `ZERO_RATE`, `NOT_SUBJECT`, or `EXEMPT` |
 | `officialTaxCode` | `varchar(8)` | Versioned catalog value |
 | `officialPercentageCode` | `varchar(8)` | Versioned catalog value |
-| `rate` | `numeric(5,2)` | Percentage points, 0.00–100.00 |
+| `rate` | `numeric(5,2)` | Percentage points from `0.00` through `100.00` |
 | `taxBase` | `numeric(14,2)` | Rounded line net amount |
 | `taxAmount` | `numeric(14,2)` | System-calculated, non-negative |
-| `catalogVersion` | `varchar(64)` | Version used by the calculation |
+| `catalogVersion` | `varchar(64)` | Rule version applied at creation |
 
-### Child: Tax Total
+`UNIQUE (invoice_line_id)` prevents more than one simultaneous line tax.
 
-One row exists per `(draft_id, official_tax_code, official_percentage_code, treatment, rate,
-catalog_version)` group. IVA 0%, not subject to IVA, and exempt from IVA remain separate groups
-even when amounts are zero.
+## Child: Grouped Tax Total
 
-### Child: Payment
+Logical persistence name: `invoice_tax_total`.
 
-| Field | PostgreSQL type | Invariant |
-|-------|-----------------|-----------|
-| `paymentId` | `uuid` | Local primary key |
-| `draftId` | `uuid` | Required local foreign key |
-| `paymentMethodId` | `uuid` | Active local reference-catalog value |
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Local primary key |
+| `invoiceDraftId` | `uuid` | Required local foreign key |
+| `family` | `varchar(16)` | Exactly `IVA` |
+| `treatment` | `varchar(32)` | Approved treatment |
+| `officialTaxCode` | `varchar(8)` | Versioned catalog value |
+| `officialPercentageCode` | `varchar(8)` | Versioned catalog value |
+| `rate` | `numeric(5,2)` | Applicable percentage points |
+| `taxBase` | `numeric(14,2)` | Sum of grouped rounded bases |
+| `taxAmount` | `numeric(14,2)` | Sum of grouped rounded taxes |
+| `catalogVersion` | `varchar(64)` | Applied catalog version |
+
+The unique group key is `(invoice_draft_id, treatment, official_tax_code,
+official_percentage_code, rate, catalog_version)`. IVA 0%, not subject, and exempt remain distinct
+because `treatment` participates in the key.
+
+## Child: Payment
+
+Logical persistence name: `invoice_payment`.
+
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Local primary key |
+| `invoiceDraftId` | `uuid` | Required local foreign key |
+| `paymentMethodId` | `uuid` | Selected local catalog method |
 | `officialCode` | `varchar(8)` | Versioned catalog value |
 | `name` | `varchar(100)` | English target display name |
-| `amount` | `numeric(14,2)` | Positive for positive totals; one exact `0.00` payment for zero totals |
-| `catalogVersion` | `varchar(64)` | Version used at creation |
+| `amount` | `numeric(14,2)` | Approved positive/zero behavior |
+| `catalogVersion` | `varchar(64)` | Applied catalog version |
 
-`UNIQUE (draft_id, payment_method_id)` prevents a payment method from appearing twice. The exact
-sum of amounts equals the draft grand total.
+`UNIQUE (invoice_draft_id, payment_method_id)` prevents duplicate payment methods. Cross-row
+payment reconciliation remains a domain/application invariant verified before commit.
 
-### Child: Additional Information
+## Child: Additional Information
 
-At most 15 local rows belong to a draft. Each has trimmed `name` and `value` of 1–300 characters,
-and a uniqueness constraint on the draft plus canonical name.
+Logical persistence name: `invoice_additional_information`.
 
-## Idempotency Binding
+| Field | PostgreSQL type | Rule |
+|-------|-----------------|------|
+| `id` | `uuid` | Local primary key |
+| `invoiceDraftId` | `uuid` | Required local foreign key |
+| `position` | `integer` | Stable response order |
+| `name` | `varchar(300)` | Trimmed, nonblank, no control characters |
+| `canonicalName` | `varchar(300)` | Canonical uniqueness value |
+| `value` | `varchar(300)` | Trimmed, nonblank, no control characters |
 
-| Field | PostgreSQL type | Required | Invariant |
-|-------|-----------------|----------|-----------|
-| `bindingId` | `uuid` | Yes | Local primary key |
-| `companyId` | `uuid` | Yes | Same normalized Company UUID as the bound draft |
-| `idempotencyKeyHash` | fixed hash bytes/text | Yes | Deterministic hash of the trimmed caller key; raw key is not required |
-| `requestFingerprint` | fixed hash bytes/text | Yes | Hash of normalized business content |
-| `normalizedContent` | canonical structured value | Yes | Supports exact collision-safe equivalence comparison |
-| `draftId` | `uuid` | Yes | Unique local foreign key to the committed draft |
-| `createdAt` | `timestamptz` | Yes | Same successful transaction boundary |
+Constraints include `UNIQUE (invoice_draft_id, canonical_name)` and
+`UNIQUE (invoice_draft_id, position)`. At most 15 entries are accepted.
 
-The mandatory concurrency boundary is:
+## Local Idempotency Binding
 
-`UNIQUE (company_id, idempotency_key_hash)`
+Logical persistence name: `invoice_draft_idempotency`.
 
-The normalized content contains the opaque emission-point identifier, emission date, buyer,
-ordered lines and tax selections, order-insensitive payments, and order-insensitive additional
-information. It excludes Company identifier because Company is already part of the scope. It also
-excludes the idempotency key, correlation identifier, and every transport-only header.
+| Field | PostgreSQL type | Required | Rule |
+|-------|-----------------|----------|------|
+| `companyId` | `uuid` | Yes | Same canonical Company partition as the draft |
+| `idempotencyKeyHash` | `bytea` | Yes | 32-byte domain-separated SHA-256; raw key not stored |
+| `requestFingerprint` | `bytea` | Yes | 32-byte SHA-256 of normalized client business content |
+| `normalizationVersion` | `smallint` | Yes | Positive version; initial value `1` |
+| `invoiceDraftId` | `uuid` | Yes | Bound local draft identifier |
+| `createdAt` | `timestamptz` | Yes | Successful binding instant |
 
-The same idempotency key may be used by different Companies. Equivalent concurrent requests in
-one Company-and-key scope produce one committed draft. A successful binding has no time-based
-expiration and remains for the lifetime of its draft.
+Required constraints:
+
+- primary key or equivalent unique row identity chosen by the migration;
+- `UNIQUE (company_id, idempotency_key_hash)`;
+- `UNIQUE (invoice_draft_id)`;
+- length checks requiring 32-byte hashes;
+- positive `normalization_version`;
+- composite local foreign key `(company_id, invoice_draft_id)` referencing
+  `invoice_draft(company_id, id)`.
+
+The binding stores no raw key and no normalized request content. The fingerprint excludes
+CompanyId because CompanyId is the explicit binding scope. It also excludes `Idempotency-Key`,
+`X-Correlation-Id`, headers, property order, and transport metadata.
 
 ## Local Reference Catalogs
 
-Versioned, effective-dated local catalogs cover buyer identification types, IVA tax rules, and
-payment methods. Each contains official codes, active state, effective interval, version, and the
-fields needed for the approved validation or calculation. Codes and rates are never hard-coded in
-production logic. Reference-data changes use Flyway migrations only.
+Versioned, active, effective-dated local tables provide:
 
-These catalogs are not Company master data and do not create a Company Service dependency.
+- buyer identification types and validation-rule version metadata;
+- IVA tax categories/rules, treatment, official codes, percentage rates, and effective periods;
+- payment methods and official codes.
 
-## Creation and Replay Transaction
+Flyway owns baseline and change migrations. Production code does not hard-code catalog codes or
+rates. These catalogs are tax-document reference data, not Company master data.
 
-1. Validate the request representation, including exactly one non-nil `X-Company-Id`, and map it to
-   normalized `CompanyId`.
-2. Normalize the local business content and calculate its fingerprint without Company or transport
-   headers.
-3. Within one reactive PostgreSQL transaction, arbitrate the Company-and-key-hash uniqueness,
-   compare any existing binding, validate the approved local catalogs and domain invariants, and
-   persist the complete aggregate plus binding.
-4. Equivalent existing content returns the original draft; different content returns the stable
-   conflict; failure rolls back all local state.
+## Aggregate Relationships
 
-No step calls a Company capability or performs authentication, authorization, fiscal-context
-resolution, Company availability handling, or snapshot persistence.
+```text
+InvoiceDraft (companyId, id)
+├── 1..500 InvoiceLine
+│   └── exactly 1 InvoiceLineTax
+├── 1..n InvoiceTaxTotal
+├── 1..10 InvoicePayment
+├── 0..15 InvoiceAdditionalInformation
+└── exactly 1 InvoiceDraftIdempotency after successful creation
+```
 
-## Excluded Data
+Child foreign keys are local to the Tax Document Service database. There are no cross-service or
+cross-database foreign keys. Because update/deletion is outside this feature, destructive cascade
+behavior is not introduced by this plan.
 
-The model contains no tenant identifier, user/principal/role/permission, token, Company aggregate,
-Company master table, Company status, Company-context version, context-observation timestamp,
-Issuer fiscal profile or snapshot, establishment snapshot, emission-point fiscal snapshot, fiscal
-sequence, access key, XML, signature, certificate, PDF, SRI response, or notification state.
+## Creation and Replay Lifecycle
+
+1. Map and normalize CompanyId, idempotency key, optional correlation, and request representation.
+2. Compute key hash and request fingerprint under normalization version 1.
+3. Look up a binding by CompanyId and key hash.
+4. Return the original Company-scoped draft when the stored fingerprint is equal, or return
+   `IDEMPOTENCY_CONFLICT` when different.
+5. For an unbound command, validate local catalogs/domain rules and calculate all amounts.
+6. Persist root, children, and binding in one reactive PostgreSQL transaction.
+7. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
+   in a fresh Company-scoped read.
+
+Every pre-commit failure leaves no aggregate or binding. A committed binding remains authoritative
+after response loss and has no time-based expiration while its draft exists.
+
+## Explicitly Excluded Data
+
+The model contains none of the following:
+
+- Company, Issuer, establishment, or emission-point master tables;
+- Company or Issuer fiscal snapshots;
+- `tenant_id`, `created_by_subject`, roles, permissions, or authorization fields;
+- `company_context_version` or `company_context_observed_at`;
+- Company Service references, shared schemas, or cross-database foreign keys;
+- official sequence, access key, XML, signature, certificate, SRI, PDF, or notification state;
+- complete normalized idempotency request content;
+- application cache state.

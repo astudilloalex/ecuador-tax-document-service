@@ -3,219 +3,220 @@
 **Feature**: `001-create-invoice-draft`
 **Date**: 2026-07-12
 **Constitution**: v2.0.0
+**Status**: Complete; no unresolved planning decisions remain
 
-This record supersedes the earlier design assumptions that draft creation needed Keycloak, a
-Company-context client, tenant authorization, or a fiscal snapshot. Those assumptions conflict
-with the definitive approved Company-context boundary.
+## 1. Runtime and Framework Baseline
 
-## 1. Quarkus and Java Baseline
+**Decision**: Use Java 25, Quarkus 3.33.2.1 LTS, and mandatory JVM execution.
 
-**Decision**: Use Java 25 with Quarkus 3.33.2.1 LTS.
+**Rationale**: Quarkus identifies 3.33 as the current production-recommended LTS line and
+3.33.2.1 as its current community micro release. Quarkus 3.31 introduced full Java 25 support, so
+the selected later LTS line satisfies the constitutional Java baseline. JVM execution is the
+release baseline; native execution remains an optional evidence-based capability.
 
-**Rationale**: The selected Quarkus LTS line provides the required reactive REST, Hibernate
-Reactive with Panache, PostgreSQL, Flyway, validation, OpenAPI, health, metrics, tracing, and test
-capabilities while supporting the project’s Java baseline. JVM execution remains mandatory.
+**Alternatives considered**:
 
-**Required capability set**:
-
-- Quarkus REST with Jackson;
-- Hibernate Reactive with Panache and the reactive PostgreSQL client;
-- Flyway plus the PostgreSQL JDBC driver used only for migration execution;
-- Hibernate Validator;
-- SmallRye OpenAPI and Health;
-- Micrometer and OpenTelemetry where enabled by the operational profile;
-- JUnit 5, REST Assured, `UniAsserter`, and PostgreSQL Dev Services/test support.
-
-No OIDC, OAuth, JWT, Keycloak, token propagation, REST client, Company client, or application
-security extension is required by this feature.
-
-**Evidence**:
-
-- [Quarkus Java compatibility](https://quarkus.io/guides/building-my-first-extension#java-version)
-- [Quarkus LTS releases](https://quarkus.io/blog/lts-releases/)
-- [Hibernate Reactive with Panache](https://quarkus.io/guides/hibernate-reactive-panache)
-- [Flyway guide](https://quarkus.io/guides/flyway)
-
-## 2. Definitive Company Context
-
-**Decision**: Accept Company context only through exactly one mandatory `X-Company-Id` header. The
-API validates presence, single cardinality, UUID syntax, and non-nil value, then maps the canonical
-UUID to an application `CompanyId`.
-
-**Rationale**: Constitution v2.0.0 defines the service as an internal Tax Document and Billing
-bounded context. The UUID is opaque business metadata and an immutable ownership partition, not a
-credential or proof of entitlement. Resource paths remain owned-resource paths, so the create
-operation is `/invoice-drafts` beneath an optional global prefix.
-
-**Rejected alternatives**:
-
-- Company in the resource path, query, body, token, or session: constitutionally prohibited.
-- Deriving Company from a principal or tenant: there is no identity or authorization context.
-- Looking up Company, Issuer, establishment, or emission point: upstream responsibility and not
-  verified by this service.
-- `CompanyContextPort`, REST client, cache, replica, shared database, or readiness dependency:
-  prohibited for Create Invoice Draft.
-
-**Failure contract**: Missing/blank header produces `COMPANY_CONTEXT_REQUIRED`; repeated,
-malformed, or nil produces `COMPANY_CONTEXT_INVALID`. No Company-not-found/inactive/not-authorized,
-timeout, unavailable, or relationship-mismatch outcome exists.
-
-## 3. No Authentication or Authorization
-
-**Decision**: Define no authentication, authorization, security scheme, Authorization header,
-principal, user, role, permission, token, `401`, or `403` behavior.
-
-**Rationale**: Any gateway/BFF security and Company validation occur outside this repository. The
-service explicitly does not verify that upstream performed them and accepts any syntactically
-valid non-nil Company UUID from a reachable process.
-
-Network/ingress controls may exist operationally outside the application, but they are not modeled
-as application dependencies, contracts, requirements, or readiness checks.
-
-## 4. Company-Scoped Durable Idempotency
-
-**Decision**: Use persistence uniqueness on `(company_id, idempotency_key_hash)`. Store a
-deterministic request fingerprint plus canonical normalized content and the committed draft
-reference in the same local transaction as draft creation.
-
-**Rationale**:
-
-- Company UUID plus key is the exact approved scope.
-- Hashing avoids requiring raw idempotency keys in persistence.
-- Canonical content comparison protects against the theoretical fingerprint-collision case and
-  determines semantic equivalence.
-- A database uniqueness constraint is the concurrency arbiter across processes and restarts.
-- Company ID is excluded from content because it is already in the uniqueness scope.
-- Correlation IDs, idempotency keys, and all transport-only headers are excluded from content.
-
-Invoice-line order is significant. Payments and additional-information entries are normalized as
-order-insensitive collections. JSON property order and UUID text case/format after accepted
-normalization do not affect equivalence.
-
-**Replay**: Equivalent content in the same Company/key scope returns the original draft. Different
-content conflicts. A successful binding does not expire while the draft exists. Replay performs no
-Company lookup or mutable-context refresh.
-
-**Rejected alternatives**:
-
-- In-memory locks or caches: not durable and the constitution prohibits application cache.
-- Key-only global uniqueness: incorrectly deduplicates across Companies.
-- Tenant plus Company scope: tenant is absent from this bounded context.
-- Company duplicated in the content fingerprint: redundant and contrary to the approved rule.
-
-**Evidence**:
-
-- [PostgreSQL unique constraints](https://www.postgresql.org/docs/current/ddl-constraints.html#DDL-CONSTRAINTS-UNIQUE-CONSTRAINTS)
-- [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html)
-
-## 5. Reactive Transaction and Persistence
-
-**Decision**: Use one short reactive PostgreSQL transaction for uniqueness arbitration, existing
-binding comparison, local catalog resolution/validation, aggregate persistence, and binding
-persistence.
-
-**Rationale**: Draft plus every child plus idempotency binding must commit together or fully roll
-back. No external call occurs, so the plan does not claim atomicity across services.
-
-The implementation must not synchronously wait for `Uni`, perform blocking JDBC business access,
-or disguise blocking work. Flyway is the sole schema/reference-data evolution mechanism and uses
-its supported migration datasource during lifecycle startup.
-
-## 6. Deterministic Monetary Calculation
-
-**Decision**: Use exact `BigDecimal` domain arithmetic and the specification’s line-level
-`HALF_UP` pipeline.
-
-- Quantity and unit price: at most six fractional digits; excess rejected.
-- Discounts and payments: exactly two fractional digits; excess rejected.
-- Catalog rates: percentage points with at most two fractional digits.
-- Round each gross, net, and tax amount to scale two using `HALF_UP` at the specified step.
-- Aggregate totals only from rounded line values.
-- Reconcile exact two-decimal payment sum to exact two-decimal grand total.
-
-**Rationale**: The policy is deterministic across JVM and optional native runtimes and contains no
-binary floating-point representation.
-
-## 7. IVA and Fiscal Reference Catalogs
-
-**Decision**: Maintain versioned, active, effective-dated local reference catalogs for buyer
-identification types, IVA tax rules, and payment methods. All catalog and schema changes use
-Flyway. Production logic never hard-codes tax codes or rates.
-
-Exactly one active/effective IVA rule is selected per line. Supported treatments are configured
-percentage-rate IVA, IVA 0%, not subject, and exempt. The three zero-tax treatments remain distinct
-groups. ICE, IRBPNR, other taxes, and simultaneous taxes are rejected.
-
-These fiscal catalogs are locally required tax-document reference data, not Company master data.
+- Quarkus 3.37: newer but non-LTS; rejected for this initial service baseline.
+- Quarkus 4 preview/development lines: rejected because no approved requirement needs them.
+- Mandatory native deployment: rejected by the constitution; JVM remains acceptable.
 
 **Official evidence**:
 
-- SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32
-- [SRI electronic invoicing resources](https://www.sri.gob.ec/facturacion-electronica)
+- [Quarkus release and LTS status](https://quarkus.io/releases/)
+- [Quarkus Java 25 support](https://quarkus.io/blog/quarkus-3-31-released/)
 
-## 8. Buyer Identification and Dates
+## 2. Required Quarkus Capabilities
 
-**Decision**: Apply versioned SRI rules effective on the emission date for RUC `04`, identity card
-`05`, passport `06`, final consumer `07`, and foreign identification `08`. No online registry
-check, invented checksum, country-specific passport rule, or legacy validator is permitted.
+**Decision**: Plan only the capabilities required for the approved feature:
 
-Final consumer requires `9999999999999`, `CONSUMIDOR FINAL`, and the SRI threshold effective on the
-date; v2.32 defines USD 50.00.
+- Quarkus REST with Jackson;
+- Hibernate Reactive with Panache;
+- reactive PostgreSQL client;
+- Flyway and the PostgreSQL JDBC migration driver;
+- Hibernate Validator;
+- SmallRye OpenAPI and Health;
+- Micrometer and OpenTelemetry when enabled by the operational profile;
+- JUnit 5, REST Assured, `UniAsserter`, and PostgreSQL test support.
 
-Emission date uses Ecuador date-only semantics and must equal the current Ecuadorian civil date at
-creation. Audit timestamps are unambiguous instants and PostgreSQL uses `timestamptz`; date-only
-values use `date`.
+No OIDC, OAuth, JWT, Keycloak, security, token-propagation, Company REST client, cache, broker,
+SOAP, XML, signature, certificate, PDF, notification, or SRI adapter capability is in scope.
 
-## 9. API Contract and Validation Ownership
+**Rationale**: The capability set implements the approved Clean Architecture boundaries and local
+reactive persistence without introducing a distributed interaction or identity layer.
 
-**Decision**: Publish synchronous `POST /api/v1/invoice-drafts`, with `X-Company-Id` and
-`Idempotency-Key` headers and an optional/generatable correlation identifier.
+## 3. PostgreSQL Baseline
 
-- Transport validation covers header/body structure, representation, unknown fields, cardinality,
-  limits, and calculated-field rejection.
-- Application validation covers use-case preconditions, Company ownership scoping, local catalog
-  applicability, idempotency, and current Ecuador date.
-- Domain validation covers monetary and invoice invariants.
-- Infrastructure validation covers database constraints and persistence failures.
+**Decision**: Target PostgreSQL 18.4 while keeping schema constructs compatible with supported
+PostgreSQL 18 minors.
 
-Success is `201` for a new commit and `200` for an equivalent replay. Stable failures include
-`400` request-contract errors, `409` idempotency conflict, `422` business validation, and safe
-`500` persistence/internal failure. The contract defines no Company dependency statuses and no
-security statuses.
+**Rationale**: PostgreSQL 18.4 is the current supported minor release, and PostgreSQL recommends
+running the current minor for a supported major. It provides the UUID, exact numeric,
+`timestamptz`, transactional uniqueness, and referential-integrity behavior required here.
 
-## 10. Draft Versus Fiscal Issuance
+**Alternatives considered**:
 
-**Decision**: Persist only the Company UUID, opaque emission-point identifier, commercial draft,
-local catalog selections/evidence, calculations, payments, additional information, and audit
-timestamps.
+- An older supported major: technically possible but offers no feature benefit for a greenfield
+  service.
+- Another datastore: prohibited by the constitutional baseline.
 
-Do not persist Company-context versions/observation times, Issuer/establishment/emission-point
-fiscal snapshots, sequences, access keys, XML, signatures, certificates, SRI state, PDFs, or
-notifications. A later approved issuance feature must decide how authoritative fiscal context is
-resolved and snapshotted.
+**Official evidence**:
 
-## 11. Observability and Health
+- [PostgreSQL 18.4 release notes](https://www.postgresql.org/docs/release/18.4/)
+- [PostgreSQL versioning policy](https://www.postgresql.org/support/versioning/)
 
-**Decision**: Liveness reports process viability. Readiness checks the same PostgreSQL datasource
-used by persistence and no Company or identity-provider destination. Logs are structured and
-correlated without buyer data, raw idempotency keys, fiscal payloads, or other sensitive content.
-Company identifiers may be used only as safe operational correlation fields, never metric labels.
+## 4. Company Context and API Shape
 
-## 12. Testing and Runtime Evidence
+**Decision**: Expose `POST /invoice-drafts` under the existing `/api/v1` base. Require exactly one
+`X-Company-Id` header and one `Idempotency-Key` header. Accept an optional `X-Correlation-Id`.
 
-Required evidence includes:
+The Company header is trimmed, parsed as a non-nil UUID, and normalized to lowercase hyphenated
+form. It is mapped by the API layer to an application `CompanyId`; the application command carries
+that value explicitly; the aggregate stores it immutably.
 
-- pure domain calculation and validation vectors;
-- header/cardinality/UUID/nil and no-security OpenAPI tests;
-- application Company-scoping and no-Company-dependency architecture tests;
-- real PostgreSQL reactive persistence and committed-concurrency tests;
-- empty-database Flyway migrations including reference data;
-- API request/response and safe error tests;
-- official buyer, IVA, rounding, final-consumer, and zero-value vectors;
-- calculated-input rejection, rollback, response-loss replay, and lifetime binding tests;
-- packaged JVM smoke tests.
+**Rationale**: This is the definitive constitutional business-context boundary. CompanyId is an
+ownership and idempotency partition, not a credential. No Company path, query, body, token,
+session, principal, or thread-local source is allowed.
 
-Native compatibility is not a production requirement. It may be claimed only after a native build
-and runtime smoke suite proves create, replay, conflict, PostgreSQL/Flyway resources, OpenAPI,
-health, and representative validation behavior. JVM deployment remains acceptable if native
-evidence fails or complexity is unjustified.
+**Alternatives considered**:
+
+- `/companies/{companyId}/invoice-drafts`: prohibited because Company is not a resource owned by
+  this bounded context.
+- Body or query CompanyId: prohibited by the approved API contract.
+- Authentication-derived Company context: impossible by design because this feature has no
+  application identity state.
+
+## 5. Correlation Contract
+
+**Decision**: `X-Correlation-Id` accepts one trimmed identifier containing 1–64 characters from
+`A-Z`, `a-z`, `0-9`, `.`, `_`, `:`, or `-`. A valid supplied value is preserved and returned. When
+absent, the API generates a UUID and returns it. Blank, repeated, or unsafe supplied values produce
+`INVALID_REQUEST`.
+
+**Rationale**: The bounded character set prevents log/header injection while accepting common
+distributed-tracing identifiers. Correlation is transport evidence, is excluded from idempotency,
+and is not persisted on the Invoice Draft aggregate. Structured logs and traces carry it.
+
+**Alternative considered**: UUID-only caller values were rejected as unnecessarily restrictive;
+generated identifiers remain UUIDs.
+
+## 6. Error Status Mapping
+
+**Decision**: Use the stable catalog in `error-catalog.md` and RFC-style
+`application/problem+json` responses.
+
+| Code | HTTP status | Retry classification |
+|------|-------------|----------------------|
+| `COMPANY_CONTEXT_REQUIRED` | 400 | Correct request |
+| `COMPANY_CONTEXT_INVALID` | 400 | Correct request |
+| `INVALID_REQUEST` | 400 | Correct request |
+| `PROHIBITED_CALCULATED_FIELD` | 422 | Correct request |
+| `IDEMPOTENCY_CONFLICT` | 409 | Use a new key or original content |
+| `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Reduce request |
+| `BUSINESS_VALIDATION_FAILED` | 422 | Correct business content |
+| `PERSISTENCE_UNAVAILABLE` | 503 | Retry same Company/key |
+| `REQUEST_TIMEOUT` | 504 | Retry same Company/key |
+| `INTERNAL_ERROR` | 500 | Retry only under operational guidance |
+
+**Rationale**: `400` covers representation/header syntax, `422` covers well-formed content rejected
+by approved validation, `409` covers the idempotency binding conflict, and `503`/`504` identify
+retryable local infrastructure outcomes. A retry uses the same Company and key because commit may
+have succeeded before response loss.
+
+## 7. Deterministic Request Fingerprinting
+
+**Decision**: Persist two separate 32-byte SHA-256 values:
+
+- a domain-separated hash of the trimmed `Idempotency-Key`;
+- a domain-separated fingerprint of normalized client-controlled business content.
+
+Persist `normalization_version = 1`. Do not persist the raw idempotency key or complete normalized
+request.
+
+**Rationale**: A cryptographic fingerprint is sufficient for equivalence and avoids duplicating
+buyer personal data in the idempotency table. Domain separation prevents the two hash purposes
+from sharing the same input namespace.
+
+Normalization version 1:
+
+- canonical lowercase hyphenated UUIDs;
+- ISO `YYYY-MM-DD` emission date;
+- trimmed validated text;
+- canonical plain decimal representations with numerical equivalents normalized identically;
+- absent optional collections normalized to empty collections;
+- invoice-line order preserved;
+- payments sorted by payment-method identifier and amount;
+- additional information sorted by canonical name and value;
+- JSON property order ignored.
+
+The fingerprint includes emission-point identifier, emission date, buyer data, lines, selected tax
+rules, payments, and additional information. It excludes CompanyId, idempotency key, correlation
+identifier, headers, and all other transport metadata.
+
+**Alternatives considered**:
+
+- Persist normalized JSON: rejected because it duplicates buyer personal data.
+- Hash raw JSON: rejected because property ordering and equivalent number representations would
+  cause false conflicts.
+- Global key uniqueness: rejected because the approved scope is CompanyId plus key.
+
+## 8. Transaction and Concurrency Arbitration
+
+**Decision**: Use one short reactive PostgreSQL transaction for a new draft aggregate, all child
+records, and the idempotency binding. Use `UNIQUE (company_id, idempotency_key_hash)` as the race
+arbiter under PostgreSQL `READ COMMITTED`.
+
+Before the transaction, perform the approved request/fingerprint checks and a Company-scoped
+binding lookup. If no binding exists, validate local catalogs and domain rules, calculate, then
+write the aggregate and binding atomically. If concurrent insertion loses the uniqueness race, its
+transaction rolls back completely; a fresh Company-scoped lookup compares the winner's
+fingerprint and returns replay or conflict.
+
+**Rationale**: The uniqueness constraint provides cross-process arbitration without application
+locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordination.
+
+## 9. Persistence Ownership and Constraints
+
+**Decision**: Store `company_id uuid NOT NULL` on `invoice_draft`, enforce a non-nil check, and add
+`UNIQUE (company_id, id)` so idempotency can reference the root through a composite local foreign
+key. Every existing-draft repository operation requires CompanyId and draftId.
+
+Children store only local foreign keys to the root or owning line. They do not repeat CompanyId and
+do not represent Company master data. Deletion behavior is not invented because draft deletion is
+out of scope.
+
+No tenant, subject, role, authorization, Company/Issuer/establishment/emission master table,
+Company-context version/time, fiscal snapshot, or cross-database foreign key is allowed.
+
+## 10. Reactive and Blocking Boundaries
+
+**Decision**: HTTP mapping, application orchestration, and business persistence remain reactive.
+Domain calculation is synchronous, deterministic, and bounded by 500 lines. No synchronous wait,
+blocking network call, filesystem access, certificate work, SOAP, or XML processing exists.
+
+Flyway runs during controlled startup through its migration datasource and is not part of the
+event-loop request path. Business persistence uses the reactive PostgreSQL client only.
+
+## 11. Fiscal and Monetary Rules
+
+**Decision**: Preserve the exact approved `BigDecimal`, `HALF_UP`, IVA-only, buyer-identification,
+current Ecuadorian date, zero-value, payment, text, collection, and no-calculated-input rules from
+the specification. Versioned local reference catalogs are managed by Flyway; codes and rates are
+not hard-coded.
+
+**Official evidence**:
+
+- [SRI electronic invoicing resources and Technical Sheet v2.32](https://www.sri.gob.ec/facturacion-electronica)
+
+## 12. Health, Performance, and Runtime Evidence
+
+**Decision**: Liveness reports process viability. Readiness uses only the configured PostgreSQL
+destination and successful local migration/catalog initialization. It performs no destructive
+query and has no Company, identity-provider, gateway, BFF, or SRI dependency.
+
+Use the measurable budgets in `operational-requirements.md`. They include only parsing,
+validation, fingerprinting, calculation, PostgreSQL, and serialization within this service.
+Company Service latency is nonexistent and excluded.
+
+Packaged JVM evidence is mandatory. Native support may be claimed only after both build and
+runtime smoke evidence covers DTO reflection/resources, validation, reactive persistence, Flyway
+resources, OpenAPI, health, create, replay, conflict, rollback, and timeout behavior.

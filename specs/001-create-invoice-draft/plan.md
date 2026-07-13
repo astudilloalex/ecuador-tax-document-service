@@ -1,155 +1,263 @@
 # Implementation Plan: Create Invoice Draft
 
-**Branch**: `6-ft-1` | **Date**: 2026-07-12 | **Spec**: `specs/001-create-invoice-draft/spec.md`
+**Branch**: `001-create-invoice-draft` | **Date**: 2026-07-12 | **Spec**: `specs/001-create-invoice-draft/spec.md`
+
+**Input**: Clarified feature specification with Constitution v2.0.0 Company-context decisions
 
 ## Summary
 
-Provide one synchronous internal API operation that accepts a mandatory opaque Company UUID in
-`X-Company-Id`, validates commercial and local versioned catalog inputs, performs deterministic USD
-calculations, and atomically persists and returns one complete invoice draft. Company UUID plus
-idempotency-key hash arbitrates duplicate and concurrent commands. The feature performs no
-authentication, authorization, Company lookup, fiscal-context resolution, snapshot creation, or
-SRI side effect.
+Deliver one synchronous internal `POST /invoice-drafts` operation under `/api/v1`. The API reads
+exactly one `X-Company-Id`, canonicalizes it, maps it to an application `CompanyId`, validates local
+commercial/fiscal inputs, calculates deterministic USD amounts, and atomically persists and returns
+one complete `DRAFT` aggregate. CompanyId plus a hashed idempotency key defines the durable
+concurrency scope. The design has no authentication, authorization, Company Service, Company
+master data, fiscal snapshot, cache, or SRI side effect.
 
 ## Technical Context
 
 **Language/Version**: Java 25
-**Framework**: Quarkus 3.33.2.1 LTS, selected in `research.md` for supported Java 25 and LTS evidence
-**Reactive Model**: Mutiny for the HTTP, application, and persistence flows
-**Persistence**: Hibernate Reactive with Panache; infrastructure-only persistence models
-**Database**: PostgreSQL 18.4
-**Schema Migration**: Flyway only
-**Caller Security**: None in this repository; no authentication, authorization, tokens, principals,
-roles, permissions, or service authentication
-**Testing**: JUnit 5, REST Assured, Quarkus `UniAsserter`, real PostgreSQL integration tests,
-empty-database Flyway tests, API contract tests, domain vectors, concurrency tests, JVM tests, and
-native smoke evidence only when native compatibility is claimed
-**Target Execution**: JVM execution is mandatory
-**Native Compatibility**: Candidate capability; actual build and runtime evidence is required
-before it may be claimed
-**External Integrations**: None for Create Invoice Draft
-**Company Context Boundary**: `X-Company-Id` is mapped to an immutable normalized application
-Company UUID. No Company port, client, lookup, status/eligibility check, readiness dependency,
-master data, cache, replication, shared persistence, or draft-time fiscal snapshot exists.
-**Performance Goals**: At the approved upper bounds, a valid request is processed with one bounded
-reactive database transaction; concurrency evidence includes at least 50 equivalent requests for
-one Company-and-key scope and proves one draft.
-**Constraints**: 500 lines, 10 positive payments or one zero payment, 15 additional-information
-entries, exact approved decimal precision, current Ecuadorian emission date, request/body limits
-defined before implementation, and no blocking event-loop work
-**Scale/Scope**: One Company ownership partition and one draft per logical command; no other tax
-document type or fiscal-issuance lifecycle
-**Sensitive Data**: Buyer identity/contact and fiscal payload content are redacted from logs,
-errors, metrics, and traces. Raw idempotency keys are not required in persistence.
+
+**Framework**: Quarkus 3.33.2.1 LTS; selected from the current production-recommended LTS line and
+justified in `research.md`
+
+**Reactive Model**: Mutiny for HTTP/application orchestration and every I/O port; synchronous pure
+domain calculation
+
+**Persistence**: Hibernate Reactive with Panache; Panache models remain infrastructure-only
+
+**Database**: PostgreSQL 18.4; real PostgreSQL is required for persistence/concurrency evidence
+
+**Schema Migration**: Flyway only, including versioned local reference data
+
+**Caller Security**: None. The repository contains no authentication, authorization, identity,
+token, role, permission, tenant, or application-level service security behavior.
+
+**Testing**: JUnit 5, REST Assured, `UniAsserter`, real PostgreSQL integration/concurrency tests,
+empty-database Flyway tests, OpenAPI contract tests, architecture tests, pure domain vectors,
+packaged JVM tests, and optional native build/runtime smoke
+
+**Target Execution**: JVM is mandatory
+
+**Native Compatibility**: Optional candidate; it may be claimed only with build and runtime
+evidence. JVM remains acceptable when native evidence fails or complexity is unjustified.
+
+**External Integrations**: None. Create Invoice Draft calls neither Company Service nor SRI and
+uses no certificate, storage, queue, rendering, notification, or identity adapter.
+
+**Company Context Boundary**: Exactly one `X-Company-Id` request header is trimmed, parsed as a
+non-nil UUID, normalized to lowercase hyphenated form, explicitly mapped to application
+`CompanyId`, stored immutably on the aggregate, returned in the response, and used for persistence
+and idempotency partitioning. It is not a credential or entitlement proof.
+
+**Performance Goals**: Typical create p95 ≤750 ms/p99 ≤1.5 s; maximum supported create p95 ≤3
+s/p99 ≤5 s; replay/conflict p95 ≤250 ms/p99 ≤500 ms; 50 equivalent concurrent requests complete
+within 10 s and create exactly one aggregate/binding
+
+**Constraints**: 2,097,152-byte request-body maximum; 500 lines; 10 payments; 15 additional entries;
+10-second overall request deadline; 5-second local write-transaction timeout; exact approved decimal
+precision/rounding; no synchronous wait or unbounded retry
+
+**Scale/Scope**: One Company partition and one Invoice Draft per logical command; no draft update,
+delete, fiscal issuance, other tax-document type, or Company administration
+
+**Sensitive Data**: Buyer identity/contact and fiscal payload content are sensitive. Logs,
+errors, metrics, traces, fixtures, and idempotency storage exclude personal values, raw keys, and
+complete normalized requests. Fingerprints are SHA-256 values with normalization version metadata.
 
 ## Source and Terminology Evidence
 
 | Authority | Applicable source and version/path | Requirements or decisions governed |
 |-----------|------------------------------------|-------------------------------------|
-| Official SRI documentation | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and applicable versioned catalogs | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
-| Constitution | `.specify/memory/constitution.md` v2.0.0 | Definitive Company header/no-auth/no-Company-dependency boundary and all project gates |
-| Specification | `specs/001-create-invoice-draft/spec.md`, clarification session 2026-07-12 | Functional behavior and approved boundaries |
-| Architecture decisions | None | No ADR is needed for the approved constitutional boundary |
-| Legacy evidence | `docs/legacy/as-is/` references listed in the specification | Discovery only; no target compatibility |
+| Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
+| Constitution | `.specify/memory/constitution.md` v2.0.0 | Company header, no identity/Company dependency, architecture, persistence, testing, operations |
+| Specification | `specs/001-create-invoice-draft/spec.md`, clarification session 2026-07-12 | Actor, inputs, calculations, validation, failure precedence, acceptance |
+| Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
+| Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
+| Legacy evidence | `docs/legacy/as-is/` paths listed in the spec | Historical discovery only |
 
-**Source Conflicts and Resolutions**: Earlier feature artifacts required Keycloak, tenant-derived
-Company context, a Company-context adapter, and fiscal snapshots. Constitution v2.0.0 has higher
-authority and removes those requirements from draft creation. The specification and all planning
-artifacts are reconciled accordingly.
+**Source Conflicts and Resolutions**: Historical and superseded feature artifacts required
+Keycloak, tenant-derived Company context, a Company client/port, status/eligibility checks, and
+fiscal snapshots. Constitution v2.0.0 and the clarified spec have higher authority. All such
+components/outcomes are removed or explicitly prohibited.
 
 **Pending Functional Validation**: None.
 
-**Terminology Mapping Impact**: Company Identifier is the normalized opaque UUID from
-`X-Company-Id`; Fiscal Context Snapshot is reserved for later fiscal issuance.
+**Terminology Mapping Impact**: `Company Identifier`/`CompanyId` remains the canonical opaque
+ownership value from `X-Company-Id`. `Fiscal Context Snapshot` remains reserved for a later
+fiscal-issuance specification. `X-Correlation-Id` is the canonical transport spelling in these
+artifacts.
 
 ## Constitution Check
 
+*GATE: Recorded before Phase 0 and re-evaluated after Phase 1.*
+
 | Gate | Pre-Research evidence | Post-Design evidence |
 |------|-----------------------|----------------------|
-| Greenfield bounded outcome | PASS — one invoice-draft creation outcome | PASS — no legacy contract or unrelated document type |
-| Authority and language | PASS — SRI v2.32 and English target terms identified | PASS — conflicts and terminology changes recorded |
-| Technology baseline | PASS — Java 25, Quarkus, Mutiny, PostgreSQL, reactive Panache, Flyway | PASS — supported versions justified in research |
-| Clean Architecture and domain purity | PASS — four required boundaries | PASS — explicit DTO/application/domain/persistence mappings; HTTP Company header remains in API |
-| Reactive safety | PASS — no external or blocking adapters | PASS — reactive PostgreSQL only; no synchronous waits |
-| Fiscal and monetary correctness | PASS — approved IVA, buyer, date, decimal, and zero-total rules | PASS — exact calculation pipeline and catalog evidence defined |
-| Internal caller boundary | PASS — identity and entitlement explicitly out of scope | PASS — no security dependencies or OpenAPI security constructs |
-| Company boundary | PASS — mandatory opaque header; no Company lookup or snapshots | PASS — data model stores only immutable Company UUID and opaque emission-point ID |
-| Sensitive data | PASS — sensitive buyer/fiscal inputs identified | PASS — safe errors and observability tests planned |
-| Persistence and consistency | PASS — Flyway and all-or-nothing outcome required | PASS — Company-plus-key-hash uniqueness and aggregate constraints defined |
-| API quality | PASS — stable English errors/correlation/idempotency | PASS — OpenAPI contract contains required header and no Company parent resource |
-| External adapters | PASS — none applicable | PASS — no Company or security adapter introduced |
-| Testing and operations | PASS — acceptance/risk tests required | PASS — JVM, PostgreSQL, migration, header, calculation, concurrency, and health evidence listed |
-| Simplicity | PASS — no extra service or abstraction | PASS — only locally required ports and persistence are planned |
+| Greenfield bounded outcome | PASS — one target create/review outcome | PASS — no legacy compatibility or unrelated lifecycle |
+| Authority/versioned evidence | PASS — Constitution v2.0.0 and SRI v2.32 identified | PASS — research links official technology/SRI sources and resolves conflicts |
+| English terminology | PASS — target terms are English | PASS — all generated artifacts use canonical English with exact SRI exceptions |
+| Required baseline | PASS — Java/Quarkus/Mutiny/PostgreSQL/Panache/Flyway fixed | PASS — Quarkus 3.33.2.1 LTS and PostgreSQL 18.4 justified |
+| Clean Architecture | PASS — four boundaries required | PASS — explicit API→application→domain/infrastructure mapping below |
+| Domain purity | PASS — synchronous deterministic fiscal model | PASS — no transport/framework/persistence/security/Mutiny types in domain |
+| Reactive safety | PASS — no blocking external operation in scope | PASS — reactive PostgreSQL only; bounded domain work and evidence budget |
+| Fiscal correctness | PASS — approved IVA/buyer/date/decimal rules | PASS — model/contract/test vectors preserve exact rules |
+| Internal caller boundary | PASS — no identity/security state | PASS — OpenAPI/dependencies/config/tests contain no security behavior |
+| Company boundary | PASS — mandatory header, no lookup/snapshot | PASS — CompanyId mapping/storage/scoping and negative architecture evidence explicit |
+| Sensitive data | PASS — buyer/fiscal data identified | PASS — fingerprint-only binding and observability redaction defined |
+| Persistence | PASS — atomic Flyway/PostgreSQL required | PASS — constraints, transaction, rollback, empty-db evidence defined |
+| Boundary consistency | PASS — idempotency/failure precedence approved | PASS — fingerprint, race arbitration, timeout/recovery outcomes complete |
+| API/async quality | PASS — synchronous observable result, stable errors | PASS — strict OpenAPI, Problem Details, correlation, no opaque job |
+| External adapters | PASS — none applicable | PASS — no Company/SRI/security port/client/health destination |
+| Testing | PASS — 48 scenarios and 28 success criteria | PASS — traceability and risk-based evidence cover every coherent group |
+| Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
+| Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
+| Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
 
-No constitutional deviation is requested.
+No constitutional deviation or complexity exception is requested.
+
+## Clean Architecture Mapping
+
+```text
+HTTP request
+  → api: parse/validate X-Company-Id and transport DTOs
+  → application: CreateInvoiceDraftCommand(CompanyId, business inputs, idempotency/correlation)
+  → domain: InvoiceDraft aggregate and deterministic calculation
+  → application outbound ports
+  → infrastructure: reactive Panache/PostgreSQL, local catalogs, clock/identifier adapters
+```
+
+| Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
+|----------|----------------|----------------------|-------------------------|
+| `api` | Enforce payload/header/body representation, strict unknown fields, correlation, DTO mapping, Problem Details | `application` | Persistence entities returned directly; Company/security clients |
+| `application` | Carry explicit CompanyId, enforce failure precedence/idempotency/use-case preconditions, orchestrate transaction ports | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
+| `domain` | Own immutable CompanyId on Invoice Draft; buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
+| `infrastructure` | Implement local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache | application ports/domain types | Company/SRI/security adapter, shared database, cache |
+
+Actual outbound boundaries are limited to the Invoice Draft repository, local identification/tax/
+payment catalog access, clock, and identifier generation. No interface named or equivalent to
+`CompanyContextPort`, `ResolveCompanyFiscalContextPort`, or Company authorization/eligibility is
+introduced.
 
 ## Reactive and Resource Boundary Design
 
-| Operation | Boundary | Classification | Execution context | Bound | Evidence |
-|-----------|----------|----------------|-------------------|-------|----------|
-| HTTP request mapping and validation | API adapter | Non-blocking, bounded CPU | Event loop | Configured payload and collection limits | Maximum-size and malformed-input tests |
-| Decimal calculation and domain validation | Domain/application | Synchronous deterministic bounded CPU | Calling context | At most 500 lines | Calculation vectors and concurrent upper-bound tests |
-| Draft/binding lookup and persistence | Repository port and reactive Panache adapter | Non-blocking database I/O | Reactive PostgreSQL client | Database/query/transaction timeout | Rollback, timeout, connection-loss, and concurrency tests |
+| Operation | Adapter/port boundary | Classification | Execution context | Timeout/resource bound | Required evidence |
+|-----------|-----------------------|----------------|-------------------|------------------------|-------------------|
+| Header/body mapping and normalization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections | Header matrix, max payload, blocked-thread check |
+| Fingerprint generation | Application normalization service | Bounded CPU, no I/O | Calling context | ≤2 MiB, SHA-256, version 1 | Vectors and maximum-payload benchmark |
+| Monetary/domain calculation | Pure domain | Synchronous deterministic bounded CPU | Calling context | ≤500 lines | Exact vectors, p99 budget, no event-loop warning |
+| Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query bound below 10 s | Unavailable, timeout, replay/conflict tests |
+| Aggregate/binding write | Repository port/reactive adapter | Non-blocking database I/O | Reactive transaction | 5-second transaction timeout | Rollback phase injection and concurrency |
+| Flyway startup migration | Startup infrastructure | Blocking lifecycle operation outside requests | Controlled startup | Deployment timeout/empty-db evidence | Migration and readiness tests |
 
-No filesystem, SOAP, certificate, cryptographic, XML, or other blocking operation exists in this
-feature. Reactive wrappers may not hide blocking work.
+No blocking filesystem/network operation, SOAP, XML, signature, certificate, SRI, or Company call
+exists. A reactive wrapper is not evidence that an underlying operation is non-blocking.
 
 ## Company Context and Sensitive-Data Design
 
-**Internal Caller Boundary**: The internal operation is neither protected nor public in an
-application-security sense because this repository implements no caller security. The OpenAPI
-contract has no security schemes, requirements, Authorization header, `401`, or `403`.
+**Internal Caller Boundary**: No operation has application authentication or authorization. The
+OpenAPI contract defines no security scheme/requirement, Authorization header, `401`, or `403`.
 
-**Company Header Contract**: The API accepts exactly one `X-Company-Id` value and validates only
-presence, single cardinality, UUID syntax, and non-nil value. Missing/blank maps to
-`COMPANY_CONTEXT_REQUIRED`; repeated/malformed/nil maps to `COMPANY_CONTEXT_INVALID`. Accepted
-values are normalized to lowercase hyphenated UUID form. Company identifier never appears in
-path, query, body, token, or session.
+**Company Header Contract**: Exactly one `X-Company-Id` is required. Trim; reject blank/missing as
+`COMPANY_CONTEXT_REQUIRED`; reject repeated/malformed/nil as `COMPANY_CONTEXT_INVALID`; normalize
+accepted UUID to lowercase hyphenated form. CompanyId never appears in path/query/body.
 
-**Company Ownership Scoping**: The application `CompanyId` is immutable on the draft and scopes
-every draft query, mutation, and idempotency lookup. Children belong through the local aggregate.
-This is business partitioning, not caller authorization or security isolation.
+**Company Ownership Scoping**: API maps to application `CompanyId`; the command carries it; the
+aggregate stores it immutably; response returns it. Existing-draft repository reads/mutations use
+CompanyId plus draftId. Idempotency uses CompanyId plus key hash. This is partitioning, not
+authorization.
 
-**Company Master-Data Boundary**: No Company aggregate, table, repository, port, client, adapter,
-status/eligibility validation, database access, foreign key, transaction, cache, replication,
-health check, timeout, failure, or snapshot exists. `emissionPointId` is opaque draft input.
+**Company Master-Data Boundary**: No Company/Issuer/establishment/emission lookup, validation,
+port, client, adapter, repository, table, shared persistence, cross-service foreign key/transaction,
+cache, replication, retry/timeout, health/readiness, fiscal context, or snapshot exists.
 
-**Sensitive Data**: Problem responses contain stable codes and safe field paths without rejected
-values. Buyer identity/contact, raw idempotency keys, payloads, and Company identifiers are not
-metric labels and are redacted from unsafe observability fields.
+**Sensitive Data**: Raw idempotency keys, normalized request content, buyer data, payloads, SQL,
+and internals are absent from errors/observability/binding storage. SHA-256 fingerprints and a
+normalization version are persisted. Correlation remains transport/operational evidence, not draft
+data.
 
-## Data and Consistency Design
-
-| Command/boundary | States | Retry/idempotency | Duplicate handling | Timeout | Recovery | Terminal outcome |
-|------------------|--------|-------------------|--------------------|---------|----------|------------------|
-| Create or replay invoice draft | No durable state before transaction; committed complete draft+binding or rollback | Scope is normalized Company UUID + key hash; fingerprint excludes Company and transport headers | Equivalent returns original; different content conflicts; concurrent equivalent produces one draft | Bounded database transaction; no Company timeout exists | Caller retries the same command/key after response loss; committed binding remains authoritative | `201` new draft, `200` replay, stable `400`/`409`/`422`/`500` errors |
-
-The service never claims atomicity with an external system because no external operation is in
-scope. PostgreSQL constraints enforce aggregate ownership and idempotency uniqueness.
+Certificate lifecycle is not applicable: certificate use/management is explicitly out of scope.
 
 ## API and Error Contract
 
-- Operation: `POST /api/v1/invoice-drafts`; the version prefix is global and Company is not a path
-  resource.
-- Required headers: `X-Company-Id`, `Idempotency-Key`; optional/generatable correlation header.
-- Request body: buyer, opaque emission-point identifier, emission date, ordered lines and tax-rule
-  selections, payments, optional additional information. Issuer/fiscal/snapshot/calculated fields
-  are rejected as unknown inputs.
-- Stable Company header codes: `COMPANY_CONTEXT_REQUIRED`, `COMPANY_CONTEXT_INVALID`.
-- The feature defines no Company-not-found/inactive/not-authorized/unavailable/timeout/mismatch,
-  authentication, or authorization error.
-- Response returns the Company UUID, opaque emission-point ID, complete captured commercial data,
-  calculated amounts, `DRAFT`, and timestamps; it returns no fiscal master-data snapshot.
+- Effective operation: `POST /api/v1/invoice-drafts` (`/api/v1` server base plus
+  `/invoice-drafts` resource path).
+- Required headers: `X-Company-Id`, `Idempotency-Key`.
+- Optional `X-Correlation-Id`: preserve one valid supplied value; generate a UUID when absent;
+  return it on every success/safe failure.
+- Strict body schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown properties, and
+  calculated fields.
+- Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
+  commercial/calculated draft, `createdAt`, and `updatedAt`.
+- New commit returns `201`; equivalent replay returns `200`; both identify replay state.
+- Stable statuses/codes are defined in `error-catalog.md` and represented in OpenAPI.
+- Failure evaluation follows FR-041 exactly.
+
+The contract contains no Company-not-found/inactive/unavailable/timeout/authorization result and
+no authentication or authorization result.
+
+## Data and External Consistency Design
+
+| Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
+|------------------|---------------------|-------------------|--------------------|---------|-------------------------|--------------------|
+| Header/body acceptance | No durable state | Key syntax checked before body business validation | N/A | Overall 10 s begins at acceptance | Correct request | 400/413 or continue |
+| Binding lookup | No new durable state | CompanyId + key hash; fingerprint/version compare | Equivalent replay; different content conflict | Bounded query | Same key safely retried | 200/409 or continue |
+| New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | 5-second write tx | Loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
+| Response delivery | Commit already authoritative | Same equivalent retry | Returns original | 10-second request deadline | Binding reconciles response loss | Original draft observable |
+
+There is no external-system boundary and no claim of atomicity beyond local PostgreSQL.
+
+## Persistence and Idempotency Design
+
+Detailed schema/constraint/transaction decisions are in `data-model.md` and
+`persistence-design.md`. Detailed hashing/canonicalization/replay decisions are in
+`idempotency-design.md`.
+
+Key invariants:
+
+- root `company_id uuid NOT NULL` and non-nil;
+- local children reference only the draft/line;
+- existing-root operations use CompanyId + draftId;
+- binding uniqueness is `UNIQUE (company_id, idempotency_key_hash)`;
+- binding-to-root composite Company/draft foreign key;
+- SHA-256 key hash and request fingerprint are 32 bytes;
+- `normalization_version = 1` for new bindings;
+- no raw key or complete normalized request is persisted;
+- root, children, and binding commit or roll back together.
 
 ## Native Compatibility Evaluation
 
-| Risk area | Applicable? | Planned evidence | Decision |
-|-----------|-------------|------------------|----------|
-| SOAP, XML/XSD, signatures, PKCS#12 | No | Excluded by specification | Not applicable to this feature |
-| Cryptographic providers | No feature-specific use | JVM and optional native smoke | No custom provider |
-| Reflection/resources | Yes — DTOs, Panache, OpenAPI, Flyway | Native build plus create/replay/conflict/health runtime smoke if claimed | JVM remains acceptable if native evidence fails |
+| Risk area | Applicable? | Build evidence required | Runtime evidence required | Decision/consequence |
+|-----------|-------------|-------------------------|---------------------------|----------------------|
+| SOAP clients | No | Excluded by spec | None | Not applicable |
+| XML generation/schema | No | Excluded by spec | None | Not applicable |
+| XML signatures | No | Excluded by spec | None | Not applicable |
+| PKCS#12 handling | No | Excluded by spec | None | Not applicable |
+| Cryptographic providers | SHA-256 via Java platform only | Optional native build if native claimed | Fingerprint vectors | No custom provider |
+| Reflection/resources | Yes: Jackson, validation, Panache, Flyway, OpenAPI, health | Native build if claimed | Create/replay/conflict/PostgreSQL/health smoke | JVM remains accepted if evidence fails |
 
 ## Project Structure
+
+### Documentation
+
+```text
+specs/001-create-invoice-draft/
+├── spec.md
+├── plan.md
+├── research.md
+├── data-model.md
+├── persistence-design.md
+├── idempotency-design.md
+├── error-catalog.md
+├── operational-requirements.md
+├── traceability.md
+├── quickstart.md
+└── contracts/
+    └── invoice-draft-api.openapi.yaml
+```
+
+No Company port contract or task file is generated.
+
+### Planned Source Boundaries
 
 ```text
 src/main/java/com/alexastudillo/taxdocument/
@@ -158,46 +266,69 @@ src/main/java/com/alexastudillo/taxdocument/
 ├── domain/invoicedraft/
 └── infrastructure/invoicedraft/
 
-src/main/resources/db/migration/
-src/test/java/com/alexastudillo/taxdocument/{api,application,domain,infrastructure}/invoicedraft/
+src/main/resources/
+├── application.properties
+└── db/migration/
+
+src/test/java/com/alexastudillo/taxdocument/
+├── api/invoicedraft/
+├── application/invoicedraft/
+├── domain/invoicedraft/
+└── infrastructure/invoicedraft/
 ```
 
-No `company` client or adapter package and no security package is introduced. Interfaces are
-limited to actual local application boundaries: persistence, approved reference catalogs, clock,
-and identifier generation.
+Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
+is planned.
 
 ## Test and Operational Evidence Plan
 
-| Requirement/risk | Level/environment | Observable evidence |
-|------------------|-------------------|---------------------|
-| FR-001–FR-005, FR-039–FR-040 | API contract/integration | Exact header validation, canonical UUID mapping, owned path, rejected snapshot/Issuer fields, zero security constructs |
-| FR-006–FR-016, DR-001–DR-016 | Domain/application | Official identification vectors, IVA treatments, exact rounding, zero-value rules, text and collection bounds |
-| FR-020–FR-024, FR-036–FR-038 | PostgreSQL/architecture | Atomic aggregate, Company-scoped queries, child ownership, no Company dependency/table/snapshot |
-| FR-027–FR-034 | PostgreSQL concurrency/API | Company+key-hash uniqueness, one winner, replay, conflict, scope independence, response-loss recovery |
-| Flyway | Empty PostgreSQL | Complete repeatable migration and constraints from empty database |
-| Sensitive data | API/observability | No buyer/raw key/payload leakage in errors, logs, metrics, or traces |
-| Runtime | Packaged JVM | Create, replay, conflict, rollback, health |
-| Native claim | Native process if claimed | Same critical smoke behavior against PostgreSQL |
+| Requirement/risk | Level/environment | Observable invariant | Required negative/boundary evidence |
+|------------------|-------------------|----------------------|-------------------------------------|
+| Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company body/path/query rejected |
+| Clean layer handoff | Architecture + application | Command has explicit CompanyId; aggregate immutable CompanyId | no HTTP/security/thread-local/Gateway types below API |
+| No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
+| Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | invalid/unsupported/calculated input vectors |
+| Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
+| Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
+| API errors/correlation | Contract/integration | exact code/status, safe Problem Details, supplied/generated correlation | 400/409/413/422/503/504/500; no 401/403 |
+| No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
+| Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
+| Performance/resources | Warmed packaged JVM + PostgreSQL | all budgets in operational requirements | max payload, 50-way contention, pool recovery, no blocked event loop |
+| JVM/native | Packaged JVM; optional native | mandatory JVM critical smoke; native build+runtime if claimed | no native claim from build alone |
 
-**Liveness and Readiness**: Liveness reports process viability. Readiness checks only dependencies
-needed to accept traffic, which for this feature is the configured PostgreSQL destination. No
-Company or identity-provider check exists.
+`traceability.md` maps each requirement group, acceptance/success evidence, design artifact,
+contract/data evidence, test level, and prohibited behavior.
 
-**Structured Observability**: Structured logs and traces carry correlation context and safe
-operation/status fields. High-cardinality or sensitive values are not metric labels.
+**Liveness and Readiness**: PostgreSQL/local initialization only for readiness; liveness remains
+independent. No Company, identity, gateway/BFF, or SRI check.
 
-**Audit Events**: Draft creation and idempotency conflict/replay are operationally observable;
-there are no certificate or authentication audit events.
+**Structured Observability**: Correlation propagates through safe structured logs/traces. Metrics
+use bounded labels only. CompanyId is never a metric label.
 
-**External Destination Consistency**: PostgreSQL readiness uses the same configured datasource as
-business persistence. There is no Company or OIDC destination.
+**Audit Events**: New commit, replay, conflict, persistence unavailable/timeout, and significant
+rollback are observable without buyer/raw-key/payload data.
+
+**External Destination Consistency**: The readiness check uses the same PostgreSQL datasource as
+business persistence. No other destination exists.
 
 ## Complexity Tracking
 
 | Addition | Requirement | Simpler alternative | Why insufficient | Consequence |
 |----------|-------------|---------------------|------------------|-------------|
-| Durable idempotency binding with key hash and normalized content | FR-027–FR-034 | In-memory or key-only deduplication | Cannot survive restart, prove semantic equivalence, or arbitrate concurrency | Migration and PostgreSQL concurrency evidence required |
-| Versioned local fiscal reference catalogs | DR-001 | Hard-coded codes/rates | Prohibited and cannot represent effective dating | Flyway reference-data evolution and catalog tests required |
+| Durable fingerprint-only idempotency binding | FR-027–FR-034 | In-memory/key-only dedupe | Not durable, cross-process safe, semantically comparable, or privacy-minimal | Migration, fingerprint vectors, concurrency/rollback evidence |
+| Versioned local tax-document reference catalogs | DR-001 | Hard-coded codes/rates | Prohibited; cannot represent activity/effective dates/version | Flyway reference migrations and catalog tests |
 
-No external service, background process, cache, broker, additional datastore, or Company
-abstraction is justified or planned.
+There is no additional microservice, external client, cache, broker, background process, shared
+database, second datastore, generic repository hierarchy, or custom authentication framework.
+
+## Phase 0 and Phase 1 Outputs
+
+- Phase 0 research: `research.md` — all planning decisions resolved.
+- Phase 1 model: `data-model.md`.
+- Phase 1 API contract: `contracts/invoice-draft-api.openapi.yaml`.
+- Phase 1 validation guide: `quickstart.md`.
+- Supporting designs: `error-catalog.md`, `persistence-design.md`,
+  `idempotency-design.md`, `operational-requirements.md`, and `traceability.md`.
+
+The next workflow command is `$speckit-checklist`; implementation tasks are intentionally not
+generated by this plan command.

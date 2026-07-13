@@ -1,0 +1,26 @@
+# Traceability Matrix: Create Invoice Draft
+
+This matrix maps approved requirements to design and planned observable evidence. It does not
+create implementation tasks.
+
+| Requirement or risk | Acceptance / success evidence | Design artifact | Contract/data evidence | Planned test level | Prohibited evidence |
+|---------------------|-------------------------------|-----------------|------------------------|--------------------|---------------------|
+| Company header and canonical CompanyId (`FR-001`–`FR-004`) | Scenarios 1, 6, 34, 35, 47, 48; `SC-006`, `SC-017` | `plan.md` Company Header; `research.md` §4 | OpenAPI `X-Company-Id`; `data-model.md` root | API contract + application mapping + PostgreSQL | No Company path/query/body or lookup |
+| Explicit Clean Architecture mapping (`FR-037`, `FR-040`) | Scenarios 34, 41, 43; `SC-017`, `SC-023` | `plan.md` Clean Architecture Mapping | Domain root `CompanyId`; application command | Architecture/dependency tests | No HTTP/security/thread-local/Gateway object below API |
+| No identity/security behavior (`FR-039`) | Scenario 43; `SC-023`, `SC-024` | `plan.md` Internal Caller Boundary | OpenAPI has no security declaration | Contract/dependency/config inspection | No Keycloak/OIDC/JWT/Auth/401/403 |
+| No Company dependency/snapshot (`FR-003`–`FR-005`, `FR-036`–`FR-038`) | Scenarios 10, 35, 41–44; `SC-022`–`SC-025` | `research.md` §4; `persistence-design.md` | No Company port contract; excluded model fields | Architecture + persistence schema inspection | No Company client/table/health/timeout/retry/snapshot |
+| Buyer identification (`FR-007`, `FR-028`; `DR-001`, `DR-014`, `DR-015`) | Scenarios 7, 13–16; `SC-010` | `research.md` §11 | Versioned identification catalog | Domain/application official vectors | No invented checksum or online registry call |
+| Lines and IVA-only tax (`FR-009`–`FR-012`; `DR-002`–`DR-010`) | Scenarios 2–4, 9, 12, 28, 40; `SC-003`, `SC-004`, `SC-009`, `SC-021` | `data-model.md` line/tax; research §11 | Strict request DTO; line/tax/group structures | Pure domain + catalog + API | No ICE/IRBPNR/multiple taxes/client tax values |
+| Payments and zero-value invoices (`FR-013`, `FR-014`; `DR-016`, `DR-022`) | Scenarios 5, 17–19, 39; `SC-011`, `SC-020` | `data-model.md` payment | Payment uniqueness and amount constraints | Domain/application/PostgreSQL | No negative amount or duplicate method |
+| Text and collection limits (`FR-008`, `FR-009`, `FR-013`, `FR-015`, `FR-035`) | Scenarios 29–33; `SC-015`, `SC-016` | `data-model.md`; operational limits | Strict request schemas | API/domain boundary tests | No silent truncation/control characters |
+| Date and audit timestamps (`FR-006`, `FR-019`; `DR-012`) | Scenarios 26, 27; `SC-013` | `data-model.md` root | `date` and `timestamptz` | Domain/application/PostgreSQL | No impossible-date normalization |
+| Atomic aggregate persistence (`FR-020`, `FR-021`) | Scenarios 3–7, 11–12, 18–19, 23, 28, 30, 33, 39–40, 44, 46; `SC-002` | `persistence-design.md` | Root/child local FKs and transaction | Real PostgreSQL failure injection | No partial child/binding rows |
+| Idempotency scope and equivalence (`FR-027`–`FR-034`; `DR-017`, `DR-018`, `DR-021`) | Scenarios 20–25, 36–38; `SC-012`, `SC-018`, `SC-019` | `idempotency-design.md` | Unique Company/key hash; fingerprint/version | PostgreSQL concurrency/API | No global dedupe, raw key, normalized request, Company in fingerprint |
+| Calculated-input rejection (`FR-012`) | Scenario 28; `SC-014`, `SC-025` | `error-catalog.md` | Strict request schema and prohibited-field catalog | API contract | Never ignore/compare/persist supplied calculation |
+| Failure precedence and payload (`FR-041`, `FR-042`) | Scenario 45; `SC-026`, `SC-027` | `error-catalog.md`; `idempotency-design.md` | OpenAPI 413 and strict schema | API precedence matrix | No later validation after terminal earlier failure |
+| Persistence unavailable/timeout/response loss (`FR-032`, `FR-043`) | Scenarios 24, 46; `SC-028` | `persistence-design.md`; `operational-requirements.md` | OpenAPI 503/504 | Integration + packaged JVM | No unsafe retry/new draft |
+| Correlation and safe errors (`FR-025`, `FR-026`) | All error scenarios; `SC-006`, `SC-028` | `error-catalog.md`; operational requirements | OpenAPI header + Problem Details | API/log/trace capture | No sensitive/error-internal leakage |
+| No fiscal/SRI side effects (`FR-017`, `FR-018`, `FR-023`) | Scenarios 8, 41; `SC-005`, `SC-008` | `plan.md` scope/native sections | Response has `DRAFT` only | Application/architecture/trace evidence | No sequence/access key/XML/signature/certificate/SRI/PDF/event |
+| Flyway and local constraints | Constitution IX/DoD | `persistence-design.md` | Empty-database schema/reference migrations | PostgreSQL migration tests | No auto-generation/manual/legacy dump |
+| Health and observability | Constitution XIII/DoD | `operational-requirements.md` | Health/OpenAPI operational contract | Runtime/metric/log/trace tests | No Company/identity/SRI readiness; no high-cardinality labels |
+| JVM/native/runtime performance | Constitution III/XII/DoD | `operational-requirements.md`; `plan.md` native table | Packaged JVM; optional native | Runtime/performance profiles | No native claim from build alone; no Company latency budget |

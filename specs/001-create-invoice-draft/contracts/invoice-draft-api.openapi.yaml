@@ -3,25 +3,23 @@ info:
   title: Ecuador Tax Document Service - Invoice Draft API
   version: 1.0.0
   description: >-
-    Target API for creating and immediately reviewing one internal invoice draft. This contract
-    does not preserve a legacy route or trigger any SRI/fiscal side effect.
+    Internal target API for creating and immediately reviewing an Invoice Draft. It performs no
+    Company lookup, authentication, authorization, fiscal issuance, or SRI operation.
 servers:
-  - url: /
+  - url: /api/v1
 tags:
   - name: Invoice Drafts
 
 paths:
-  /api/v1/invoice-drafts:
+  /invoice-drafts:
     post:
       tags: [Invoice Drafts]
       operationId: createInvoiceDraft
-      summary: Create and return a complete invoice draft
+      summary: Create and return a complete Invoice Draft
       description: >-
-        Requires exactly one syntactically valid, non-nil Company UUID in X-Company-Id. The value
-        is opaque business context and is not authentication or authorization. This operation
-        performs no Company lookup and persists no Company or fiscal master-data snapshot. The
-        request contains commercial inputs only; calculated values, tax codes, and tax rates are
-        rejected.
+        Accepts Company ownership context only through X-Company-Id. CompanyId is not a path,
+        query, or body field. The request contains client-controlled commercial inputs only;
+        Company, Issuer, fiscal-snapshot, and system-calculated properties are prohibited.
       parameters:
         - $ref: '#/components/parameters/CompanyContext'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -34,27 +32,23 @@ paths:
               $ref: '#/components/schemas/CreateInvoiceDraftRequest'
       responses:
         '201':
-          description: A new invoice draft and idempotency binding were committed.
+          description: A new Invoice Draft and idempotency binding were committed.
           headers:
-            X-Correlation-ID:
+            X-Correlation-Id:
               $ref: '#/components/headers/CorrelationId'
             Idempotency-Replayed:
-              schema:
-                type: boolean
-                const: false
+              $ref: '#/components/headers/NewResult'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/InvoiceDraftResponse'
         '200':
-          description: An equivalent retry returned the original committed draft without mutation.
+          description: An equivalent request returned the original committed Invoice Draft.
           headers:
-            X-Correlation-ID:
+            X-Correlation-Id:
               $ref: '#/components/headers/CorrelationId'
             Idempotency-Replayed:
-              schema:
-                type: boolean
-                const: true
+              $ref: '#/components/headers/ReplayedResult'
           content:
             application/json:
               schema:
@@ -63,10 +57,16 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '409':
           $ref: '#/components/responses/IdempotencyConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
         '422':
-          $ref: '#/components/responses/BusinessValidation'
+          $ref: '#/components/responses/ValidationFailure'
         '500':
           $ref: '#/components/responses/InternalFailure'
+        '503':
+          $ref: '#/components/responses/PersistenceUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
 
 components:
   parameters:
@@ -75,45 +75,61 @@ components:
       in: header
       required: true
       description: >-
-        Exactly one nonblank, non-nil UUID. The API may normalize it to canonical lowercase
-        hyphenated form. This is opaque business-context metadata, not an authentication or
-        authorization credential. Repeated values are COMPANY_CONTEXT_INVALID.
+        Exactly one value is accepted. Surrounding whitespace is trimmed; the result must be a
+        syntactically valid non-nil UUID. The service normalizes it to canonical lowercase
+        hyphenated form. The value identifies the Invoice Draft ownership and idempotency
+        partition. It is business context, not an authentication or authorization credential.
       schema:
         type: string
         format: uuid
-        pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
     IdempotencyKey:
       name: Idempotency-Key
       in: header
       required: true
       description: >-
-        Caller-generated printable ASCII key, trimmed and scoped by normalized Company UUID plus
-        key. It remains bound for the draft lifetime.
+        Caller-generated key trimmed before use and scoped by canonical CompanyId. It remains bound
+        for the lifetime of the created draft.
       schema:
         type: string
         minLength: 1
         maxLength: 128
         pattern: '^[\x20-\x7E]+$'
     CorrelationId:
-      name: X-Correlation-ID
+      name: X-Correlation-Id
       in: header
       required: false
       description: >-
-        Optional caller correlation value. The service returns a UUID and generates a new one when
-        this value is absent or invalid.
+        Optional caller correlation identifier. A valid supplied value is preserved and returned;
+        a UUID is generated and returned when absent.
       schema:
-        type: string
-        maxLength: 64
+        $ref: '#/components/schemas/CorrelationIdentifier'
 
   headers:
     CorrelationId:
-      description: UUID used to correlate this attempt and its safe operational records.
+      description: Correlates this attempt and its safe operational evidence.
       required: true
       schema:
-        type: string
-        format: uuid
+        $ref: '#/components/schemas/CorrelationIdentifier'
+    NewResult:
+      description: Indicates that this response represents a new committed draft.
+      required: true
+      schema:
+        type: boolean
+        const: false
+    ReplayedResult:
+      description: Indicates that this response represents an equivalent replay.
+      required: true
+      schema:
+        type: boolean
+        const: true
 
   schemas:
+    CorrelationIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+
     CreateInvoiceDraftRequest:
       type: object
       additionalProperties: false
@@ -127,18 +143,21 @@ components:
         emissionPointId:
           type: string
           format: uuid
-          description: Opaque external reference retained for later fiscal processing.
+          description: >-
+            Required non-nil UUID stored as an opaque external reference. This service does not
+            validate Company ownership, active state, Issuer, or establishment relationships.
+          pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
         emissionDate:
           type: string
           format: date
-          description: Must equal the Ecuadorian civil date at creation.
+          description: Must equal the Ecuadorian civil date at original creation.
         buyer:
           $ref: '#/components/schemas/BuyerInput'
         lines:
           type: array
           minItems: 1
           maxItems: 500
-          description: Order is business-significant and is preserved.
+          description: Order is business-significant and preserved.
           items:
             $ref: '#/components/schemas/InvoiceLineInput'
         payments:
@@ -146,15 +165,14 @@ components:
           minItems: 1
           maxItems: 10
           description: >-
-            Order is not business-significant. Payment method identity must be unique within the
-            request.
+            Order is representation-only; payment-method identity must be unique within the draft.
           items:
             $ref: '#/components/schemas/PaymentInput'
         additionalInformation:
           type: array
           maxItems: 15
           default: []
-          description: Order is not business-significant; trimmed names must be unique.
+          description: Order is representation-only; canonical names must be unique.
           items:
             $ref: '#/components/schemas/AdditionalInformationInput'
 
@@ -166,12 +184,10 @@ components:
         identificationType:
           type: string
           enum: ['04', '05', '06', '07', '08']
-          description: Exact SRI buyer-identification type effective on the emission date.
         identification:
           type: string
           minLength: 1
           maxLength: 20
-          description: Validated by the selected effective SRI rule.
         legalName:
           type: string
           minLength: 1
@@ -189,7 +205,6 @@ components:
           minLength: 7
           maxLength: 20
           pattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
-          description: Must contain 7 through 15 digits after formatting is removed.
 
     InvoiceLineInput:
       type: object
@@ -206,7 +221,7 @@ components:
           minLength: 1
           maxLength: 300
         quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
+          $ref: '#/components/schemas/PositiveSixScaleDecimal'
         unitPrice:
           $ref: '#/components/schemas/NonNegativeSixScaleDecimal'
         discount:
@@ -214,9 +229,7 @@ components:
         taxRuleId:
           type: string
           format: uuid
-          description: >-
-            Selects one active, emission-date-effective IVA rule. Tax code, rate, base, and amount
-            are resolved and calculated by the service.
+          description: Selects exactly one active, emission-date-effective IVA rule.
 
     PaymentInput:
       type: object
@@ -247,7 +260,7 @@ components:
       type: object
       additionalProperties: false
       required:
-        - draftId
+        - id
         - companyId
         - emissionPointId
         - emissionDate
@@ -262,19 +275,21 @@ components:
         - totalDiscount
         - grandTotal
         - createdAt
-        - lastModifiedAt
+        - updatedAt
       properties:
-        draftId:
+        id:
           type: string
           format: uuid
+          description: Local Invoice Draft identifier; not a fiscal identifier.
         companyId:
           type: string
           format: uuid
-          description: Sole external Company ownership reference for this document.
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          description: Canonical normalized immutable Company ownership reference.
         emissionPointId:
           type: string
           format: uuid
-          description: Opaque external reference captured in the draft.
+          description: Canonical opaque external reference captured in the draft.
         emissionDate:
           type: string
           format: date
@@ -317,7 +332,7 @@ components:
         createdAt:
           type: string
           format: date-time
-        lastModifiedAt:
+        updatedAt:
           type: string
           format: date-time
 
@@ -351,7 +366,7 @@ components:
           type: string
           maxLength: 300
         quantity:
-          $ref: '#/components/schemas/QuantityDecimal'
+          $ref: '#/components/schemas/PositiveSixScaleDecimal'
         unitPrice:
           $ref: '#/components/schemas/NonNegativeSixScaleDecimal'
         discount:
@@ -461,12 +476,11 @@ components:
       type: string
       enum: [PERCENTAGE_RATE, ZERO_RATE, NOT_SUBJECT, EXEMPT]
 
-    QuantityDecimal:
+    PositiveSixScaleDecimal:
       type: string
       minLength: 1
       maxLength: 25
       pattern: '^(?=.*[1-9])(?=(?:\D*\d){1,18}\D*$)(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$'
-      description: Positive exact decimal with <=18 total digits and <=6 fractional digits.
       examples: ['2', '2.500000']
 
     NonNegativeSixScaleDecimal:
@@ -474,24 +488,35 @@ components:
       minLength: 1
       maxLength: 25
       pattern: '^(?=(?:\D*\d){1,18}\D*$)(?:0|[1-9][0-9]*)(?:\.[0-9]{1,6})?$'
-      description: Non-negative exact decimal with <=18 total digits and <=6 fractional digits.
       examples: ['0', '10.000000']
 
     MoneyDecimal:
       type: string
       pattern: '^(?:0|[1-9][0-9]{0,11})\.[0-9]{2}$'
-      description: Non-negative exact USD decimal with exactly two fractional digits and <=14 total digits.
       examples: ['0.00', '17.25']
 
     PercentageDecimal:
       type: string
       pattern: '^(?:(?:0|[1-9][0-9]?)\.[0-9]{2}|100\.00)$'
-      description: Percentage points from 0.00 through 100.00.
       examples: ['0.00', '15.00']
+
+    ErrorCode:
+      type: string
+      enum:
+        - COMPANY_CONTEXT_REQUIRED
+        - COMPANY_CONTEXT_INVALID
+        - INVALID_REQUEST
+        - PROHIBITED_CALCULATED_FIELD
+        - IDEMPOTENCY_CONFLICT
+        - REQUEST_PAYLOAD_TOO_LARGE
+        - BUSINESS_VALIDATION_FAILED
+        - PERSISTENCE_UNAVAILABLE
+        - REQUEST_TIMEOUT
+        - INTERNAL_ERROR
 
     ProblemDetails:
       type: object
-      additionalProperties: true
+      additionalProperties: false
       required: [type, title, status, code, detail, instance, correlationId]
       properties:
         type:
@@ -504,18 +529,15 @@ components:
           minimum: 400
           maximum: 599
         code:
-          type: string
-          pattern: '^[A-Z][A-Z0-9_]*$'
-          description: Stable English machine-readable code.
+          $ref: '#/components/schemas/ErrorCode'
         detail:
           type: string
-          description: Safe English detail with no rejected values or internals.
+          description: Safe English detail without rejected values or implementation internals.
         instance:
           type: string
           format: uri
         correlationId:
-          type: string
-          format: uuid
+          $ref: '#/components/schemas/CorrelationIdentifier'
         violations:
           type: array
           items:
@@ -531,43 +553,73 @@ components:
           pattern: '^[A-Z][A-Z0-9_]*$'
         field:
           type: string
-          description: Safe request field path; never includes the rejected value.
+          description: Safe request field path; never contains the rejected value.
 
   responses:
     BadRequest:
       description: >-
-        Malformed JSON; missing, repeated, blank, malformed, or nil Company header; unknown or
-        calculated field; or another invalid representation. Company-header failures use
-        COMPANY_CONTEXT_REQUIRED or COMPANY_CONTEXT_INVALID.
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. No draft, child,
+        or idempotency binding is created.
       headers:
-        X-Correlation-ID:
+        X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
     IdempotencyConflict:
-      description: The scoped key is bound to different normalized business content.
+      description: IDEMPOTENCY_CONFLICT; the scoped key is bound to different content.
       headers:
-        X-Correlation-ID:
+        X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
-    BusinessValidation:
-      description: Structurally valid request violates an application/domain/catalog rule.
+    PayloadTooLarge:
+      description: REQUEST_PAYLOAD_TOO_LARGE; body exceeds 2,097,152 bytes.
       headers:
-        X-Correlation-ID:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationFailure:
+      description: PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PersistenceUnavailable:
+      description: PERSISTENCE_UNAVAILABLE; retry with the same Company, key, and content.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Retry-After:
+          description: Optional safe retry delay when known.
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    RequestTimeout:
+      description: REQUEST_TIMEOUT; retry with the same Company, key, and content.
+      headers:
+        X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
     InternalFailure:
-      description: Safe generic failure; no partial draft or binding remains.
+      description: INTERNAL_ERROR; safe unexpected failure.
       headers:
-        X-Correlation-ID:
+        X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
       content:
         application/problem+json:
