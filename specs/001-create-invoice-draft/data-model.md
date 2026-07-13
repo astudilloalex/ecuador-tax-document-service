@@ -187,9 +187,9 @@ CompanyId because CompanyId is the explicit binding scope. It also excludes `Ide
 
 ## Local Reference Catalogs
 
-The candidate baseline and its unresolved approval state are defined in
-`reference-data-baseline.md`. No row may be seeded until that artifact marks the row approved and
-records every field required by FR-045 through FR-047.
+The approved executable baseline is defined in `reference-data-baseline.md`. It contains 5 buyer,
+6 IVA, and 8 payment rows under `SRI-OFFLINE-2.32-TARGET-1`. Reference UUIDs use deterministic
+UUIDv5 namespace `32576bbf-b70d-5c24-98ff-d5f9b48e8826`; runtime generation is prohibited.
 
 ### Buyer Identification Type Catalog
 
@@ -198,23 +198,27 @@ Logical persistence name: `buyer_identification_type_catalog`.
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
 | `officialCode` | `varchar(2)` | Official SRI code; exactly two ASCII digits |
+| `officialLabel` | `varchar(100)` | Exact official Spanish label |
 | `displayName` | `varchar(100)` | Approved English target display name |
 | `validationStrategy` | `varchar(64)` | Approved named validation behavior; never an unevidenced regex or algorithm |
 | `validationRuleVersion` | `varchar(64)` | Exact approved rule-set version |
-| `validFrom` | `date` | Inclusive official/approved effective start |
-| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `sourceValidFrom` | `date` | Nullable official effective start; null means the cited source provides none |
+| `sourceValidTo` | `date` | Nullable official effective end |
+| `targetValidFrom` | `date` | Inclusive target activation date; `2026-07-12` for this baseline |
+| `targetValidTo` | `date` | Inclusive target end, null for the initial open target interval |
 | `active` | `boolean` | Approved baseline state; not inferred by production code |
 | `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
 | `officialSourceUri` | `text` | Exact authoritative SRI source |
 | `officialSourceLocator` | `varchar(128)` | Exact table, section, schema, or rule locator |
 
-The primary key is `(official_code, catalog_version)`. `valid_to` must be null or not precede
-`valid_from`. An active row must have a complete validation strategy and evidence locator. A
+The primary key is `(official_code, catalog_version)`. Each source or target end must be null or
+not precede its corresponding start; `source_valid_to` requires `source_valid_from`. An active row
+must have a complete validation strategy and evidence locator. A
 Flyway verification statement MUST reject overlapping active intervals for the same official code.
 `invoice_draft` references `(buyer_identification_type_code,
 buyer_identification_catalog_version)` locally.
 
-Every column is `NOT NULL` except `valid_to`.
+Every column is `NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
 ### IVA Tax Rule Catalog
 
@@ -226,25 +230,29 @@ Logical persistence name: `iva_tax_rule_catalog`.
 | `family` | `varchar(16)` | Exactly `IVA` |
 | `officialTaxCode` | `varchar(8)` | Exact official SRI tax code; `2` for the approved family |
 | `officialPercentageCode` | `varchar(8)` | Exact official percentage/treatment code |
+| `officialLabel` | `varchar(100)` | Exact official Spanish label |
 | `displayName` | `varchar(100)` | Approved English target display name |
 | `treatment` | `varchar(32)` | `PERCENTAGE_RATE`, `ZERO_RATE`, `NOT_SUBJECT`, or `EXEMPT` |
 | `rate` | `numeric(5,2)` | `0.00`–`100.00`; exact configured percentage points |
-| `validFrom` | `date` | Inclusive official/approved effective start |
-| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `sourceValidFrom` | `date` | Nullable official effective start; null means the cited source provides none |
+| `sourceValidTo` | `date` | Nullable official effective end |
+| `targetValidFrom` | `date` | Inclusive target activation date; `2026-07-12` for this baseline |
+| `targetValidTo` | `date` | Inclusive target end, null for the initial open target interval |
 | `active` | `boolean` | Approved baseline state |
 | `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
 | `officialSourceUri` | `text` | Exact authoritative SRI source |
 | `officialSourceLocator` | `varchar(128)` | Exact source table/row or legal rule locator |
 
 The primary key is `(id, catalog_version)` and required natural uniqueness is
-`(official_tax_code, official_percentage_code, valid_from, catalog_version)`. The family must be
+`(official_tax_code, official_percentage_code, target_valid_from, catalog_version)`. The family must be
 `IVA`; percentage-rate rows must have a positive approved
-rate; the other three treatments must have rate `0.00`. `valid_to` must be null or not precede
-`valid_from`. Flyway verification MUST reject overlapping active intervals for the same official
+rate; the other three treatments must have rate `0.00`. Each source or target end must be null or
+not precede its corresponding start; `source_valid_to` requires `source_valid_from`. Flyway
+verification MUST reject overlapping active target intervals for the same official
 tax/percentage code. `(invoice_line_tax.tax_rule_id, invoice_line_tax.catalog_version)` is a
 required local composite foreign key to this table.
 
-Every column is `NOT NULL` except `valid_to`.
+Every column is `NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
 ### Payment Method Catalog
 
@@ -254,21 +262,24 @@ Logical persistence name: `payment_method_catalog`.
 |-------|-----------------|------|
 | `id` | `uuid` | Approved, published stable target `paymentMethodId`; never startup-generated |
 | `officialCode` | `varchar(8)` | Exact official SRI payment code |
+| `officialLabel` | `varchar(160)` | Exact official Spanish label |
 | `displayName` | `varchar(100)` | Approved English target display name |
-| `validFrom` | `date` | Inclusive official/approved effective start |
-| `validTo` | `date` | Inclusive effective end, or null only when officially open-ended |
+| `sourceValidFrom` | `date` | Official Table 24 start date |
+| `sourceValidTo` | `date` | Nullable official end; Table 24 dash maps to null |
+| `targetValidFrom` | `date` | Inclusive target activation date; `2026-07-12` for this baseline |
+| `targetValidTo` | `date` | Inclusive target end, null for the initial open target interval |
 | `active` | `boolean` | Approved baseline state |
 | `catalogVersion` | `varchar(64)` | Versioned target baseline identifier |
 | `officialSourceUri` | `text` | Exact authoritative SRI source |
 | `officialSourceLocator` | `varchar(128)` | Exact source table/row locator |
 
 The primary key is `(id, catalog_version)` and required natural uniqueness is
-`(official_code, valid_from, catalog_version)`. `valid_to` must be null or not precede
-`valid_from`, and Flyway verification MUST reject overlapping active intervals for the same
+`(official_code, target_valid_from, catalog_version)`. Each source or target end must be null or not
+precede its corresponding start, and Flyway verification MUST reject overlapping active target intervals for the same
 official code. `(invoice_payment.payment_method_id, invoice_payment.catalog_version)` is a required
 local composite foreign key.
 
-Every column is `NOT NULL` except `valid_to`.
+Every column is `NOT NULL` except `source_valid_to` and `target_valid_to`.
 
 Flyway alone owns schema creation, initial baseline rows, and later catalog versions. The runtime
 has no catalog administration write path. A later official change adds a new immutable migration

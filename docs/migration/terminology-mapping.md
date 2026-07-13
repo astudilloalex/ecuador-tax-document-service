@@ -25,11 +25,12 @@ otherwise.
 | `punto de emisión` | Emission Point | Target Domain | Create Invoice Draft stores only an opaque external identifier selected for later processing and performs no Company, Issuer, establishment, status, or fiscal-relationship validation. |
 | `datos fiscales utilizados` | Fiscal Context Snapshot | Target Domain | Reserved for a later separately approved fiscal-issuance specification. Create Invoice Draft MUST NOT resolve or persist this snapshot. |
 | `comprador` | Buyer | Target Domain | Recipient of the goods or services represented by an invoice. |
+| `tipo de identificación` | Buyer Identification Type | Target Domain | Uses official SRI codes `04`–`08` as canonical identifiers and the approved validation strategies in `SRI-OFFLINE-2.32-TARGET-1`; no target UUID is introduced. |
 | `detalle de factura` | Invoice Line | Target Domain | One priced product or service entry in an invoice draft. |
 | `impuesto` | Tax Category | Target Domain | Governing tax type or code; exact SRI catalog values remain official terms. |
 | `tarifa de impuesto` | Tax Rate | Target Domain | Percentage or rate associated with an effective tax rule. |
-| `regla tributaria` | Tax Rule | Target Domain | Effective combination of tax category, rate, validity, and calculation behavior. |
-| `forma de pago` | Payment Method | Target Domain | Active catalog method selected for a draft payment. |
+| `regla tributaria` | Tax Rule | Target Domain | Effective combination of tax category, rate, validity, and calculation behavior; the initial IVA rules use immutable deterministic UUIDv5 mappings from the approved reference-data baseline. |
+| `forma de pago` | Payment Method | Target Domain | Active catalog method selected for a draft payment; the initial Table 24 methods use immutable deterministic UUIDv5 mappings from the approved reference-data baseline. |
 | `pago` | Payment | Target Domain | Amount allocated to one payment method for an invoice draft. |
 | `información adicional` | Additional Information | Target Domain | Optional named information captured for later review. |
 | `clave de idempotencia` | Idempotency Key | Target API | Caller-generated key scoped exactly by normalized Company UUID plus key for deduplicating invoice-draft creation commands. |

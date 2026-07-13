@@ -32,40 +32,47 @@ deployment step, and no legacy database dump is accepted as the target schema.
 
 The runtime exposes no reference-data administration write path. Each official catalog change is
 delivered by a new immutable migration containing versioned rows and a verification query that
-fails on duplicate or overlapping active effective intervals. The schema migration MAY be planned
-while PFV-001 through PFV-003 remain unresolved, but a seed migration MUST NOT be authored or
-executed until every included row is approved.
+fails on duplicate or overlapping active target-effective intervals. The later seed migration MUST
+reproduce exactly the 5 buyer, 6 IVA, and 8 payment rows approved in
+`reference-data-baseline.md`; no migration is created by this remediation.
 
 ## Exact Local Catalog Structures
 
 `buyer_identification_type_catalog` contains exactly: `official_code varchar(2)`,
-`display_name varchar(100)`, `validation_strategy varchar(64)`,
-`validation_rule_version varchar(64)`, `valid_from date`, nullable `valid_to date`,
+`official_label varchar(100)`, `display_name varchar(100)`, `validation_strategy varchar(64)`,
+`validation_rule_version varchar(64)`, nullable `source_valid_from date`, nullable
+`source_valid_to date`, `target_valid_from date`, nullable `target_valid_to date`,
 `active boolean`, `catalog_version varchar(64)`, `official_source_uri text`, and
 `official_source_locator varchar(128)`. Its primary key is `(official_code, catalog_version)`.
-Codes are exactly two ASCII digits, dates are ordered, active rows require complete validation and
-source metadata, and Flyway rejects overlapping active intervals for the same code. Every column
-is `NOT NULL` except `valid_to`.
+Codes are exactly two ASCII digits, source and target dates are independently ordered,
+`source_valid_to` requires `source_valid_from`, active rows require complete validation and source
+metadata, and Flyway rejects overlapping active target intervals for the same code. Every column
+is `NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
 `iva_tax_rule_catalog` contains exactly: `id uuid`, `family varchar(16)`,
 `official_tax_code varchar(8)`, `official_percentage_code varchar(8)`,
-`display_name varchar(100)`, `treatment varchar(32)`, `rate numeric(5,2)`, `valid_from date`,
-nullable `valid_to date`, `active boolean`, `catalog_version varchar(64)`,
+`official_label varchar(100)`, `display_name varchar(100)`, `treatment varchar(32)`,
+`rate numeric(5,2)`, nullable `source_valid_from date`, nullable `source_valid_to date`,
+`target_valid_from date`, nullable `target_valid_to date`, `active boolean`,
+`catalog_version varchar(64)`,
 `official_source_uri text`, and `official_source_locator varchar(128)`. The primary key is
 `(id, catalog_version)`; `id` is the published stable `taxRuleId`. The unique natural-version key is
-`(official_tax_code, official_percentage_code, valid_from, catalog_version)`. Family is exactly
+`(official_tax_code, official_percentage_code, target_valid_from, catalog_version)`. Family is exactly
 `IVA`; treatment is approved; rate is `0.00` through `100.00`; non-percentage treatments require
-`0.00`; percentage treatments require a positive approved rate; dates are ordered; and Flyway
-rejects overlapping active intervals for the same official tax/percentage code. Every column is
-`NOT NULL` except `valid_to`.
+`0.00`; percentage treatments require a positive approved rate; source and target dates are
+independently ordered; `source_valid_to` requires `source_valid_from`; and Flyway rejects
+overlapping active target intervals for the same official tax/percentage code. Every column is
+`NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
 `payment_method_catalog` contains exactly: `id uuid`, `official_code varchar(8)`,
-`display_name varchar(100)`, `valid_from date`, nullable `valid_to date`, `active boolean`,
+`official_label varchar(160)`, `display_name varchar(100)`, `source_valid_from date`, nullable
+`source_valid_to date`, `target_valid_from date`, nullable `target_valid_to date`, `active boolean`,
 `catalog_version varchar(64)`, `official_source_uri text`, and
 `official_source_locator varchar(128)`. The primary key is `(id, catalog_version)`; `id` is the
 published stable `paymentMethodId`. The unique natural-version key is
-`(official_code, valid_from, catalog_version)`. Dates are ordered and Flyway rejects overlapping
-active intervals for the same official code. Every column is `NOT NULL` except `valid_to`.
+`(official_code, target_valid_from, catalog_version)`. Source and target dates are independently
+ordered and Flyway rejects overlapping active target intervals for the same official code. Every
+column is `NOT NULL` except `source_valid_to` and `target_valid_to`.
 
 Drafts reference identification rows by `(buyer_identification_type_code,
 buyer_identification_catalog_version)`. Line-tax and payment rows reference the approved catalog
@@ -91,10 +98,9 @@ A failure at any write step rolls back the root, all children, and the binding. 
 filesystem write, event publication, SRI operation, or Company operation occurs within or adjacent
 to this transaction.
 
-Catalog resolution MUST reject an unresolved, inactive, not-yet-effective, expired, or ambiguous
-row before persistence. Until PFV-001 through PFV-003 are resolved, no request can be represented
-as having passed the authoritative reference-data baseline, so `$speckit-tasks` and production
-implementation remain blocked.
+Catalog resolution MUST reject an inactive, not-yet-target-effective, target-expired, unknown, or
+ambiguous row before persistence. Initial valid references are exactly those published in
+`SRI-OFFLINE-2.32-TARGET-1`; product/tax legal classification remains upstream responsibility.
 
 ## Concurrency Arbitration
 
@@ -195,12 +201,10 @@ Liveness remains independent of PostgreSQL availability.
 - numeric boundary tests confirm overflow and excess precision are rejected before persistence and
   never surface as PostgreSQL errors.
 
-## Planning Blocker
+## Planning Gate
 
-`reference-data-baseline.md` records official candidate rows from SRI Technical Sheet v2.32. The
-SRI document does not publish this service's target UUIDs, and it does not provide all effective
-dates, active-state decisions, or type-specific validation algorithms required by the target
-baseline. The current percentage-rate requirements also require reconciliation against the
-official rule effective on the emission date. PFV-001, PFV-002, and PFV-003 therefore remain open.
-No reference-data seed migration and no `$speckit-tasks` output may proceed until those mappings
-and evidence gaps are approved.
+The reference-data planning gate is complete. `reference-data-baseline.md` separates official
+facts from target decisions, publishes UUIDv5 namespace
+`32576bbf-b70d-5c24-98ff-d5f9b48e8826`, and approves every initial row. Flyway remains the sole
+future schema/seed owner. Task generation is still governed by the independent Constitution-on-main
+gate recorded in `plan.md`.

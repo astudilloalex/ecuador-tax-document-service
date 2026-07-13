@@ -4,7 +4,8 @@
 
 **Created**: 2026-07-12
 
-**Status**: Draft
+**Status**: Draft — reference data is approved; task generation remains blocked only because
+Constitution v2.0.0 is not yet present on local `main` or `origin/main`
 
 **Input**: User description: "Create and persist a complete Company-scoped electronic invoice draft
 for review before any fiscal identifier allocation or SRI interaction."
@@ -26,9 +27,9 @@ for review before any fiscal identifier allocation or SRI interaction."
   confirmed commit instant, and equivalent replay returns the original draft without current-date
   revalidation.
 - Q: What reference-data baseline is required before tasks? → A: Identification types, IVA rules,
-  and payment methods require approved, versioned, officially sourced baseline rows. Tax-rule and
-  payment-method identifiers are stable published UUIDs seeded by Flyway, never startup-generated.
-  Every unverified row is Pending Functional Validation and blocks task generation.
+  and payment methods use the approved `SRI-OFFLINE-2.32-TARGET-1` baseline in
+  `reference-data-baseline.md`. Tax-rule and payment-method identifiers are deterministic UUIDv5
+  values published by the target contract and later seeded by Flyway, never startup-generated.
 - Q: How is `X-Correlation-Id` initialized and validated? → A: Initialize correlation at the HTTP
   boundary; generate a safe UUID when absent, preserve one valid supplied identifier, and replace
   blank, repeated, over-length, or unsafe input with a safe UUID for the `INVALID_REQUEST` response
@@ -142,7 +143,7 @@ issued electronic invoice, or triggering any SRI side effect.
 | Applicable Ecuadorian legislation | [Regulation for Sales, Withholding, and Complementary Documents, SRI consolidated copy dated 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf), together with [later amendments listed by the SRI](https://www.sri.gob.ec/facturacion-electronica) | Establishes invoices as sales documents and governs issuer responsibility and required invoice information. This feature creates only an internal pre-issuance draft. |
 | Official SRI technical documentation | [Electronic Tax Documents Offline Scheme Technical Sheet v2.32, updated 2025-10-08](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/29562323-2e76-42f5-abb6-cb7ac542c3c6/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.32.pdf) and the [SRI electronic invoicing page](https://www.sri.gob.ec/facturacion-electronica), which lists invoice XSD/XML versions 1.0.0 through 2.1.0 updated in 2022-02 | Governs official catalogs, invoice fields, tax and payment representations, and the later generation/authorization process. XML generation and XSD selection are excluded here. |
 | Project constitution | `.specify/memory/constitution.md` v2.0.0 | Governs authority, target-first scope, `X-Company-Id`, caller-agnostic Company scoping, Company master-data exclusion, fiscal-stage separation, atomic persistence, testing, and workflow. |
-| Approved target requirements | This specification and its future clarification session | Governs the internal `DRAFT` behavior and the explicit absence of fiscal side effects. |
+| Approved target requirements | This specification and its recorded clarification decisions | Governs the internal `DRAFT` behavior and the explicit absence of fiscal side effects. |
 | Legacy evidence | `docs/legacy/as-is/04-data-model.md`; `docs/legacy/as-is/05-business-rules.md`; `docs/legacy/as-is/06-validation-rules.md`; `docs/legacy/as-is/07-process-flows.md`; `docs/legacy/as-is/10-security-access-control.md`; `docs/legacy/as-is/14-pending-functional-validation.md` | Supplies historical scenarios for invoice graphs, calculations, validation gaps, persistence, side effects, and tenant risks. It is not target authority. |
 
 **Source Conflicts**:
@@ -160,27 +161,24 @@ issued electronic invoice, or triggering any SRI side effect.
 - Official SRI electronic-document statuses do not include `DRAFT`. Here, `DRAFT` is an internal
   target-domain state and MUST NOT be presented as an SRI status, issued invoice, or tax-valid
   electronic document.
+- The current SRI IVA guidance observed on 2026-07-12 identifies 13% for general goods and services,
+  while Circular NAC-DGECCGC25-00000006 and Circular NAC-DGECCGC26-00000005 provide official 15%
+  applicability evidence. The approved target baseline retains both representation rules with
+  explicit applicability notes. Neither is labeled universal, and the upstream billing workflow,
+  not this feature, selects the rule appropriate to the product or transaction.
 
-**Pending Functional Validation**:
+**Approved Reference Data**:
 
-- **PFV-001 — Identification-type baseline**: Approve the baseline rows for codes `04` through
-  `08`, including display name, validation strategy, validity interval, active state, catalog
-  version, and exact official source. — **Evidence needed**: versioned official SRI catalog/schema
-  plus approved target mapping. — **Blocks**: `$speckit-tasks`, final Flyway reference-data rows,
-  and authoritative identification vectors.
-- **PFV-002 — IVA tax-rule baseline**: Approve every supported tax-rule row, its stable published
-  `taxRuleId` UUID, official tax and percentage codes, display name, treatment, rate, validity
-  interval, active state, catalog version, and exact official source. — **Evidence needed**:
-  versioned official SRI IVA catalog/rule source plus approved target UUID mapping. — **Blocks**:
-  `$speckit-tasks`, Flyway reference data, API integration examples, and tax-rule fixtures.
-- **PFV-003 — Payment-method baseline**: Approve every supported payment-method row, its stable
-  published `paymentMethodId` UUID, official code, display name, validity interval, active state,
-  catalog version, and exact official source. — **Evidence needed**: versioned official SRI payment
-  catalog plus approved target UUID mapping. — **Blocks**: `$speckit-tasks`, Flyway reference data,
-  API integration examples, and payment fixtures.
-
-No baseline row, identifier, rate, mapping, validity period, or validation strategy may be inferred
-while its official evidence or target mapping remains unresolved.
+- `reference-data-baseline.md` approves five buyer-identification types, six IVA tax rules, and
+  eight payment methods under catalog version `SRI-OFFLINE-2.32-TARGET-1`.
+- Buyer-identification types use official codes `04` through `08`. Tax and payment references use
+  the exact deterministic UUIDv5 values published in that baseline.
+- Buyer validation is deliberately `FORMAT_ONLY` for RUC, Ecuadorian identity card, passport, and
+  foreign identification because no exact governing checksum algorithm was established from the
+  approved primary sources for this draft feature. This is an approved scope boundary, not an
+  inferred fiscal algorithm or hidden implementation task.
+- The target adoption date is 2026-07-12. It is target-service catalog metadata and MUST NOT be
+  attributed to the SRI as a legal-origin date.
 
 **Terminology Mapping**: The approved terms `Invoice Draft`, `Invoice`, `Company`, `Issuer`,
 `Establishment`, `Emission Point`, `Fiscal Context Snapshot`, `Buyer`, `Invoice Line`, `Tax
@@ -215,9 +213,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
    calculated grand total, **when** the internal billing client creates the draft, **then** exactly
    one complete draft is persisted with status `DRAFT`, the normalized Company UUID, a unique draft identifier,
    calculated amounts, and creation and last-modification timestamps.
-2. **Given** a line with quantity `2`, unit price `10.00`, discount `5.00`, and an applicable
-   percentage tax rate of `15%`, **when** the draft is calculated, **then** gross amount is `20.00`,
-   net amount is `15.00`, tax is `2.25`, and that line contributes `17.25` to the grand total.
+2. **Given** a line with quantity `2`, unit price `10.00`, discount `5.00`, and the approved IVA
+   15% rule selected solely as a mathematical rounding vector, **when** the draft is calculated,
+   **then** gross amount is `20.00`, net amount is `15.00`, tax is `2.25`, and that line contributes
+   `17.25` to the grand total; this scenario does not state that 15% is universally applicable.
 3. **Given** a line with gross amount `20.00` and discount `21.00`, **when** draft creation is
    attempted, **then** a business validation error is returned and no draft or child data is
    persisted.
@@ -248,11 +247,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     simultaneous tax treatment, **when** draft creation is attempted, **then** the request is
     rejected as unsupported and no draft is persisted.
 13. **Given** a buyer identification uses code `04`, `05`, `06`, or `08`, **when** draft creation is
-    attempted, **then** it is accepted only when it satisfies the applicable versioned SRI syntax,
-    length, and any officially applicable checksum effective on the emission date.
-14. **Given** a RUC class for which the applicable SRI rules define no checksum, **when** its value
-    satisfies the official RUC format, **then** the draft is not rejected for failing a generic or
-    locally assumed checksum.
+    attempted, **then** it is accepted only when it satisfies that row's approved `FORMAT_ONLY`
+    syntax and length in `SRI-OFFLINE-2.32-TARGET-1`.
+14. **Given** a syntactically valid RUC or Ecuadorian identity-card value, **when** draft creation is
+    attempted, **then** the draft is not rejected by any checksum or legacy validation algorithm,
+    because checksum validation is outside this draft feature.
 15. **Given** identification type `07`, value `9999999999999`, buyer name `CONSUMIDOR FINAL`, and a
     grand total at or below the effective SRI final-consumer threshold, **when** draft creation is
     attempted, **then** the final-consumer identification is valid; **and given** any mismatch in
@@ -335,9 +334,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 39. **Given** a positive-total draft contains two or more payments selecting the same payment
     method, **when** draft creation is attempted, **then** a stable duplicate-payment-method error
     is returned and no draft or child data is persisted.
-40. **Given** a line supplies a tax code or rate instead of selecting the applicable effective tax
-    rule, **when** draft creation is attempted, **then** the request is rejected and no draft or
-    child data is persisted.
+40. **Given** the upstream billing workflow selects an approved active tax rule effective on the
+    emission date, **when** draft creation is attempted, **then** the service uses that rule without
+    classifying the product or deciding its legal tax eligibility; **and given** a line supplies a
+    tax code or rate instead of a `taxRuleId`, **then** the request is rejected and no draft or child
+    data is persisted.
 41. **Given** a valid logically new Company-scoped command, **when** creation is attempted, **then**
     the service uses the supplied normalized Company UUID without calling a Company capability and
     persists no Company-context version, observation time, or fiscal master-data snapshot; it also
@@ -474,13 +475,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   check exists in this feature.
 - A request containing any system-calculated monetary field MUST be rejected. The supplied value
   MUST NOT be ignored, compared with a calculated result, or persisted.
-- Identification code `05` MUST satisfy the official Ecuadorian identity-card numeric format and
-  check-digit rule effective on the emission date; no alternative algorithm is permitted.
-- Identification code `04` MUST satisfy the official RUC format and an official checksum only when
-  the applicable SRI rule defines one for that RUC class. A generic locally assumed checksum MUST
-  NOT be applied to a class for which the SRI defines no checksum.
-- Identification codes `06` and `08` MUST satisfy only the format and length defined by the
-  applicable SRI catalog or invoice schema; no checksum or country-specific rule may be invented.
+- Identification code `05` MUST contain exactly 10 ASCII digits under the approved
+  `FORMAT_ONLY_NUMERIC_10` strategy. Identification code `04` MUST contain exactly 13 ASCII digits
+  under `FORMAT_ONLY_NUMERIC_13`. This feature MUST NOT apply a checksum, legacy validation
+  algorithm, or online existence check to either type.
+- Identification codes `06` and `08` MUST contain 1 to 20 alphanumeric characters under
+  `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`; no checksum or country-specific rule may be invented. Code
+  `08` retains the SRI requirement that the value is the identifier issued by the tax authority of
+  the buyer's fiscal-residence country.
 - Identification code `07` MUST use value `9999999999999` and buyer name `CONSUMIDOR FINAL`, and the
   rounded invoice grand total MUST NOT exceed the final-consumer threshold effective on the
   emission date. Under SRI Technical Sheet v2.32, that threshold is USD `50.00`.
@@ -540,8 +542,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-007**: Buyer legal name, identification value, and exactly one supported identification type
   MUST be present. Supported types are RUC (`04`), Ecuadorian identity card (`05`), passport (`06`),
   final consumer (`07`), and foreign identification (`08`). The selected type MUST be active and
-  effective on the draft emission date, and the identification MUST satisfy the versioned SRI
-  type-specific rules applicable on that date.
+  effective on the draft emission date, and the identification MUST satisfy the approved
+  type-specific strategy in `SRI-OFFLINE-2.32-TARGET-1`.
 - **FR-008**: Buyer address, email, and telephone MAY be captured as optional contact information.
   When present, an address MUST contain 1 to 300 characters, an email MUST be one syntactically
   valid address of no more than 254 characters, and a telephone MUST contain no more than 20
@@ -557,7 +559,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   effective period MUST include the draft emission date. Supported rules MUST represent configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA. Any other tax or multiple
   simultaneous taxes on one line MUST be rejected as unsupported. The caller MUST select the tax
-  rule and MUST NOT supply a tax code or rate as line input.
+  rule and MUST NOT supply a tax code or rate as line input. The service MUST NOT infer product
+  classification or decide whether a product legally qualifies for construction-material or other
+  special treatment; the upstream billing workflow is responsible for selecting the appropriate
+  published rule.
 - **FR-012**: The service MUST calculate line gross amount, line net amount, tax base, tax amount,
   grouped tax totals, subtotal before taxes, total discount, and grand total. A creation request
   containing any of those system-calculated fields MUST be rejected with a stable validation error
@@ -612,10 +617,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   scope MUST be the normalized Company UUID plus the key, with no tenant component. After trimming,
   the key MUST contain 1 to 128 printable ASCII characters. Changing the normalized Company UUID
   MUST change the idempotency scope even when the key and normalized business content are unchanged.
-- **FR-028**: Buyer validation MUST validate only the approved type-specific syntax, length, exact
-  special values, and officially applicable checksum rules. Draft creation MUST NOT perform an
-  online SRI registry existence check or verify the supplied buyer name against an external
-  registry.
+- **FR-028**: Buyer validation MUST validate only the approved type-specific syntax, length, and
+  exact special values in `SRI-OFFLINE-2.32-TARGET-1`. Draft creation MUST NOT apply a RUC or
+  Ecuadorian identity-card checksum, perform an online SRI registry existence check, or verify the
+  supplied buyer name against an external registry. Checksum and registry verification are outside
+  this feature and MUST NOT be treated as deferred implementation work.
 - **FR-029**: Idempotency equivalence MUST include emission-point identifier, emission date, buyer
   information, invoice lines, tax treatments, payments, and additional information affecting the
   resulting draft. Company identifier MUST participate in the scope and MUST NOT be duplicated in
@@ -701,17 +707,21 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   persistence, responses, and acceptance vectors. An out-of-range value MUST NOT be silently
   rounded, clamped, truncated, wrapped, or exposed as a persistence error.
 - **FR-045**: Before `$speckit-tasks`, the supported identification types, IVA tax rules, and payment
-  methods MUST have an approved versioned baseline. Every baseline row MUST record official code,
-  display name, treatment or validation strategy, rate when applicable, `valid-from`, `valid-to`,
-  active state, catalog version, and exact official source.
+  methods MUST use the approved versioned baseline in `reference-data-baseline.md`. Every baseline
+  row MUST retain official code, exact official label, canonical English target name, treatment or
+  validation strategy, rate when applicable, source and target validity, active state, catalog
+  version, exact official source, and approval status.
 - **FR-046**: Every approved tax rule and payment method MUST use a stable fixed UUID published by
-  the target integration contract and seeded through the authoritative Flyway baseline. Those
-  UUIDs MUST NOT be generated randomly at application startup. This feature MUST NOT add a catalog
-  query operation; clients are expected to know the published stable identifiers through the
+  the target integration contract and derived by UUIDv5 from namespace
+  `32576bbf-b70d-5c24-98ff-d5f9b48e8826` using the exact names in
+  `reference-data-baseline.md`. The authoritative Flyway baseline created later MUST seed those
+  values unchanged. UUIDs MUST NOT be generated at application startup. This feature MUST NOT add
+  a catalog query operation; clients are expected to know the published identifiers through the
   integration contract.
 - **FR-047**: No tax rate, payment code, identification rule, validity period, official mapping, or
-  baseline UUID may be invented. Any unverified baseline row MUST remain Pending Functional
-  Validation and MUST block `$speckit-tasks` until its official evidence and target mapping are
+  baseline UUID may be invented. Unsupported Table 17 rows MUST be omitted from the initial seed
+  plan rather than seeded inactive. Any later unverified row MUST remain Pending Functional
+  Validation and MUST block its introduction until official evidence and target mapping are
   approved.
 
 ### Domain Rules and Invariants
@@ -769,11 +779,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **DR-013**: Impossible dates, inconsistent totals, inactive or temporally inapplicable catalog
   combinations, unsupported identification types, and invalid local aggregate relationships MUST
   be rejected without normalization or partial persistence.
-- **DR-014**: An Ecuadorian identity card (`05`) MUST satisfy the official numeric format and
-  check-digit rule. A RUC (`04`) MUST satisfy the official RUC format and an official checksum only
-  when one applies to its RUC class. Passport (`06`) and foreign identification (`08`) MUST satisfy
-  only the format and length defined by the applicable SRI catalog or invoice schema. No format,
-  checksum, country-specific rule, or legacy algorithm may be invented.
+- **DR-014**: RUC (`04`) MUST use `FORMAT_ONLY_NUMERIC_13`; Ecuadorian identity card (`05`) MUST use
+  `FORMAT_ONLY_NUMERIC_10`; passport (`06`) and foreign identification (`08`) MUST use
+  `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`. Code `08` MUST represent the identifier issued by the tax
+  authority of the buyer's fiscal-residence country. No checksum, country-specific rule, registry
+  lookup, or legacy algorithm may be applied in this feature.
 - **DR-015**: Final consumer (`07`) is valid only with identification value `9999999999999`, buyer
   name exactly `CONSUMIDOR FINAL`, and a rounded grand total not exceeding the SRI final-consumer
   threshold effective on the emission date. Under SRI Technical Sheet v2.32, the threshold MUST be
@@ -858,8 +868,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   draft, child, and idempotency-binding records.
 - **SC-003**: The same commercial inputs, emission date, and catalog-rule versions always produce
   identical line amounts, grouped taxes, payment comparison, and invoice totals.
-- **SC-004**: The calculation vector `2 × 10.00 − 5.00` with a `15%` percentage tax produces gross
-  `20.00`, net `15.00`, tax `2.25`, and line contribution `17.25` in every supported runtime.
+- **SC-004**: The mathematical calculation vector `2 × 10.00 − 5.00` with the approved IVA 15%
+  rule produces gross `20.00`, net `15.00`, tax `2.25`, and line contribution `17.25` in every
+  supported runtime without asserting universal 15% applicability.
 - **SC-005**: Every successful or failed draft-creation test records zero official sequential
   reservations, access keys, XML artifacts, signature operations, certificate reads, SRI calls,
   asynchronous integration jobs, notification events, PDFs, and notifications.
@@ -971,10 +982,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **Dependency**: Draft creation has no Company Service, authentication, authorization, gateway,
   BFF, or Company master-data runtime dependency. Only the required Company header contract is
   visible at this service boundary.
-- **Dependency**: Versioned identification, tax-category, tax-rule, and payment-method catalogs must
-  provide active/effective reference data aligned with the official sources cited above. PFV-001,
-  PFV-002, and PFV-003 MUST be resolved with approved official evidence and target mappings before
-  `$speckit-tasks` is generated.
+- **Dependency**: Versioned identification, tax-rule, and payment-method catalogs use the approved
+  `SRI-OFFLINE-2.32-TARGET-1` rows and exact identifiers in `reference-data-baseline.md`. The later
+  Flyway seed task MUST reproduce that baseline without generating or substituting identifiers.
 - **Dependency**: The target integration contract publishes the stable fixed UUIDs for approved tax
   rules and payment methods. Callers know those identifiers through that contract because Create
   Invoice Draft provides no catalog-query operation. The authoritative Flyway migration baseline

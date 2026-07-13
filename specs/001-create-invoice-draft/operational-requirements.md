@@ -56,10 +56,10 @@ If evidence misses a budget, the plan must be revisited before implementation is
 complete. The response is not to add a Company cache, application cache, broker, or unapproved
 distributed component.
 
-Performance execution is currently blocked by `PFV-001`, `PFV-002`, and `PFV-003`. No benchmark
-may substitute invented tax-rule/payment-method UUIDs or unapproved reference rows. Record results
-only after the published contract identifiers and authoritative Flyway seeds are approved and
-identical.
+Performance fixtures MUST use the exact published tax-rule and payment-method UUIDs from
+`reference-data-baseline.md`. Benchmarks MUST NOT substitute invented identifiers, runtime-generated
+rows, or excluded SRI representations. Execution evidence begins only after the later Flyway seed
+implements that approved baseline unchanged.
 
 ## Capacity and Resource Safety
 

@@ -4,25 +4,20 @@
 
 **Purpose**: Phase 1 validation guide; it does not create implementation tasks
 
-## Current Validation Blocker
+## Approved Reference Inputs
 
-Catalog-dependent execution is **blocked**. `reference-data-baseline.md` now inventories the
-official candidate rows, but marks zero rows seed-authorized, and `PFV-001`, `PFV-002`, and
-`PFV-003` remain unresolved in `spec.md`. In particular, no approved seeded `taxRuleId` or
-`paymentMethodId` UUID is available.
+`reference-data-baseline.md` approves catalog version `SRI-OFFLINE-2.32-TARGET-1`. Every command
+and fixture MUST copy its identifiers exactly; invented or runtime-generated substitutes are
+prohibited. Frequently used validation identifiers are:
 
-Until all three baselines are approved:
+```bash
+IVA_ZERO_RULE_ID="84cb3f03-574b-54de-9e73-efb8d485476a"
+IVA_FIFTEEN_RULE_ID="5b34b038-931c-50e3-a84c-10af272fdcd4"
+PAYMENT_WITHOUT_FINANCIAL_SYSTEM_ID="639f2b7e-10a3-5d92-a1a3-28223896f5b5"
+```
 
-- do not invent UUIDs, tax rates, payment codes, identification rules, validity periods, or fixture
-  rows;
-- do not reuse any former illustrative tax-rule or payment-method UUID;
-- do not claim successful create, replay, fiscal-vector, migration-reference-data, performance, or
-  native-runtime evidence;
-- do not proceed to `$speckit-tasks`.
-
-After approval, every catalog-dependent command and fixture MUST copy the exact published UUID and
-metadata from the approved target integration contract and the matching authoritative Flyway seed.
-The two sources MUST agree byte-for-byte on each UUID.
+The reference namespace is `32576bbf-b70d-5c24-98ff-d5f9b48e8826`. The later Flyway seed and
+published contract MUST agree byte-for-byte with the complete approved baseline.
 
 ## Prerequisites
 
@@ -36,7 +31,8 @@ Only PostgreSQL and mandatory local service infrastructure are runtime dependenc
 
 ## 1. Verify the Empty-Database Baseline
 
-After the reference-data blocker is resolved, run against an empty PostgreSQL database:
+After the later implementation supplies the planned migrations, run against an empty PostgreSQL
+database:
 
 ```bash
 ./gradlew clean test
@@ -101,9 +97,8 @@ The shell value is only test input. The service captures `requestCreationInstant
 derives the authoritative expected date in `America/Guayaquil`; it does not use the test shell's
 clock or recalculate the date at commit.
 
-Before a successful create test, obtain both reference UUIDs from the approved baseline and verify
-that they exist in the Flyway-seeded database. Stop rather than substituting a sample value when
-either UUID is unavailable.
+Before a successful create test, verify the selected exact baseline UUIDs exist in the
+Flyway-seeded database. Stop rather than substituting a sample value when either row is unavailable.
 
 The valid request must contain:
 
@@ -113,8 +108,10 @@ The valid request must contain:
 - one opaque non-nil UUID `emissionPointId`;
 - `emissionDate` equal to `$ECUADOR_DATE`;
 - final-consumer buyer data only when the approved identification baseline and threshold support it;
-- a `taxRuleId` copied verbatim from the approved IVA baseline;
-- a `paymentMethodId` copied verbatim from the approved payment-method baseline;
+- `taxRuleId: 5b34b038-931c-50e3-a84c-10af272fdcd4` for the 15% mathematical vector, or another
+  exact approved tax-rule UUID appropriate to the upstream-selected transaction;
+- `paymentMethodId: 639f2b7e-10a3-5d92-a1a3-28223896f5b5` for official payment code `01`, or
+  another exact approved payment UUID;
 - payment amount exactly equal to the service-calculated grand total.
 
 Expected new result:
@@ -189,8 +186,6 @@ Company path/query/body parameter.
 
 ## 8. Verify Idempotency
 
-These catalog-dependent tests remain blocked until the approved seeded UUIDs exist.
-
 1. Repeat the original command with the same Company/key and equivalent content. Expect `200`,
    `Idempotency-Replayed: true`, and the original draft.
 2. Change business content with the same Company/key. Expect `409 IDEMPOTENCY_CONFLICT` and no
@@ -227,15 +222,19 @@ the retry must return the original draft.
 
 ## 10. Verify Fiscal, Monetary, and Boundary Vectors
 
-Catalog-dependent fiscal vectors remain blocked until the approved baselines exist. After approval,
-validate at least:
+Using the exact approved baseline identifiers, validate at least:
 
-- `2 × 10.00 − 5.00` with the approved 15% rule, yielding gross `20.00`, net `15.00`, IVA `2.25`,
-  and contribution `17.25`;
+- `2 × 10.00 − 5.00` with tax rule
+  `5b34b038-931c-50e3-a84c-10af272fdcd4`, yielding gross `20.00`, net `15.00`, IVA `2.25`, and
+  contribution `17.25`; this is a mathematical vector, not a claim of universal 15% applicability;
 - all four supported IVA treatments and separate zero-tax grouping;
 - unsupported ICE/IRBPNR/multiple-tax rejection;
 - all supported buyer identification types and final-consumer threshold;
-- zero-value draft with exactly one `0.00` payment;
+- zero-value draft with IVA 0% rule `84cb3f03-574b-54de-9e73-efb8d485476a` only when that
+  treatment is appropriate, and exactly one `0.00` payment using
+  `639f2b7e-10a3-5d92-a1a3-28223896f5b5`;
+- caller selection of the appropriate published tax rule without service-side product
+  classification, including the 5% construction-material applicability boundary;
 - payment mismatch and duplicate payment method;
 - current date derived from the single `requestCreationInstant`, past/future/impossible rejection,
   a commit crossing Guayaquil midnight, and later-date replay;
@@ -273,8 +272,8 @@ Static and runtime evidence must show:
 
 ## 12. Record Operational and Performance Evidence
 
-Run every profile in `operational-requirements.md` only after the reference-data baseline is
-approved. Record environment, warm-up, sample count, percentiles, resource usage, event-loop
+Run every profile in `operational-requirements.md` with the approved seeded reference baseline.
+Record environment, warm-up, sample count, percentiles, resource usage, event-loop
 blocked-thread evidence, and pool state. Company Service latency must not appear in the workload or
 budget.
 
@@ -286,7 +285,7 @@ request duration but correlation values never become metric labels or idempotenc
 
 The packaged JVM smoke suite is mandatory and covers migration, startup, OpenAPI, health, create,
 normalization, date capture, monetary envelopes, replay, conflict, rollback, unavailable/timeout,
-and correlation. Catalog-dependent cases remain blocked until the approved seeds exist.
+and correlation using the exact approved seeds.
 
 Native support is optional. If claimed, record both build and runtime evidence for the same critical
 paths using the approved seeds. Otherwise document native as deferred or unsupported with evidence

@@ -3,9 +3,10 @@
 This matrix maps every approved functional requirement, domain rule, and measurable outcome to
 design evidence and an observable verification target. It does not create implementation tasks.
 
-**Planning blocker**: `PFV-001`, `PFV-002`, and `PFV-003` remain unresolved. Therefore `FR-045`
-through `FR-047`, `DR-001`, `SC-031`, and `SC-032` are not satisfied, `$speckit-tasks` remains
-blocked, and catalog-dependent API examples and fixtures MUST NOT invent identifiers or rules.
+**Reference-data status**: Complete. `reference-data-baseline.md` approves 5 buyer rows, 6 IVA
+rows, and 8 payment rows under `SRI-OFFLINE-2.32-TARGET-1`, using deterministic UUIDv5 namespace
+`32576bbf-b70d-5c24-98ff-d5f9b48e8826`. The independent Constitution-on-main gate remains blocked
+as recorded in `plan.md`.
 
 ## Functional Requirements
 
@@ -17,11 +18,11 @@ blocked, and catalog-dependent API examples and fixtures MUST NOT invent identif
 | `FR-004` | OpenAPI `emissionPointId`; `data-model.md` root | Scenarios 1, 34; `SC-007`, `SC-022` | UUID syntax/canonicalization, persistence, response, and no ownership lookup |
 | `FR-005` | Strict OpenAPI request schema; `error-catalog.md` | Scenarios 10, 44; `SC-022`, `SC-025` | Reject Issuer/establishment/emission fiscal and snapshot properties |
 | `FR-006` | `plan.md` clock mapping; `data-model.md` temporal model | Scenarios 26, 27, 51, 52; `SC-013`, `SC-030` | One captured `requestCreationInstant`, Guayaquil conversion, midnight and replay tests |
-| `FR-007` | Approved identification baseline required by `research.md` | Scenarios 7, 9, 13–16, 53; `SC-010`, `SC-031` | Official effective-date vectors after `PFV-001` is resolved |
+| `FR-007` | Approved identification baseline in `reference-data-baseline.md` | Scenarios 7, 9, 13–16, 53; `SC-010`, `SC-031` | Exact FORMAT_ONLY and final-consumer vectors for all five approved codes |
 | `FR-008` | OpenAPI buyer/contact limits; `data-model.md` buyer fields | Scenarios 31–33; `SC-016` | Address/email/telephone boundary and invalid-format tests |
 | `FR-009` | OpenAPI line cardinality; `data-model.md` aggregate | Scenarios 4, 29, 30; `SC-015` | 1/500 accepted; 0/501 rejected without state |
 | `FR-010` | OpenAPI line numeric/text bounds; `data-model.md` decimals | Scenarios 2, 3, 31, 32, 49, 50; `SC-004`, `SC-016`, `SC-029` | Quantity/price/discount precision, range, text, and overflow vectors |
-| `FR-011` | Tax-rule request reference; approved baseline gate | Scenarios 9, 12, 40, 53, 54; `SC-009`, `SC-021`, `SC-031`, `SC-032` | Effective IVA-only selection after `PFV-002`; reject direct code/rate and multiple tax |
+| `FR-011` | OpenAPI `taxRuleId`; approved IVA baseline and upstream-selection boundary | Scenarios 9, 12, 40, 53, 54; `SC-009`, `SC-021`, `SC-031`, `SC-032` | Effective IVA-only selection, zero automatic classification, direct code/rate and multiple-tax rejection |
 | `FR-012` | Strict request schema; calculation model; error catalog | Scenarios 2, 28, 49, 50; `SC-003`, `SC-004`, `SC-014`, `SC-029` | Pure calculation, prohibited-field, intermediate/grouped overflow, and no-state tests |
 | `FR-013` | Payment schema/model and local uniqueness constraint | Scenarios 5, 17–19, 29, 30, 39, 50, 53, 54; `SC-011`, `SC-020`, `SC-029`, `SC-032` | Positive/zero payment, cardinality, duplicate method, range, and baseline UUID tests |
 | `FR-014` | Calculation/reconciliation design | Scenarios 5, 17–19, 50; `SC-003`, `SC-011`, `SC-029` | Exact two-decimal equality and payment-sum overflow tests |
@@ -38,7 +39,7 @@ blocked, and catalog-dependent API examples and fixtures MUST NOT invent identif
 | `FR-025` | `error-catalog.md`; observability redaction rules | All failure scenarios; `SC-002`, `SC-006`, `SC-028`, `SC-033` | Stable English codes/messages and sensitive/internal-data leakage tests |
 | `FR-026` | OpenAPI correlation header; `operational-requirements.md` | Scenarios 55–58; `SC-033` | Absent/valid/blank/repeated/65-char/unsafe/combined-failure correlation vectors |
 | `FR-027` | OpenAPI idempotency header; `idempotency-design.md` | Scenarios 20–25, 32; `SC-012`, `SC-016`, `SC-018` | Trim/ASCII/1–128 tests and Company-scope independence |
-| `FR-028` | Identification validation boundary | Scenarios 7, 13–16; `SC-010` | Official syntax/checksum vectors; zero online registry/name lookup |
+| `FR-028` | Identification validation boundary and approved FORMAT_ONLY strategies | Scenarios 7, 13–16; `SC-010` | Exact syntax/length/special-value vectors; zero checksum, online registry, or name lookup |
 | `FR-029` | `idempotency-design.md` canonical content version 1 | Scenarios 20, 21, 25, 37, 38, 52, 56; `SC-012`, `SC-019`, `SC-030`, `SC-033` | Golden fingerprints for property/order/text/decimal/correlation/Company exclusions |
 | `FR-030` | Binding schema and `UNIQUE (company_id, idempotency_key_hash)` | Scenarios 20–25, 36; `SC-012`, `SC-018` | New/replay/conflict/lifetime and atomic binding tests |
 | `FR-031` | PostgreSQL uniqueness arbitration design | Scenarios 22, 25; `SC-012`, `SC-017` | 50-way same-scope concurrency and cross-Company independence |
@@ -55,15 +56,15 @@ blocked, and catalog-dependent API examples and fixtures MUST NOT invent identif
 | `FR-042` | HTTP body limit; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027` | Exact 2 MiB proceeds; 2 MiB+1 rejects before Company/correlation validation with safe correlation |
 | `FR-043` | Persistence/error/timeout design | Scenarios 24, 46; `SC-028` | 503/504/500 injection, zero pre-commit state, and post-commit replay recovery |
 | `FR-044` | OpenAPI decimal constraints; domain/data numeric envelopes | Scenarios 49, 50; `SC-029` | API/domain/intermediate/group/payment/persistence/response boundary and overflow vectors |
-| `FR-045` | Required `reference-data-baseline.md` (not yet approved) | Scenario 53; `SC-031` | Pre-task evidence audit of every row and metadata field; currently blocked by `PFV-001`–`PFV-003` |
-| `FR-046` | OpenAPI published UUIDs plus Flyway reference baseline | Scenario 54; `SC-032` | Contract-to-seed UUID equality and no startup generation/catalog-query tests; currently blocked |
-| `FR-047` | PFV registry in `spec.md`; authority rules | Scenario 53; `SC-031`, `SC-032` | Pre-task gate fails on any missing source/mapping/rate/validity/UUID; currently failing by design |
+| `FR-045` | Approved `reference-data-baseline.md` row tables and source register | Scenario 53; `SC-031` | Audit proves every supported row has official facts, target decisions, validity, activity, version, source, and approval |
+| `FR-046` | Published UUIDv5 namespace/names; OpenAPI and quickstart exact IDs | Scenario 54; `SC-032` | Independently recalculate all 14 UUIDs; later contract-to-seed equality and no runtime generation/catalog query |
+| `FR-047` | Baseline excluded-row table and governance rules | Scenario 53; `SC-031`, `SC-032` | Unsupported rows omitted; any later unevidenced row blocks its own introduction |
 
 ## Domain Rules and Invariants
 
 | ID | Design and data evidence | Acceptance / success evidence | Planned verification |
 |----|--------------------------|-------------------------------|----------------------|
-| `DR-001` | Required approved reference-data baseline and Flyway seeds | Scenarios 9, 13–16, 40, 53, 54; `SC-009`, `SC-010`, `SC-021`, `SC-031`, `SC-032` | Official-source/metadata/UUID audit; blocked until all three PFVs resolve |
+| `DR-001` | Approved reference-data baseline and planned Flyway ownership | Scenarios 9, 13–16, 40, 53, 54; `SC-009`, `SC-010`, `SC-021`, `SC-031`, `SC-032` | Official-fact/target-decision audit, exact row counts, UUID recalculation, and later empty-database seed verification |
 | `DR-002` | Calculation pipeline | Scenario 2; `SC-003`, `SC-004` | Exact multiplication and upper-bound intermediate tests |
 | `DR-003` | Calculation pipeline | Scenarios 2, 3; `SC-003`, `SC-004` | Rounded gross less two-decimal discount vectors |
 | `DR-004` | Line invariant | Scenario 3; `SC-002` | Discount equal to gross accepted; greater rejected without state |
@@ -76,7 +77,7 @@ blocked, and catalog-dependent API examples and fixtures MUST NOT invent identif
 | `DR-011` | Calculation ownership and strict input contract | Scenarios 2, 5, 28, 40; `SC-003`, `SC-014`, `SC-021` | Caller supplies commercial/payment inputs only; every calculated/code/rate input rejected, never reconciled |
 | `DR-012` | Single request clock and temporal model | Scenarios 26, 27, 51, 52; `SC-013`, `SC-030` | One-instant Guayaquil conversion, midnight commit, commit timestamp, later replay |
 | `DR-013` | Validation/error/transaction boundaries | Scenarios 3–7, 9, 12–16, 27, 39, 40, 50; `SC-002`, `SC-009`, `SC-010`, `SC-029` | Impossible/inconsistent/inactive/unsupported/local-relation failures reject without normalization or state |
-| `DR-014` | Official buyer validation strategy | Scenarios 7, 13, 14, 16; `SC-010` | Cédula/RUC/passport/foreign official vectors; no invented rules |
+| `DR-014` | Approved buyer FORMAT_ONLY strategies | Scenarios 7, 13, 14, 16; `SC-010` | RUC 13-digit, Cédula 10-digit, passport/foreign 1–20 alphanumeric vectors; no checksum or invented rules |
 | `DR-015` | Final-consumer rule | Scenario 15; `SC-010` | Exact code/value/name and effective USD threshold boundaries |
 | `DR-016` | Zero-value and tax-treatment rules | Scenarios 17–19; `SC-011` | Zero lines/totals/payment accepted only in approved shape; no automatic IVA 0% |
 | `DR-017` | Durable idempotency binding | Scenarios 20–24, 36; `SC-012`, `SC-018` | Commit-only binding, conflict, response-loss replay, no time expiry |
@@ -122,15 +123,94 @@ blocked, and catalog-dependent API examples and fixtures MUST NOT invent identif
 | `SC-028` | `FR-032`, `FR-043` | 503/504/500 pre-commit failures leave zero state; post-commit loss replays original |
 | `SC-029` | `FR-010`, `FR-012`–`FR-014`, `FR-044`; `DR-010` | Same numeric envelope at API/domain/intermediate/group/payment/database/response; every breach gives `MONETARY_RANGE_EXCEEDED` |
 | `SC-030` | `FR-006`, `FR-033`; `DR-012`, `DR-017` | Later-date equivalent replay returns original date without validation or mutation |
-| `SC-031` | `FR-045`, `FR-047`; `DR-001` | Pre-task audit has zero unverified reference rows; currently blocked by `PFV-001`–`PFV-003` |
-| `SC-032` | `FR-046`, `FR-047`; `DR-001` | Contract UUIDs equal Flyway seed UUIDs; zero startup generation/catalog-query operations; currently blocked |
+| `SC-031` | `FR-045`, `FR-047`; `DR-001` | Baseline audit records zero unverified supported rows and explicitly omits unsupported rows |
+| `SC-032` | `FR-046`, `FR-047`; `DR-001` | Published UUIDs recalculate exactly; later contract UUIDs equal Flyway seed UUIDs; zero startup generation/catalog-query operations |
 | `SC-033` | `FR-026`, `FR-029`, `FR-041`; `DR-024` | Correlation absent/valid/invalid/combined-failure vectors plus fingerprint invariance |
+
+## Acceptance Scenario Coverage
+
+| Scenario | Primary trace | Planned observable evidence |
+|----------|---------------|-----------------------------|
+| `AS-001` | `FR-001`, `FR-020`, `FR-022`, `FR-037` | Valid header and content commit one complete draft |
+| `AS-002` | `FR-012`; `DR-002`–`DR-005` | 15% mathematical vector yields 20.00/15.00/2.25/17.25 without universal-rate claim |
+| `AS-003` | `FR-010`; `DR-003`, `DR-004` | Discount greater than gross rejects with zero state |
+| `AS-004` | `FR-009` | Empty line collection rejects with zero state |
+| `AS-005` | `FR-014` | Payment mismatch rejects with zero state |
+| `AS-006` | `FR-001`, `FR-025` | Missing/blank Company header returns `COMPANY_CONTEXT_REQUIRED` |
+| `AS-007` | `FR-007`, `FR-028`; `DR-014` | Invalid approved buyer format rejects |
+| `AS-008` | `FR-023` | Successful create has zero fiscal/SRI/notification side effects |
+| `AS-009` | `FR-007`, `FR-011`, `FR-013` | Inactive or ineffective reference rejects |
+| `AS-010` | `FR-002`, `FR-005` | Body `companyId` rejects as prohibited/unknown |
+| `AS-011` | `FR-020`, `FR-021` | Injected persistence failure rolls back aggregate and binding |
+| `AS-012` | `FR-011`; `DR-005` | Non-IVA, missing, or multiple tax selection rejects |
+| `AS-013` | `FR-007`, `FR-028`; `DR-014` | Codes 04/05/06/08 follow exact approved FORMAT_ONLY strategies |
+| `AS-014` | `FR-028`; `DR-014` | Valid RUC/Cédula format is not subjected to checksum or legacy algorithm |
+| `AS-015` | `FR-007`; `DR-015` | Final-consumer type/value/name/USD 50.00 boundary |
+| `AS-016` | `FR-007`, `FR-028` | Unknown/inactive/not-effective/expired type rejects |
+| `AS-017` | `FR-013`, `FR-014`; `DR-016` | Valid zero-total shape accepts one 0.00 payment |
+| `AS-018` | `FR-013`, `FR-014` | Invalid zero-total payment shapes reject |
+| `AS-019` | `FR-013`, `FR-014` | Positive total with zero or mismatched payment rejects |
+| `AS-020` | `FR-029`, `FR-030`, `FR-033` | Equivalent same-scope replay returns original |
+| `AS-021` | `FR-030` | Different-content same-scope replay conflicts |
+| `AS-022` | `FR-031` | Concurrent equivalent requests create one draft |
+| `AS-023` | `FR-032` | Validation/rollback failure creates no binding |
+| `AS-024` | `FR-032`, `FR-033`, `FR-043` | Response loss after commit reconciles by replay |
+| `AS-025` | `FR-027`, `FR-031` | Same key is independent across Companies |
+| `AS-026` | `FR-006`; `DR-012` | Current Ecuador date accepts from one request instant |
+| `AS-027` | `FR-006`; `DR-012`, `DR-013` | Past/future/impossible date rejects without normalization |
+| `AS-028` | `FR-012`; `DR-011` | Every supplied calculated field rejects |
+| `AS-029` | `FR-009`, `FR-013`, `FR-015` | Exact collection maxima accept |
+| `AS-030` | `FR-009`, `FR-013`, `FR-015` | Collection maxima plus one reject |
+| `AS-031` | `FR-008`, `FR-010`, `FR-015`, `FR-035` | Exact text limits accept |
+| `AS-032` | `FR-008`, `FR-010`, `FR-015`, `FR-027`, `FR-035` | Over-limit and malformed text/key reject |
+| `AS-033` | `FR-035` | Blank/control/duplicate canonical text rejects |
+| `AS-034` | `FR-002`, `FR-004`, `FR-037`, `FR-040` | Header maps to stored/returned CompanyId; emission point remains opaque |
+| `AS-035` | `FR-003`, `FR-036` | Externally unknown valid Company UUID proceeds without lookup |
+| `AS-036` | `FR-030`; `DR-017` | Binding has draft-lifetime retention |
+| `AS-037` | `FR-029`; `DR-021` | Payment/additional reorder remains equivalent |
+| `AS-038` | `FR-029`; `DR-021` | Line reorder conflicts |
+| `AS-039` | `FR-013`; `DR-022` | Duplicate payment method rejects |
+| `AS-040` | `FR-011`; `DR-001`, `DR-011` | Caller-selected published rule is used without classification; direct code/rate rejects |
+| `AS-041` | `FR-023`, `FR-036`, `FR-038` | New create performs no Company/fiscal resolution or side effect |
+| `AS-042` | `FR-033`, `FR-038` | Replay performs no external refresh or mutation |
+| `AS-043` | `FR-036`, `FR-039`, `FR-040` | Static boundary has no Company/security/cache dependency |
+| `AS-044` | `FR-005`, `FR-038` | Issuer/fiscal/snapshot request fields reject |
+| `AS-045` | `FR-041`, `FR-042` | Payload >2 MiB wins precedence and leaves zero state |
+| `AS-046` | `FR-043` | Persistence timeout/unexpected failure is safe and atomic |
+| `AS-047` | `FR-001`, `FR-002` | Malformed/nil Company header returns `COMPANY_CONTEXT_INVALID` |
+| `AS-048` | `FR-001`, `FR-002` | Multiple Company values return `COMPANY_CONTEXT_INVALID` |
+| `AS-049` | `FR-010`, `FR-044`; `DR-010` | Quantity/price/money maxima accept when totals remain in range |
+| `AS-050` | `FR-044`; `DR-010` | Any input/intermediate/group/total overflow returns `MONETARY_RANGE_EXCEEDED` |
+| `AS-051` | `FR-006`, `FR-019`; `DR-012` | Pre-midnight request retains derived date across commit |
+| `AS-052` | `FR-033`; `DR-012`, `DR-017` | Later-date replay returns original emission date |
+| `AS-053` | `FR-045`, `FR-047`; `DR-001` | Readiness audit blocks any future incomplete reference row; current supported rows all pass |
+| `AS-054` | `FR-046`; `DR-001` | Published UUIDs select approved rows and are never startup-generated |
+| `AS-055` | `FR-026`; `DR-024` | Missing correlation generates safe UUID |
+| `AS-056` | `FR-026`, `FR-029`; `DR-024` | One valid correlation is preserved and excluded from equivalence |
+| `AS-057` | `FR-026`, `FR-041`; `DR-024` | Invalid correlation is replaced, never echoed, and returns `INVALID_REQUEST` |
+| `AS-058` | `FR-026`, `FR-041`; `DR-024` | Company error precedes correlation error while safe replacement is returned |
+
+## Stable Error Coverage
+
+| Error code | Governing requirements | Acceptance / planned evidence |
+|------------|------------------------|-------------------------------|
+| `COMPANY_CONTEXT_REQUIRED` | `FR-001`, `FR-002`, `FR-025` | `AS-006`; safe 400 and zero state |
+| `COMPANY_CONTEXT_INVALID` | `FR-001`, `FR-002`, `FR-025` | `AS-047`, `AS-048`; safe 400 and zero state |
+| `INVALID_REQUEST` | `FR-002`, `FR-005`, `FR-026`, `FR-027`, `FR-041` | `AS-010`, `AS-032`, `AS-044`, `AS-057`; safe 400/correlation |
+| `PROHIBITED_CALCULATED_FIELD` | `FR-012`, `FR-025`; `DR-011` | `AS-028`; safe 422 and zero state |
+| `IDEMPOTENCY_CONFLICT` | `FR-030`, `FR-031` | `AS-021`, `AS-038`; safe 409, original unchanged |
+| `REQUEST_PAYLOAD_TOO_LARGE` | `FR-041`, `FR-042` | `AS-045`; safe 413 before Company validation |
+| `BUSINESS_VALIDATION_FAILED` | `FR-007`–`FR-015`, `FR-028`, `FR-044` | Business rejection scenarios and `AS-050`; safe 422 and zero state |
+| `MONETARY_RANGE_EXCEEDED` | `FR-044`; `DR-010` | `AS-050`; nested violation under `BUSINESS_VALIDATION_FAILED` |
+| `PERSISTENCE_UNAVAILABLE` | `FR-020`, `FR-021`, `FR-043` | `AS-011`, `AS-046`; safe 503 and retry same scope |
+| `REQUEST_TIMEOUT` | `FR-032`, `FR-043` | `AS-024`, `AS-046`; safe 504 and replay recovery |
+| `INTERNAL_ERROR` | `FR-025`, `FR-043` | `AS-046`; safe 500 without internal/sensitive data |
 
 ## Cross-Cutting Constitutional Evidence
 
 | Risk | Governing source | Planned evidence | Explicit prohibition |
 |------|------------------|------------------|----------------------|
-| Flyway and local constraints | Constitution IX and Definition of Done | Empty-database migration and constraint tests after reference baselines are approved | No auto-generation, manual schema, legacy dump, or cross-service foreign key |
+| Flyway and local constraints | Constitution IX and Definition of Done | Empty-database migration and constraint tests using the approved reference baseline | No auto-generation, manual schema, legacy dump, or cross-service foreign key |
 | Health and observability | Constitution XIII | `operational-requirements.md` liveness/readiness/log/metric/trace tests | No Company/identity/SRI readiness and no sensitive/high-cardinality labels |
 | JVM/native evidence | Constitution III/XII | Mandatory packaged JVM suite; native build plus runtime only if claimed | No native claim from build alone |
 | Performance and reactive safety | Constitution V/XIII | Documented reference environment, latency profiles, 50-way concurrency, blocked-thread evidence | No Company latency, cache, blocking wait, or hidden blocking wrapper |

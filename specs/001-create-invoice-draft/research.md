@@ -3,8 +3,9 @@
 **Feature**: `001-create-invoice-draft`
 **Date**: 2026-07-12
 **Constitution**: v2.0.0
-**Status**: Blocked for task generation; PFV-001 through PFV-003 remain open until every row and
-stable target mapping in `reference-data-baseline.md` is approved from the cited official evidence
+**Status**: Complete — official evidence and target mappings are approved in
+`reference-data-baseline.md`; the separate Constitution-on-main governance gate remains outside
+this research status
 
 ## 1. Runtime and Framework Baseline
 
@@ -241,25 +242,42 @@ resources, OpenAPI, health, create, replay, conflict, rollback, and timeout beha
 
 ## 13. Reference-Data Baseline Evidence Gate
 
-**Decision**: `reference-data-baseline.md` is the sole planning inventory for initial buyer
-identification types, IVA tax rules, and payment methods. Flyway owns the corresponding fixed rows.
-`taxRuleId` and `paymentMethodId` values are stable target-contract UUIDs; application startup MUST
-NOT create or replace them. Quickstart and fixtures may use only UUIDs listed as approved and
-seeded in that baseline.
+**Decision**: `reference-data-baseline.md` is the approved executable planning baseline for five
+buyer-identification types, six IVA tax rules, and eight payment methods. Flyway will own the
+corresponding fixed rows in a later implementation task. Buyer types use official codes `04`
+through `08`; tax and payment references use deterministic UUIDv5 identifiers. Application startup
+MUST NOT create or replace them, and all examples and fixtures MUST use only the published values.
+
+The namespace is:
+
+```text
+UUIDv5(UUID.NAMESPACE_DNS, "com.alexastudillo.taxdocument.reference-data.v1")
+= 32576bbf-b70d-5c24-98ff-d5f9b48e8826
+```
+
+Tax-rule names are
+`tax-rule|SRI-OFFLINE-2.32|<tax-code>|<percentage-code>|<rate>|<treatment>` and payment names are
+`payment-method|SRI-OFFLINE-2.32|<official-code>`. Exact values and independent recalculation
+requirements are recorded in the baseline.
 
 **Official evidence reviewed**:
 
 - [SRI electronic invoicing page, publishing Technical Sheet v2.32](https://www.sri.gob.ec/facturacion-electronica)
-- [SRI Technical Sheet v2.31, Table 6 identification types and Tables 16–17 tax/IVA codes](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/d5411726-0081-4f0c-b5f0-08f3924c5f28/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.31.pdf)
-- [SRI current payment-method catalog](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/5fe276a4-34dd-4d2c-a19e-614e195e01d3/FORMAS%2BDE%2BPAGO.pdf)
+- [SRI Technical Sheet v2.32, Table 6, §9.10, Tables 16–17, invoice field table, and Table 24](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/29562323-2e76-42f5-abb6-cb7ac542c3c6/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.32.pdf)
 - [SRI IVA guidance](https://www.sri.gob.ec/impuesto-al-valor-agregado-iva)
+- [SRI Resolution NAC-DGERCGC24-00000013](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar?id=6b8588f2-a4bf-44bb-ac40-085391ba2aed&nombre=NAC-DGERCGC24-00000013.pdf)
 - [SRI Circular NAC-DGECCGC25-00000006](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar?id=236482f4-6125-42fd-b073-62c99d08233d&nombre=NAC-DGECCGC25-00000006.pdf)
+- [SRI Circular NAC-DGECCGC26-00000005](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar?id=a3e4257d-ba2e-4ec7-89c7-635fa764b22a&nombre=NAC-DGECCGC26-00000005.pdf)
 
-**Unresolved material evidence**: The current SRI IVA guidance reports a general rate of `13%`,
-while Circular NAC-DGECCGC25-00000006 states that `15%` remains effective until modified and the
-approved feature calculation vector uses `15%`. No official modification date reconciling those
-sources has been established in this planning pass. Therefore the percentage-rate baseline row and
-any dependent fixture MUST remain Pending Functional Validation. Research MUST NOT be marked
-complete, and `$speckit-tasks` MUST NOT run, until the governing rate, effective interval, and
-stable target UUID mapping are approved. The zero-rate, not-subject, exempt, identification, and
-payment rows remain subject to the row-by-row approval status recorded in the baseline.
+**Resolution**: The current SRI IVA page identifies 13% and 5% applicability, while the 2025 and
+2026 circulars provide primary evidence for active 15% contexts. Technical Sheet v2.32 publishes
+all corresponding representation codes. The target baseline therefore includes 13% and 15% as
+distinct caller-selectable rules with explicit applicability notes; neither is represented as a
+universal rate. The upstream billing workflow selects the appropriate rule, and this feature does
+not classify products or determine legal eligibility. The approved 15% scenario remains a
+mathematical rounding vector.
+
+No exact governing checksum algorithm was located in the approved sources for draft-time RUC or
+Ecuadorian identity-card validation. Under the approved feature policy, both use explicitly named
+`FORMAT_ONLY` strategies. This is a resolved scope decision: checksum and registry verification are
+outside Create Invoice Draft, not deferred implementation work.

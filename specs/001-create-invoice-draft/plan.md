@@ -82,7 +82,7 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 | Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
 | Constitution | `.specify/memory/constitution.md` v2.0.0 | Company header, no identity/Company dependency, architecture, persistence, testing, operations |
 | Specification | `specs/001-create-invoice-draft/spec.md`, clarification session 2026-07-12 | Actor, inputs, calculations, validation, failure precedence, acceptance |
-| Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Official buyer-type, IVA-rule, and payment-method candidates; row-level evidence and target-UUID approval gate |
+| Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Approved buyer-type, IVA-rule, and payment-method rows; official evidence; target decisions; deterministic UUIDv5 mappings |
 | Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
 | Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
 | Legacy evidence | `docs/legacy/as-is/` paths listed in the spec | Historical discovery only |
@@ -90,21 +90,20 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 **Source Conflicts and Resolutions**: Historical and superseded feature artifacts required
 Keycloak, tenant-derived Company context, a Company client/port, status/eligibility checks, and
 fiscal snapshots. Constitution v2.0.0 and the clarified spec have higher authority. All such
-components/outcomes are removed or explicitly prohibited. Current SRI IVA guidance reports `13%`,
-while Circular NAC-DGECCGC25-00000006 states that `15%` remains effective until modified and the
-approved feature vector uses `15%`. No effective-date resolution is inferred; PFV-002 records the
-conflict and blocks a percentage-rate seed row until authoritative reconciliation is approved.
+components/outcomes are removed or explicitly prohibited. Current SRI IVA guidance identifies 13%
+and 5% applicability, while Circulars NAC-DGECCGC25-00000006 and
+NAC-DGECCGC26-00000005 provide official 15% applicability evidence. The approved baseline retains
+13% and 15% as distinct caller-selectable rules with applicability notes; neither is labeled
+universal. Product or transaction classification remains the upstream billing workflow's
+responsibility. The 15% acceptance vector is mathematical only.
 
-**Pending Functional Validation**:
-
-- `PFV-001`: approve every buyer-identification baseline row and its official validation evidence;
-- `PFV-002`: reconcile the effective percentage-rate IVA row, including the current official-rate
-  source conflict, effective interval, and stable target UUID;
-- `PFV-003`: approve every payment-method row and stable target UUID mapping.
-
-`reference-data-baseline.md` records the row-level evidence and approval state. Planning MUST NOT
-promote an unverified row into a Flyway seed, quickstart request, or fixture. These PFVs block
-`$speckit-tasks` but do not require inventing an answer during this Phase 0/1 design pass.
+**Reference-Data Resolution**: `reference-data-baseline.md` approves five buyer-identification
+rows, six IVA tax-rule rows, and eight payment-method rows under
+`SRI-OFFLINE-2.32-TARGET-1`. Tax and payment identifiers use UUIDv5 namespace
+`32576bbf-b70d-5c24-98ff-d5f9b48e8826`. RUC and Ecuadorian identity-card validation are explicitly
+`FORMAT_ONLY` because no exact governing checksum algorithm was established from the approved
+primary sources for this draft feature. Checksum and registry verification are outside scope, not
+deferred implementation work.
 
 **Terminology Mapping Impact**: `Company Identifier`/`CompanyId` remains the canonical opaque
 ownership value from `X-Company-Id`. `Fiscal Context Snapshot` remains reserved for a later
@@ -117,15 +116,16 @@ artifacts.
 
 | Gate | Pre-Research evidence | Post-Design evidence |
 |------|-----------------------|----------------------|
+| Constitution approval on main | BLOCKED — local `main` and `origin/main` contain Constitution v1.0.0 | BLOCKED — branch `6-ft-1` contains v2.0.0, but editing this branch does not satisfy main approval |
 | Greenfield bounded outcome | PASS — one target create/review outcome | PASS — no legacy compatibility or unrelated lifecycle |
-| Authority/versioned evidence | PASS — Constitution v2.0.0 and SRI v2.32 identified | BLOCKED FOR TASKS — research and the baseline register exact evidence, but PFV-001–PFV-003 remain pending |
+| Authority/versioned evidence | PASS — Constitution v2.0.0 and SRI v2.32 identified | PASS — source register separates official facts from target decisions with exact locators |
 | English terminology | PASS — target terms are English | PASS — all generated artifacts use canonical English with exact SRI exceptions |
 | Required baseline | PASS — Java/Quarkus/Mutiny/PostgreSQL/Panache/Flyway fixed | PASS — Quarkus 3.33.2.1 LTS and PostgreSQL 18.4 justified |
-| Reference-data evidence | PFV-001–PFV-003 registered; inference prohibited | BLOCKED FOR TASKS — candidate rows are inventoried, but zero rows are seed-authorized |
+| Reference-data evidence | PASS — evidence needs identified without inference | PASS — 5 buyer, 6 IVA, and 8 payment rows approved with fixed identifiers where applicable |
 | Clean Architecture | PASS — four boundaries required | PASS — explicit API→application→domain/infrastructure mapping below |
 | Domain purity | PASS — synchronous deterministic fiscal model | PASS — no transport/framework/persistence/security/Mutiny types in domain |
 | Reactive safety | PASS — no blocking external operation in scope | PASS — reactive PostgreSQL only; bounded domain work and evidence budget |
-| Fiscal correctness | PASS — approved IVA/buyer/date/decimal rules | BLOCKED FOR TASKS — numeric/date behavior is complete; unverified catalog rows cannot be seeded or tested as authoritative |
+| Fiscal correctness | PASS — approved IVA/buyer/date/decimal rules | PASS — catalog, FORMAT_ONLY buyer strategies, applicability boundary, numeric, and date rules are complete |
 | Internal caller boundary | PASS — no identity/security state | PASS — OpenAPI/dependencies/config/tests contain no security behavior |
 | Company boundary | PASS — mandatory header, no lookup/snapshot | PASS — CompanyId mapping/storage/scoping and negative architecture evidence explicit |
 | Sensitive data | PASS — buyer/fiscal data identified | PASS — fingerprint-only binding and observability redaction defined |
@@ -138,10 +138,9 @@ artifacts.
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
 
-No constitutional deviation or complexity exception is requested. Phase 1 design may complete with
-the explicitly registered evidence gate, but task generation and implementation MUST remain blocked
-until every row required by `reference-data-baseline.md` is approved and the research status can be
-changed to complete.
+No constitutional deviation or complexity exception is requested. Phase 1 design and reference
+data are complete. Task generation remains blocked only by the constitutional governance rule that
+Constitution v2.0.0 MUST be approved on `main`; local `main` and `origin/main` still contain v1.0.0.
 
 ## Clean Architecture Mapping
 
@@ -371,5 +370,6 @@ database, second datastore, generic repository hierarchy, or custom authenticati
 - Supporting designs: `error-catalog.md`, `persistence-design.md`,
   `idempotency-design.md`, `operational-requirements.md`, and `traceability.md`.
 
-The next workflow command is `$speckit-checklist`; implementation tasks are intentionally not
-generated by this plan command.
+The planning and requirements-quality checklist artifacts are complete. `$speckit-tasks` remains
+prohibited until Constitution v2.0.0 is approved on `main`, `6-ft-1` is rebased onto that approved
+mainline, and this pre-task gate is rerun. No implementation tasks are generated by this plan.
