@@ -33,22 +33,47 @@ release baseline; native execution remains an optional evidence-based capability
 
 ## 2. Required Quarkus Capabilities
 
-**Decision**: Plan only the capabilities required for the approved feature:
+**Decision**: Use only these exact build capabilities. Every Quarkus artifact is version-managed by
+the Quarkus `3.33.2.1` platform BOM; no independently versioned Quarkus extension is permitted.
 
-- Quarkus REST with Jackson;
-- Hibernate Reactive with Panache;
-- reactive PostgreSQL client;
-- Flyway and the PostgreSQL JDBC migration driver;
-- Hibernate Validator;
-- SmallRye OpenAPI and Health;
-- Micrometer and OpenTelemetry when enabled by the operational profile;
-- JUnit 5, REST Assured, `UniAsserter`, and PostgreSQL test support.
+| Scope | Approved artifact or mechanism | Reason |
+|-------|--------------------------------|--------|
+| HTTP and JSON | `io.quarkus:quarkus-rest-jackson` | Implements the target-first synchronous JSON operation and distinct transport DTOs |
+| Validation | `io.quarkus:quarkus-hibernate-validator` | Enforces bounded transport representation before application mapping |
+| Reactive persistence | `io.quarkus:quarkus-hibernate-reactive-panache`, `io.quarkus:quarkus-reactive-pg-client` | Implements the required non-blocking PostgreSQL adapter while keeping Panache in infrastructure |
+| Migrations | `io.quarkus:quarkus-flyway`, `io.quarkus:quarkus-jdbc-postgresql` | Runs authoritative Flyway migrations during controlled startup; JDBC is migration-only |
+| Contract and health | `io.quarkus:quarkus-smallrye-openapi`, `io.quarkus:quarkus-smallrye-health` | Publishes the approved contract and distinct liveness/readiness behavior |
+| Observability | `io.quarkus:quarkus-micrometer`, `io.quarkus:quarkus-opentelemetry` | Supplies bounded metrics and safe trace correlation; exporters remain profile-controlled |
+| Quarkus/API tests | `io.quarkus:quarkus-junit`, `io.rest-assured:rest-assured` | Provides JUnit 5 Quarkus runtime tests and HTTP contract evidence |
+| Reactive tests | `io.quarkus:quarkus-test-vertx`, `io.quarkus:quarkus-test-hibernate-reactive-panache` | Provides `UniAsserter`, event-loop execution, and reactive transactional assertions |
+| PostgreSQL tests | Quarkus Database Dev Services supplied by the PostgreSQL extensions, pinned in test configuration to `docker.io/library/postgres:18.4` | Provides real PostgreSQL without a direct Testcontainers dependency or a second lifecycle mechanism |
+| Formatting | Gradle plugin `com.diffplug.spotless` `8.8.0` with `google-java-format` `1.35.0` | Provides one reproducible Java/Kotlin-Gradle formatting gate |
+| Static analysis | JDK 25 `javac -Xlint:all -Werror` plus the planned architecture tests | Uses the approved JDK and focused boundary evidence without another analyzer dependency |
 
 No OIDC, OAuth, JWT, Keycloak, security, token-propagation, Company REST client, cache, broker,
 SOAP, XML, signature, certificate, PDF, notification, or SRI adapter capability is in scope.
 
 **Rationale**: The capability set implements the approved Clean Architecture boundaries and local
 reactive persistence without introducing a distributed interaction or identity layer.
+
+**Alternatives considered**:
+
+- A directly declared Testcontainers PostgreSQL dependency and custom container lifecycle were
+  rejected because Quarkus Database Dev Services already supplies the required real PostgreSQL
+  lifecycle and permits an exact image pin.
+- Checkstyle, PMD, Error Prone, and a second formatter were rejected because JDK lint, Spotless,
+  focused architecture tests, and the required risk suites satisfy the current feature without
+  overlapping analyzers or configuration files.
+- An unversioned formatter engine was rejected because it would make formatting outcomes depend on
+  a future plugin default.
+
+**Official evidence**:
+
+- [Quarkus Hibernate Reactive with Panache and reactive-test artifacts](https://quarkus.io/guides/hibernate-reactive-panache)
+- [Quarkus testing and test-resource model](https://quarkus.io/guides/getting-started-testing)
+- [Quarkus Database Dev Services](https://quarkus.io/guides/databases-dev-services)
+- [Spotless Gradle plugin 8.8.0](https://plugins.gradle.org/plugin/com.diffplug.spotless/8.8.0)
+- [google-java-format 1.35.0](https://github.com/google/google-java-format/releases/tag/v1.35.0)
 
 ## 3. PostgreSQL Baseline
 

@@ -38,6 +38,25 @@ token, role, permission, tenant, or application-level service security behavior.
 empty-database Flyway tests, OpenAPI contract tests, architecture tests, pure domain vectors,
 packaged JVM tests, and optional native build/runtime smoke
 
+**Approved Build Dependencies**: Quarkus-BOM-managed
+`quarkus-rest-jackson`, `quarkus-hibernate-validator`,
+`quarkus-hibernate-reactive-panache`, `quarkus-reactive-pg-client`, `quarkus-flyway`,
+`quarkus-jdbc-postgresql`, `quarkus-smallrye-openapi`, `quarkus-smallrye-health`,
+`quarkus-micrometer`, and `quarkus-opentelemetry`; test dependencies are BOM-managed
+`quarkus-junit`, `quarkus-test-vertx`, `quarkus-test-hibernate-reactive-panache`, and
+`io.rest-assured:rest-assured`. Exact rationale and rejected alternatives are recorded in
+`research.md`.
+
+**PostgreSQL Test Harness**: Quarkus Database Dev Services from the approved PostgreSQL extensions,
+with test configuration pinned to `docker.io/library/postgres:18.4`. No direct Testcontainers
+dependency or competing container lifecycle is introduced; shared helpers consume the Quarkus test
+resource/Dev Services context.
+
+**Build Quality**: Spotless Gradle plugin `com.diffplug.spotless` `8.8.0` with
+`google-java-format` `1.35.0` is the only formatter. Static analysis uses JDK 25
+`javac -Xlint:all -Werror` plus the focused architecture tests; no Checkstyle, PMD, Error Prone, or
+second formatter is planned.
+
 **Target Execution**: JVM is mandatory
 
 **Native Compatibility**: Optional candidate; it may be claimed only with build and runtime
@@ -149,7 +168,8 @@ data are complete, and no material planning blocker remains.
 ```text
 HTTP request
   → api: parse/validate X-Company-Id and transport DTOs
-  → application: CreateInvoiceDraftCommand(CompanyId, business inputs, idempotency/correlation)
+  → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
+    inputs, idempotency/correlation)
   → domain: InvoiceDraft aggregate and deterministic calculation
   → application outbound ports
   → infrastructure: reactive Panache/PostgreSQL, local catalogs, clock/identifier adapters
@@ -157,8 +177,8 @@ HTTP request
 
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
-| `api` | Enforce payload/header/body representation, strict unknown fields, correlation, DTO mapping, Problem Details | `application` | Persistence entities returned directly; Company/security clients |
-| `application` | Carry explicit CompanyId, enforce failure precedence/idempotency/use-case preconditions, orchestrate transaction ports | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
+| `api` | Enforce FR-041 stages 1–5, initialize safe correlation for every outcome, capture one request instant after those stages pass, map transport inputs, and return Problem Details | `application` | Persistence entities returned directly; Company/security clients |
+| `application` | Receive an already mapped CompanyId and fixed request instant; enforce FR-041 stages 6–12, idempotency, use-case preconditions, and transaction-port orchestration | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
 | `domain` | Own immutable CompanyId on Invoice Draft; buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
 | `infrastructure` | Implement local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache | application ports/domain types | Company/SRI/security adapter, shared database, cache |
 
@@ -166,6 +186,16 @@ Actual outbound boundaries are limited to the Invoice Draft repository, local id
 payment catalog access, clock, and identifier generation. No interface named or equivalent to
 `CompanyContextPort`, `ResolveCompanyFiscalContextPort`, or Company authorization/eligibility is
 introduced.
+
+**Failure-Precedence Ownership**: API filters/resource coordination own payload-size enforcement,
+Company-header validation, correlation validation, idempotency-key syntax, and request
+representation (FR-041 stages 1–5). Correlation initialization still produces a safe identifier for
+stage 1 or 2 failures without allowing correlation invalidity to replace the earlier error. Once
+stages 1–5 pass, the API calls the application `RequestClock` exactly once, derives the immutable
+request instant carried by `CreateInvoiceDraftCommand`, and performs no later clock read for that
+command. Application orchestration begins at normalized-content generation (stage 6), continues
+through replay/conflict, business/reference/domain validation and calculation, and ends with atomic
+persistence (stage 12). HTTP headers and payload representations never enter application logic.
 
 ## Reactive and Resource Boundary Design
 
@@ -230,6 +260,12 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
   `MONETARY_RANGE_EXCEEDED`; API, calculation, persistence, response, and test limits are identical.
 - Failure evaluation follows FR-041 exactly.
 
+**OpenAPI Source of Truth**: `specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml`
+is the only independently authored contract. `src/main/resources/META-INF/openapi.yaml` is a
+byte-for-byte runtime publication copy created from that canonical file and MUST NOT be edited as a
+second contract. Contract tests parse and resolve both files and fail unless their bytes and
+semantics are identical.
+
 The contract contains no Company-not-found/inactive/unavailable/timeout/authorization result and
 no authentication or authorization result.
 
@@ -237,7 +273,7 @@ no authentication or authorization result.
 
 | Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
 |------------------|---------------------|-------------------|--------------------|---------|-------------------------|--------------------|
-| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | Overall 10 s begins at acceptance; one request instant captured | Correct request | 400/413 or continue |
+| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | Overall 10 s begins at acceptance; one request instant is captured after stage 5 passes | Correct request | 400/413 or continue |
 | Binding lookup | No new durable state | CompanyId + key hash; fingerprint/version compare | Equivalent replay; different content conflict | Bounded query | Same key safely retried | 200/409 or continue |
 | New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | 5-second write tx | Loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
 | Response delivery | Commit already authoritative | Same equivalent retry | Returns original | 10-second request deadline | Binding reconciles response loss | Original draft observable |
@@ -309,13 +345,23 @@ src/main/java/com/alexastudillo/taxdocument/
 
 src/main/resources/
 ├── application.properties
-└── db/migration/
+├── db/migration/
+└── META-INF/
+    └── openapi.yaml  # byte-for-byte publication copy of the canonical contract
 
 src/test/java/com/alexastudillo/taxdocument/
 ├── api/invoicedraft/
 ├── application/invoicedraft/
+├── architecture/
 ├── domain/invoicedraft/
-└── infrastructure/invoicedraft/
+├── infrastructure/invoicedraft/
+└── runtime/
+
+src/test/resources/
+├── application.properties
+└── invoicedraft/
+    ├── calculation-vectors.json
+    └── idempotency-v1-vectors.json
 ```
 
 Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
@@ -356,11 +402,19 @@ business persistence. No other destination exists.
 
 | Addition | Requirement | Simpler alternative | Why insufficient | Consequence |
 |----------|-------------|---------------------|------------------|-------------|
+| Quarkus HTTP/validation/contract/health extensions: `quarkus-rest-jackson`, `quarkus-hibernate-validator`, `quarkus-smallrye-openapi`, `quarkus-smallrye-health` | FR-001–FR-026, FR-039–FR-044, Constitution X/XIII | JDK HTTP/hand-written JSON, validation, OpenAPI, and health | Reimplements framework capabilities, weakens contract/validation evidence, and conflicts with the Quarkus baseline | BOM-managed extensions; API, contract, validation, health, JVM, and optional-native evidence |
+| Quarkus reactive persistence/migration extensions: `quarkus-hibernate-reactive-panache`, `quarkus-reactive-pg-client`, `quarkus-flyway`, `quarkus-jdbc-postgresql` | FR-020–FR-024, FR-030–FR-034, FR-043, Constitution III/V/IX | Hand-written reactive SQL and manual migrations | Panache/Flyway/PostgreSQL are mandatory; JDBC remains migration-only | Reactive adapter tests, empty-database migrations, transaction/timeout/concurrency evidence |
+| Quarkus observability extensions: `quarkus-micrometer`, `quarkus-opentelemetry` | FR-025–FR-026, SC-002, SC-012, SC-023, SC-033, Constitution XIII | Logs alone | Cannot prove bounded metrics and trace/correlation behavior | Profile-controlled exporters and sensitive/high-cardinality exposure tests |
+| Quarkus test stack: `quarkus-junit`, `quarkus-test-vertx`, `quarkus-test-hibernate-reactive-panache`, `io.rest-assured:rest-assured`, and Database Dev Services supplied by the PostgreSQL extensions | Constitution XII and all acceptance evidence | Plain JUnit with mocked persistence or direct Testcontainers lifecycle | Cannot prove packaged Quarkus HTTP/reactive/PostgreSQL behavior; direct lifecycle duplicates Dev Services | Real PostgreSQL 18.4, HTTP, reactive transaction, concurrency, migration, and JVM evidence; no direct Testcontainers dependency |
+| Spotless `8.8.0` with google-java-format `1.35.0` | Constitution Definition of Done | Manual formatting or unpinned formatter default | Not deterministic or enforceable in CI | One reproducible `spotlessCheck`; no second formatter |
+| Four outbound abstractions: `InvoiceDraftRepository`, `ReferenceDataPort`, `RequestClock`, `DraftIdentifierGenerator` | FR-006–FR-024, FR-027–FR-034, FR-045–FR-047, Constitution IV | Call Panache, system clock, or UUID generation directly from application/domain | Would couple use-case/domain policy to infrastructure and prevent deterministic tests at actual replaceable boundaries | Four capability-local interfaces only; no generic hierarchy, Company port, or speculative factory |
 | Durable fingerprint-only idempotency binding | FR-027–FR-034 | In-memory/key-only dedupe | Not durable, cross-process safe, semantically comparable, or privacy-minimal | Migration, fingerprint vectors, concurrency/rollback evidence |
 | Versioned local tax-document reference catalogs | DR-001 | Hard-coded codes/rates | Prohibited; cannot represent activity/effective dates/version | Flyway reference migrations and catalog tests |
 
-There is no additional microservice, external client, cache, broker, background process, shared
-database, second datastore, generic repository hierarchy, or custom authentication framework.
+JDK 25 `javac -Xlint:all -Werror` adds no external dependency and complements, rather than
+duplicates, the architecture tests. There is no additional microservice, external client, cache,
+broker, background process, shared database, second datastore, generic repository hierarchy, or
+custom authentication framework.
 
 ## Phase 0 and Phase 1 Outputs
 
