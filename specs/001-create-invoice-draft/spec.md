@@ -80,6 +80,12 @@ clarifies that IVA category is the rule's immutable family rather than a separat
   Payment and additional-information ordering are representation-only differences.
 - Q: May the same payment method appear more than once in a positive-total draft? → A: No. Each
   active payment method may appear at most once per draft.
+- Q: How does the 10-second request deadline interact with ordered failure precedence? → A: One
+  monotonic deadline begins before body consumption and arbitrates before and during every FR-041
+  stage. A stage outcome wins only when conclusively determined before expiry; otherwise
+  `REQUEST_TIMEOUT` wins. A selected outcome is never replaced by a later deadline signal, an
+  unresolved commit is reconciled by same-scope replay, and expiry after HTTP response commitment
+  is telemetry-only.
 
 ## Scope and Evidence *(mandatory)*
 
@@ -359,12 +365,22 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     Issuer fiscal attribute, establishment fiscal data, or an emission-point fiscal snapshot,
     **when** strict request-body validation is performed, **then** every such property is rejected as
     unknown or prohibited and no draft, child, or idempotency binding is persisted.
-45. **Given** the request body exceeds `2 MiB` (`2,097,152` bytes), **when** the create operation
-    receives it, **then** the request is rejected with a stable safe payload-size error before
-    Company-header evaluation and no draft, child, or idempotency binding is persisted.
-46. **Given** local persistence times out or fails unexpectedly before a successful commit,
-    **when** draft creation terminates, **then** a stable safe error with a correlation identifier is
-    returned and no draft, child, or idempotency binding remains persisted.
+45. **Given** the request body is conclusively observed to exceed `2 MiB` (`2,097,152` bytes)
+    before the request deadline, **when** the create operation receives it with an absent, valid, or
+    invalid `X-Correlation-Id`, **then** `REQUEST_PAYLOAD_TOO_LARGE` is returned before Company-header
+    evaluation, one valid correlation value is preserved while absent or invalid input receives a
+    safe generated replacement, correlation invalidity never changes the result to HTTP `400`, no
+    later processing or database operation occurs, and no draft, child, or idempotency binding is
+    persisted; **and given** the deadline expires before payload-size classification is conclusive,
+    **then** `REQUEST_TIMEOUT` remains the selected outcome even if a later read would exceed the
+    payload limit.
+46. **Given** local persistence times out or fails unexpectedly and complete rollback is confirmed
+    before the request deadline, **when** draft creation terminates, **then** the approved stable
+    safe persistence error with a correlation identifier is returned and no draft, child, or
+    idempotency binding remains persisted; **and given** the deadline expires while commit outcome
+    is unresolved, **then** `REQUEST_TIMEOUT` reports an uncertain client-facing outcome, makes no
+    zero-state claim, and same-Company/key/content replay resolves whether the original draft was
+    committed without creating a second draft.
 47. **Given** `X-Company-Id` is malformed or is the nil UUID, **when** draft creation is attempted,
     **then** `COMPANY_CONTEXT_INVALID` is returned in a safe English error response with a
     correlation identifier and no draft, child, or idempotency binding is persisted.
@@ -415,11 +431,13 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   MUST be normalized to canonical lowercase hyphenated form before ownership, persistence,
   response, or idempotency scoping. Nil UUID text MUST be rejected rather than normalized into an
   accepted CompanyId.
-- Failure evaluation MUST follow FR-041. In particular, an oversized payload MUST be rejected
-  before Company-header evaluation; invalid Company context MUST take precedence over invalid
-  correlation; correlation validation MUST take precedence over idempotency-key and body-field
-  validation; and an existing equivalent local binding MUST return the original result before
-  current business rules are reevaluated.
+- Failure evaluation MUST follow FR-041. In particular, an oversized payload conclusively detected
+  before deadline expiry MUST be rejected before Company-header evaluation; invalid Company
+  context conclusively detected before expiry MUST take precedence over invalid correlation;
+  correlation validation MUST take precedence over idempotency-key and body-field validation; and
+  an existing equivalent local binding conclusively resolved before expiry MUST return the
+  original result before current business rules are reevaluated. Deadline expiry first produces
+  `REQUEST_TIMEOUT` and no later stage result may replace it.
 - Correlation initialization MUST always produce a safe response identifier. If both Company
   context and correlation input are invalid, the Company error governs, the unsafe correlation is
   not echoed, and the replacement identifier correlates the response.
@@ -595,8 +613,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   accepted emission date. The last-modification timestamp MUST NOT precede `createdAt`.
 - **FR-020**: The complete draft, its invoice lines, tax selections and calculated amounts,
   payments, and additional information MUST be persisted as one all-or-nothing outcome.
-- **FR-021**: A request-contract, business-validation, reference-data, or persistence failure MUST
-  leave no partial draft, child data, or idempotency binding.
+- **FR-021**: A request-contract, business-validation, reference-data, or deadline failure confirmed
+  before persistence begins, and a persistence failure confirmed fully rolled back, MUST leave no
+  draft, child data, or idempotency binding. This zero-state guarantee MUST NOT be asserted while a
+  commit outcome is unresolved or after a successful commit; those outcomes follow FR-032,
+  FR-033, and FR-043.
 - **FR-022**: A successful response MUST include the draft identifier, `DRAFT` status, captured
   normalized Company identifier, opaque emission-point identifier, buyer information, emission
   date, lines, payments, additional information, every calculated line amount, grouped tax totals,
@@ -619,6 +640,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   over-length, or otherwise unsafe supplied value MUST NOT be echoed; the service MUST generate a
   safe replacement UUID and return `INVALID_REQUEST` when correlation validation is the governing
   outcome. The safe correlation identifier MUST be returned and used for operational correlation.
+  On the payload-limit path, correlation classification exists solely to choose that safe response
+  identifier: one valid value is preserved and absent or invalid input receives a generated safe
+  UUID. It MUST NOT execute or emit the normal stage-3 correlation-validation outcome after
+  `REQUEST_PAYLOAD_TOO_LARGE` has been selected.
 - **FR-027**: Every creation command MUST provide a non-blank caller-generated idempotency key. Its
   scope MUST be the normalized Company UUID plus the key, with no tenant component. After trimming,
   the key MUST contain 1 to 128 printable ASCII characters. Changing the normalized Company UUID
@@ -697,15 +722,51 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   initialization MUST still produce a safe identifier for an earlier payload-size or
   Company-context error, but correlation invalidity MUST NOT replace that higher-precedence error.
   No authentication, authorization, tenant resolution, Company lookup, Issuer lookup, or
-  emission-point ownership validation step may be inserted.
+  emission-point ownership validation step may be inserted. These numbers define precedence among
+  stage outcomes that become conclusive; `REQUEST_TIMEOUT` is a cross-cutting terminal outcome and
+  is not an additional numbered validation or persistence stage. One transport-independent
+  deadline MUST be captured at the earliest HTTP boundary from a monotonic elapsed-time source and
+  MUST arbitrate before and during every stage. A stage outcome wins only if it becomes conclusively
+  determined before deadline expiry. If expiry occurs first, `REQUEST_TIMEOUT` (`504`) wins and a
+  later stage completion MUST NOT replace it; once any terminal outcome is conclusively selected
+  before expiry, a later deadline signal MUST NOT replace that outcome.
+
+  For payload reading, conclusive over-limit detection before expiry selects
+  `REQUEST_PAYLOAD_TOO_LARGE`, while expiry before size classification selects `REQUEST_TIMEOUT`.
+  For Company, correlation, and idempotency headers, conclusive invalidity before expiry selects the
+  approved `400`, while expiry before classification selects `REQUEST_TIMEOUT`. Replay or conflict,
+  business validation, calculation, rollback, persistence failure, or successful commit similarly
+  wins only when conclusively determined before expiry. Expiry while commit outcome is unresolved
+  selects `REQUEST_TIMEOUT` as an uncertain outcome; later database completion does not change the
+  selected HTTP result and same-scope replay determines authoritative state.
 - **FR-042**: The create operation MUST reject a request body larger than `2 MiB` (`2,097,152`
-  bytes) with a stable safe English payload-size error before Company-header evaluation. The error
-  MUST include or return a correlation identifier and MUST leave no draft, child data, or
-  idempotency binding.
-- **FR-043**: A local persistence timeout or unexpected failure before successful commit MUST
-  return a stable safe English error with a correlation identifier and MUST leave no draft, child
-  data, or idempotency binding. A timeout or response-delivery failure after successful commit MUST
-  preserve the binding and be recoverable through the replay behavior in FR-032 and FR-033.
+  bytes), when that fact is conclusively detected before deadline expiry, with
+  `REQUEST_PAYLOAD_TOO_LARGE` (`413`) before Company-header evaluation. Correlation classification
+  on this path exists solely for safe response propagation: absent input generates a UUID, one
+  valid value is preserved, and blank, malformed, unsafe, over-length, or repeated input is never
+  echoed and receives a generated replacement UUID. Invalid correlation MUST NOT replace the `413`
+  with `400`. The path MUST NOT continue to normal deserialization, idempotency or reference-data
+  lookup, validation, calculation, or persistence and MUST leave no draft, child data, or
+  idempotency binding. If the deadline expires before size classification is conclusive, FR-041
+  selects `REQUEST_TIMEOUT` instead.
+- **FR-043**: Local PostgreSQL unavailability or a configured database-operation timeout
+  conclusively determined while request-deadline budget remains MUST return
+  `PERSISTENCE_UNAVAILABLE`; an unexpected classified service failure conclusively determined in
+  that interval MUST return `INTERNAL_ERROR`. Either result MUST use a stable safe English error
+  with a correlation identifier and MUST leave no draft, child data, or idempotency binding only
+  when pre-commit failure or complete rollback is confirmed. Expiry of the shared request deadline,
+  rather than an earlier configured database-operation timeout, selects `REQUEST_TIMEOUT`. A
+  successful commit conclusively confirmed
+  before deadline expiry selects the successful creation outcome. Deadline or connection loss
+  while commit outcome is unresolved MUST return or expose an
+  uncertain outcome, MUST NOT claim zero state, and MUST be resolved by retrying the same CompanyId,
+  idempotency key, and equivalent content. A late completion MUST NOT change the already selected
+  HTTP result. A timeout or response-delivery failure after successful commit MUST preserve the
+  draft and binding, MUST NOT trigger compensation or deletion, and MUST be recoverable through the
+  replay behavior in FR-032 and FR-033. Once the HTTP response is committed, deadline expiry MUST
+  be telemetry-only: it MUST NOT change status, emit a second response or error body, mutate domain
+  state, start another database write, or compensate committed data; existing serialization MAY
+  continue to normal completion.
 - **FR-044**: Any value outside the approved quantity, unit-price, monetary, or percentage-rate
   envelope MUST return `BUSINESS_VALIDATION_FAILED` with violation code
   `MONETARY_RANGE_EXCEEDED` before persistence. The same limits MUST govern API schemas and
@@ -870,8 +931,11 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 
 - **SC-001**: In the approved acceptance suite, 100% of logically new valid create commands persist
   exactly one complete invoice draft and return all fields required by FR-022.
-- **SC-002**: In the approved validation and failure suite, 100% of rejected requests leave zero
-  draft, child, and idempotency-binding records.
+- **SC-002**: In the approved validation and failure suite, 100% of confirmed pre-commit rejections
+  and confirmed complete rollbacks leave zero draft, child, and idempotency-binding records, and
+  rolled-back keys remain reusable. Uncertain commit and post-commit response-delivery outcomes make
+  no zero-state claim and are resolved through Company-scoped idempotent replay without creating a
+  second draft.
 - **SC-003**: The same commercial inputs, emission date, and catalog-rule versions always produce
   identical line amounts, grouped taxes, payment comparison, and invoice totals.
 - **SC-004**: The mathematical calculation vector `2 × 10.00 − 5.00` with the approved IVA 15%
@@ -898,8 +962,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   exactly one `0.00` payment, while every invalid zero-total payment combination persists no draft
   data.
 - **SC-012**: Every idempotency acceptance and concurrency vector commits at most one draft for one
-  scoped key and equivalent content; conflict and failure vectors create or modify no draft and
-  every lookup remains scoped by Company UUID plus idempotency key.
+  scoped key and equivalent content; conflict, confirmed pre-commit rejection, and confirmed
+  complete-rollback vectors create or modify no draft. Uncertain or post-commit outcomes preserve
+  authoritative state and are resolved through Company-scoped same-key equivalent replay; every
+  lookup remains scoped by Company UUID plus idempotency key.
 - **SC-013**: Every accepted new draft uses the date derived from the one captured
   `requestCreationInstant` in `America/Guayaquil`; all midnight-boundary vectors retain that date
   through commit, and every different or impossible date is rejected without persisted draft data.
@@ -938,15 +1004,22 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-025**: Every request body containing `companyId`, `issuerId`, or an Issuer, establishment, or
   emission-point fiscal attribute is rejected as unknown or prohibited and leaves zero draft,
   child, and idempotency-binding records.
-- **SC-026**: Every failure-precedence test produces the outcome of the earliest applicable FR-041
-  step; later validation, calculation, lookup, or persistence behavior is not executed after that
-  terminal outcome.
+- **SC-026**: Every failure-precedence and controlled-deadline test produces the first outcome
+  conclusively determined under FR-041: the earliest applicable completed stage wins before expiry,
+  otherwise `REQUEST_TIMEOUT` wins. No later deadline signal or stage completion replaces the
+  selected outcome, and later validation, calculation, lookup, or persistence does not start after
+  that terminal outcome.
 - **SC-027**: Every request body of `2,097,152` bytes or less proceeds to the next applicable
-  validation step, while every larger body is rejected before Company-header evaluation and leaves
-  zero draft, child, and idempotency-binding records.
-- **SC-028**: Every simulated local persistence timeout or unexpected pre-commit failure leaves zero
-  draft, child, and idempotency-binding records and returns a correlated safe error; every simulated
-  post-commit response failure remains recoverable as the original draft by equivalent replay.
+  validation step when known before expiry, while every larger body conclusively detected before
+  expiry returns correlated `413` before Company-header evaluation and leaves zero state. Valid
+  correlation is preserved, invalid correlation is replaced without a `400`, and no database
+  operation occurs; deadline-first slow-body vectors return `504`.
+- **SC-028**: Every simulated persistence failure confirmed pre-commit or fully rolled back leaves
+  zero draft, child, and idempotency-binding records and returns its correlated safe outcome; every
+  deadline-first unresolved-commit or simulated post-commit response failure makes no zero-state
+  claim and remains recoverable as the original draft by same-scope equivalent replay. Deadline
+  expiry after HTTP response commitment writes no alternate response or database compensation and
+  records only the approved safe telemetry event.
 - **SC-029**: Boundary review and vectors demonstrate that API schemas and inputs, exact
   intermediate calculations, rounded and grouped results, payment sums, persistence values, and
   response values all enforce the same quantity, unit-price, monetary, and percentage-rate
@@ -963,7 +1036,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-033**: Correlation acceptance vectors generate a safe UUID when the header is absent, preserve
   every single valid supplied identifier, never echo invalid input, and return a safe replacement
   UUID with `INVALID_REQUEST` when correlation validation governs. Combined-failure vectors follow
-  FR-041, and changing correlation never changes idempotency equivalence.
+  FR-041; an oversized body selected first remains `413`, preserves valid correlation or replaces
+  invalid correlation safely without emitting `400`, and changing correlation never changes
+  idempotency equivalence.
 
 ## Assumptions and Dependencies
 

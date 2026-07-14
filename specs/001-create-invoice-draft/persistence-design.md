@@ -90,7 +90,11 @@ For a logically new command:
 
 1. Complete payload/header/key/body validation and fingerprint generation before opening the write
    transaction.
-2. Resolve applicable local reference-catalog rows and domain values without external calls.
+2. Resolve applicable local reference-catalog rows and domain values without external calls. Every
+   reference-data invocation receives the explicit remaining `Duration` derived from the one
+   application `RequestDeadline`; its reactive adapter clamps pool acquisition and every query
+   subscription to the minimum of configured database-operation timeout and that remainder and
+   starts no database operation when the remainder is zero or negative.
 3. Start one bounded reactive PostgreSQL transaction.
 4. Persist the Invoice Draft root.
 5. Persist every line and exactly one line-tax selection per line.
@@ -169,18 +173,31 @@ root, child, or idempotency row is written.
 
 - Overall create request deadline: 10 seconds.
 - Local write-transaction timeout: 5 seconds.
-- Every repository operation receives the request's remaining monotonic budget; PostgreSQL pool
-  acquisition and query timeouts MUST be bounded by that remainder.
+- Every aggregate and buyer/IVA/payment reference-data repository operation receives an explicit
+  remaining monotonic `Duration`; no persistence port depends on HTTP or Quarkus request objects.
+- Each adapter bounds PostgreSQL pool acquisition and every reactive query subscription by
+  `minimum(configured database operation timeout, remaining request budget)` and starts no database
+  operation when the supplied remainder is zero or negative.
+- A configured database-operation timeout that becomes conclusive while request budget remains maps
+  to `PERSISTENCE_UNAVAILABLE`; exhausted shared request budget maps to `REQUEST_TIMEOUT`.
 - A write transaction uses the lesser of the remaining request budget and 5 seconds, and no new
   persistence operation starts after the request budget is exhausted.
 - Confirmed pre-commit database unavailability maps to `PERSISTENCE_UNAVAILABLE` (`503`).
-- Deadline exhaustion maps to `REQUEST_TIMEOUT` (`504`).
+- Deadline exhaustion before a persistence result is conclusive maps to `REQUEST_TIMEOUT` (`504`);
+  confirmed rollback/failure or confirmed commit before expiry keeps its already selected result.
+- A database completion arriving after deadline expiry does not replace the selected HTTP result.
 - SQL state, query text, table/column names, connection details, and stack traces are never exposed.
 
 Zero-state guarantees apply only to a confirmed pre-commit failure or a transaction confirmed fully
 rolled back. If commit status is uncertain or a response is lost after commit, the service does not
 claim zero state or attempt compensating deletion; the client retries the same CompanyId,
 idempotency key, and content, and the local binding resolves the authoritative result.
+
+Once the HTTP response is committed, deadline expiry is transport telemetry only. Persistence does
+not receive another write command, mutate aggregate/domain status, delete the draft or binding, or
+perform compensation. Existing response serialization may complete, and the safe
+`request_deadline_exceeded_after_response_commit` event records the already selected status without
+buyer data, request body, or raw idempotency key.
 
 ## Readiness
 
@@ -205,6 +222,11 @@ Liveness remains independent of PostgreSQL availability.
 - conflicting concurrency yields one winner and stable conflict;
 - injected confirmed pre-commit failure after every write phase leaves zero partial rows/binding;
 - unavailable/timeout outcomes are safe and correlated;
+- reference-data timeout clamping proves both sides of the configured-timeout/remaining-budget
+  minimum, exhausted-before-invocation with no query, and expiry during lookup with no state;
+- unresolved-at-deadline commit makes no zero-state claim and same-scope replay creates at most one
+  draft;
+- post-response-commit expiry causes no second response-driven database write or compensation;
 - no buyer payload, raw idempotency key, or normalized request stored in the binding;
 - schema inspection confirms every prohibited Company/identity/snapshot structure is absent;
 - numeric boundary tests confirm overflow and excess precision are rejected before persistence and

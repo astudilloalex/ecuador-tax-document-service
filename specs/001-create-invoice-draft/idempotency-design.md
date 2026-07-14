@@ -92,6 +92,11 @@ ambiguous. The exact normalization vectors become committed test fixtures before
 
 ## Failure Precedence and Replay
 
+The numbered sequence below orders only outcomes that become conclusive before the one monotonic
+request deadline expires. Deadline arbitration applies before and during every step: a conclusive
+step result before expiry wins; otherwise `REQUEST_TIMEOUT` wins, and neither a later step
+completion nor a later deadline signal replaces the selected outcome.
+
 1. Enforce request payload size.
 2. Validate and canonicalize Company header.
 3. Initialize and validate correlation: preserve one valid value, generate a UUID when absent, or
@@ -105,8 +110,18 @@ ambiguous. The exact normalization vectors become committed test fixtures before
 10. Only an unbound command proceeds to current catalog/domain validation, calculation, and write.
 
 Correlation initialization still provides a safe response identifier for a higher-precedence
-payload-size or Company-context failure. Correlation values never affect the key hash, request
-fingerprint, binding scope, replay result, or conflict decision.
+payload-size or Company-context failure. On a selected 413 path, classification solely preserves
+one valid value or generates a safe replacement for absent/invalid input; it never emits the normal
+correlation-validation `400` and no binding/reference lookup or other database operation follows.
+Correlation values never affect the key hash, request fingerprint, binding scope, replay result, or
+conflict decision.
+
+If expiry occurs before persistence begins, no binding exists. If expiry occurs while commit status
+is unresolved, the client-facing outcome is uncertain and no zero-state claim is made. The client
+retries the same CompanyId, key, and equivalent content: a committed binding returns the original
+draft; otherwise normal creation may proceed under the same unique boundary. A later database
+completion never changes the already selected HTTP result, and no correctly committed or possibly
+committed draft is compensated or deleted because its response was not received.
 
 Replay does not call Company Service, validate current Company/Issuer/emission-point state,
 authenticate, authorize, recalculate, or mutate the original draft.
@@ -124,7 +139,8 @@ participates.
 
 - Validation errors do not bind the key; correct the request and retry.
 - `PERSISTENCE_UNAVAILABLE` and `REQUEST_TIMEOUT` are retried with the same Company, key, and
-  content.
+  content. For an unresolved commit, this replay is the required authoritative-state resolution,
+  not evidence that the original request persisted zero rows.
 - Response loss after commit is recovered by the same equivalent replay.
 - `IDEMPOTENCY_CONFLICT` is not automatically retried; use the original content or a new key for a
   distinct command.
@@ -141,3 +157,6 @@ participates.
 - same key/content across Companies creates independent bindings;
 - 50 simultaneous equivalent requests create one draft;
 - response-loss replay and pre-commit rollback behavior.
+- deadline-first unresolved-commit replay proves at most one draft without a zero-state assumption;
+- response-commit deadline expiry changes no selected status or persisted state and triggers no
+  compensation.

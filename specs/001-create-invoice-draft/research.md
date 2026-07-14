@@ -153,8 +153,10 @@ generated identifiers remain UUIDs.
 
 **Rationale**: `400` covers representation/header syntax, `422` covers well-formed content rejected
 by approved validation, `409` covers the idempotency binding conflict, and `503`/`504` identify
-retryable local infrastructure outcomes. A retry uses the same Company and key because commit may
-have succeeded before response loss.
+retryable local infrastructure outcomes. `503` covers PostgreSQL unavailability or a configured
+database-operation timeout that becomes conclusive while shared request budget remains; `504` is
+reserved for expiry of the cross-cutting request deadline before the current outcome is conclusive.
+A retry uses the same Company and key because commit may have succeeded before response loss.
 
 ## 7. Deterministic Request Fingerprinting
 
@@ -311,14 +313,27 @@ outside Create Invoice Draft, not deferred implementation work.
 **Decision**: Enforce the 2,097,152-byte request limit at the Quarkus HTTP upload-limit route,
 before Quarkus REST dispatch. A CDI `Router` observer registers a Vert.x failure handler that owns
 only status `413` for `POST /api/v1/invoice-drafts`, converts that failure into the approved Problem
-Details response, and bootstraps a safe correlation identifier without evaluating Company or
-correlation validity; every other failure continues to its existing handler. After routing and
-before entity deserialization, one `@ServerRequestFilter(nonBlocking = true)` restricted to the
-create resource method by a custom Jakarta REST `@NameBinding` evaluates Company, correlation, and
-idempotency-key headers in FR-041 order. Only a request that passes those header stages reaches
-Jackson deserialization and Bean Validation. Strict unknown-property rejection is explicitly
-enabled, and Quarkus' built-in Jackson input mapper is disabled so the feature's stable mapper owns
-representation failures.
+Details response, and uses the shared absent/valid/invalid correlation classifier solely to choose
+a safe response identifier: absent input generates a UUID, one valid value is preserved, and blank,
+malformed, unsafe, over-length, or repeated input is replaced and never echoed. Once payload size
+is conclusively over the limit, the handler emits only `REQUEST_PAYLOAD_TOO_LARGE`; it does not
+execute or emit normal Company or stage-3 correlation validation, perform deserialization, or allow
+any idempotency, reference-data, validation, calculation, or persistence work. Every other failure
+continues to its existing handler. After routing and before entity deserialization, one
+`@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
+Jakarta REST `@NameBinding` evaluates Company, correlation, and idempotency-key headers in FR-041
+order. Only a request that passes those header stages reaches Jackson deserialization and Bean
+Validation. Strict unknown-property rejection is explicitly enabled, and Quarkus' built-in Jackson
+input mapper is disabled so the feature's stable mapper owns representation failures.
+
+The same earliest routing boundary owns one transport-independent monotonic request deadline.
+FR-041 orders conclusive stage outcomes, while deadline arbitration applies before and during every
+stage: an outcome conclusively determined before expiry wins, otherwise `REQUEST_TIMEOUT` wins, and
+neither a later stage completion nor a later deadline signal replaces the selected outcome. If
+expiry occurs while commit status is unresolved, the HTTP outcome remains `504` and same-scope
+idempotent replay determines authoritative state. After the HTTP response is committed, expiry is
+telemetry-only; it cannot change status, write a second response, mutate domain state, or compensate
+the database, and existing serialization may finish normally.
 
 The canonical OpenAPI file remains the only independently authored contract. Runtime publication
 sets `mp.openapi.scan.disable=true`, because Quarkus otherwise combines a static document with a
@@ -327,9 +342,13 @@ packaged-runtime test that fetches `/q/openapi`, resolves the served document, a
 equality plus the SC-024 Company-header and security-absence invariants.
 
 **Rationale**: The upload-limit route precedes REST processing, so a Jakarta REST mapper alone
-cannot prove the required earliest failure or safe correlation response. One pre-entity header gate
-prevents typed DTO decoding from overtaking header precedence. Disabling OpenAPI scanning prevents
-runtime annotations or extension defaults from silently augmenting the approved static contract.
+cannot prove the required earliest failure or safe correlation response. Safe classification on the
+413 path avoids echoing hostile input without allowing correlation invalidity to overtake payload
+precedence. One pre-entity header gate prevents typed DTO decoding from overtaking header
+precedence. Atomic outcome selection makes slow-body, header, idempotency, validation, calculation,
+and persistence races deterministic without compensating a committed draft. Disabling OpenAPI
+scanning prevents runtime annotations or extension defaults from silently augmenting the approved
+static contract.
 
 **Official evidence**:
 

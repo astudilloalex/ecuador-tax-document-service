@@ -30,10 +30,10 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `INVALID_REQUEST` | 400 | Invalid idempotency syntax; blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; or unknown/prohibited non-calculated property such as `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
 | `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
-| `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body exceeds `2,097,152` bytes | Reduce request size | Rejected before Company evaluation; no state |
+| `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
 | `BUSINESS_VALIDATION_FAILED` | 422 | Buyer, requestCreationInstant-derived emission date, lines, IVA selection, catalogs, text, collections, calculation, discount, zero-value, payment, or numeric-envelope rule fails; any quantity, unit-price, monetary, percentage-rate, exact-intermediate, rounded, grouped, payment-sum, or invoice-total overflow includes violation `MONETARY_RANGE_EXCEEDED` | Correct business content | No draft, children, or binding |
-| `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable or cannot start/continue a transaction before commit | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit is confirmed |
-| `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline is exhausted before an uncommitted terminal response wins | Retry same Company/key/content | Confirmed pre-commit failure leaves no state; replay resolves an uncertain or completed commit after response loss |
+| `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable, or its configured operation timeout/failure becomes conclusive while shared request-deadline budget remains | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit or complete rollback is confirmed |
+| `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline expires before the current FR-041 stage or persistence outcome becomes conclusive | Retry same Company/key/content | No state when expiry is confirmed before persistence; no zero-state claim when commit is unresolved; replay resolves uncertain or completed commit state |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
 
 ## Recognized Prohibited Calculated Fields
@@ -80,7 +80,7 @@ property.
 
 ## Failure Precedence
 
-When more than one failure is present, return the first applicable outcome:
+FR-041 orders stage outcomes that become conclusive before deadline expiry:
 
 1. `REQUEST_PAYLOAD_TOO_LARGE`;
 2. `COMPANY_CONTEXT_REQUIRED` or `COMPANY_CONTEXT_INVALID`;
@@ -95,18 +95,47 @@ When more than one failure is present, return the first applicable outcome:
     and numeric-envelope validation, including `MONETARY_RANGE_EXCEEDED`;
 11. calculation failure as `BUSINESS_VALIDATION_FAILED` when input-driven, including any exact,
     rounded, grouped, payment-sum, or invoice-total overflow;
-12. persistence outcome (`PERSISTENCE_UNAVAILABLE`, `REQUEST_TIMEOUT`, or `INTERNAL_ERROR`).
+12. persistence outcome (`PERSISTENCE_UNAVAILABLE` or `INTERNAL_ERROR`) or successful commit.
 
-Correlation initialization always produces a safe response identifier. If payload size or Company
-context fails before correlation validation, that earlier code governs, but invalid correlation
-input is still never echoed and the response uses a safe replacement UUID. Correlation does not
-affect idempotency equivalence.
+Correlation initialization always produces a safe response identifier. When payload size is
+conclusively over limit first, `REQUEST_PAYLOAD_TOO_LARGE` remains terminal: the 413 handler
+classifies correlation only to preserve one valid value or generate a safe UUID for absent/invalid
+input, never echoes invalid input, and never emits the normal stage-3 `INVALID_REQUEST`. It does not
+continue into deserialization, idempotency or reference-data lookup, validation, calculation, or
+persistence. Company-context failure selected first likewise governs while using a safe correlation
+value. Correlation does not affect idempotency equivalence.
 
-The deadline begins before body consumption and is not restarted by any precedence stage. Its
-non-blocking timer remains active through response serialization and is cancelled on response end.
-Application and persistence work receive the same deadline's remaining budget. Deadline expiry does
-not overwrite an earlier payload-size or Company outcome and never authorizes deletion when commit
-status is uncertain or successful.
+### Cross-Cutting Deadline Arbitration
+
+`REQUEST_TIMEOUT` is a cross-cutting terminal result, not a numbered validation or persistence
+stage. One deadline begins before body consumption from a monotonic elapsed-time source, is never
+restarted, and applies before and during every FR-041 stage. A stage outcome wins only when it is
+conclusively determined before expiry. If expiry occurs first, `REQUEST_TIMEOUT` wins; a later
+stage completion cannot replace it. Once any terminal outcome is conclusively selected before
+expiry, a later deadline signal cannot replace that outcome.
+
+Deterministic races are:
+
+- body size known over limit before expiry → `413`; expiry before size is known → `504`;
+- Company, correlation, or idempotency-header invalidity known before expiry → approved `400`;
+  expiry before classification → `504`;
+- replay or conflict known before expiry → `200` or `409`; expiry before lookup resolution → `504`;
+- business validation or calculation result known before expiry → approved `422`; expiry first →
+  `504`;
+- confirmed rollback, unavailable, or unexpected persistence failure known before expiry → the
+  approved persistence result; confirmed commit before expiry → the selected success result;
+  expiry while commit remains unresolved → `504` with uncertain state.
+
+A database completion arriving after expiry never changes the selected HTTP outcome. Confirmed
+pre-persistence expiry or complete rollback leaves no state; unresolved commit status makes no
+zero-state claim and is reconciled by retrying the same CompanyId, idempotency key, and equivalent
+content. No timeout or response loss authorizes deletion of a committed or possibly committed
+draft.
+
+The non-blocking deadline timer remains active through response serialization and is cancelled on
+response end. After the HTTP response is committed, expiry is telemetry-only: it does not change
+status, write a second body or error envelope, start a database write, mutate domain state, or
+compensate committed data; existing serialization may complete normally.
 
 No authentication, authorization, tenant, Company lookup, Issuer lookup, or emission-point
 ownership outcome participates.

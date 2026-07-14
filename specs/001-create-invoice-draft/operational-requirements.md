@@ -20,9 +20,10 @@ Before performance evidence is accepted, record:
 - warm-up duration, measurement duration, sample count, and percentile method.
 
 Server-side request duration MUST use a monotonic timer captured at the earliest service request
-boundary and stopped when the terminal response is ready for delivery. It MUST NOT use wall-clock
-timestamps, `requestCreationInstant`, `createdAt`, or correlation timestamps. Client network,
-gateway, and upstream queueing time are outside this server-side measurement.
+boundary and normally stopped when the response ends, so response serialization is included. It
+MUST NOT use wall-clock timestamps, `requestCreationInstant`, `createdAt`, or correlation
+timestamps. Client network, gateway, and upstream queueing time are outside this server-side
+measurement.
 
 `requestCreationInstant` is separate functional evidence. The request boundary captures it exactly
 once from the approved wall clock and derives the expected emission date once using
@@ -45,12 +46,14 @@ never starts, stops, partitions, or otherwise changes a performance measurement.
 | Same-scope concurrency | 50 concurrent equivalent commands | All terminate within 10 s; exactly one draft and binding; no pool starvation after completion |
 
 The overall request deadline is 10 seconds and the local database write-transaction timeout is 5
-seconds. A request larger than 2 MiB is rejected before Company-header evaluation.
+seconds. A request conclusively detected larger than 2 MiB before deadline expiry is rejected before
+Company-header evaluation; deadline-first slow-body processing returns `REQUEST_TIMEOUT` instead.
 
 The overall deadline begins at the same service boundary as the monotonic request timer. Therefore
 body reading, Company-header validation, safe correlation initialization/validation, idempotency
-processing, domain work, persistence, and serialization all consume the same 10-second budget.
-Failure precedence determines the observable result; it does not reset the timer.
+processing, domain work, persistence, and serialization all contribute elapsed time against the
+same 10-second boundary. Failure precedence does not reset the timer. FR-041 orders only outcomes
+that become conclusive; deadline arbitration applies before and during every stage.
 
 One earliest-ordered API routing handler owns exactly one transport-independent monotonic request
 deadline for each matched `POST /api/v1/invoice-drafts` attempt. It starts the deadline before body
@@ -59,17 +62,44 @@ non-blocking timer, and keeps that timer active through response serialization. 
 restart or extend the deadline, and the timer MUST be cancelled when the terminal response ends.
 
 The API maps the same fixed deadline into the application command. Application orchestration checks
-the remaining budget before each asynchronous stage and passes it to local persistence operations.
-The reactive repository adapter bounds pool acquisition and queries by the remaining budget and
-bounds a write transaction by the lesser of that budget and five seconds. It MUST NOT start another
-operation after the budget is exhausted.
+the remaining budget before each asynchronous stage and passes an explicit remaining `Duration`
+derived from that one deadline to every local aggregate and reference-data repository invocation.
+No port depends on HTTP or Quarkus request objects. Each reactive database adapter computes its
+effective operation timeout as the minimum of its configured database-operation timeout and the
+supplied remaining request budget, applies that bound to pool acquisition and every reactive query
+subscription, and starts no database work when the remainder is zero or negative. A write
+transaction is additionally bounded by the lesser of that effective budget and five seconds. If
+the configured database-operation timeout is the smaller bound and fires while request budget still
+remains, the conclusive result is `PERSISTENCE_UNAVAILABLE`; only expiry of the shared request
+deadline selects `REQUEST_TIMEOUT`.
 
-When the deadline expires before an uncommitted terminal response has won, the deadline owner returns
-`REQUEST_TIMEOUT` (`504`) with the safe correlation identifier. A higher-precedence terminal outcome
-already selected under FR-041 is not overwritten. If commit may have completed or response delivery
-has begun, the service MUST NOT delete authoritative state; equivalent replay reconciles the result.
-A generic HTTP connection, idle, or body timeout is not sufficient as the sole implementation of
-this end-to-end deadline.
+A stage outcome wins only when it becomes conclusively determined before deadline expiry. If
+expiry occurs first, the deadline owner atomically selects correlated `REQUEST_TIMEOUT` (`504`);
+later stage or database completion cannot replace it. Once a terminal outcome is conclusively
+selected before expiry, a later deadline signal cannot replace that response. In particular:
+
+- payload size conclusively over 2 MiB first selects `413`; deadline-first slow-body processing
+  selects `504`;
+- Company, correlation, or idempotency-header invalidity conclusively detected first selects its
+  `400`; deadline-first classification selects `504`;
+- replay, conflict, validation, or calculation conclusively completed first selects its approved
+  result; deadline-first completion selects `504`;
+- confirmed rollback/failure or confirmed commit before expiry selects its approved result;
+  deadline expiry while commit outcome is unresolved selects `504` and an uncertain outcome.
+
+Confirmed expiry before persistence begins and confirmed complete rollback leave zero state. An
+unresolved or successful commit makes no zero-state claim and MUST NOT trigger compensation or
+deletion; equivalent replay with the same CompanyId, key, and content reconciles authoritative
+state. A generic HTTP connection, idle, or body timeout is not sufficient as the sole
+implementation of this end-to-end deadline.
+
+Before HTTP response commitment, the atomic selection rules above govern. Once the response is
+committed, deadline expiry is telemetry-only: status and headers are unchanged, no alternative
+timeout response, second body, or error envelope is written, no database or domain mutation starts,
+and no committed draft or binding is compensated or deleted. Existing response serialization is
+allowed to continue to normal completion. The service records one safe
+`request_deadline_exceeded_after_response_commit` event/counter and then cancels the timer on
+response end.
 
 If evidence misses a budget, the plan must be revisited before implementation is considered
 complete. The response is not to add a Company cache, application cache, broker, or unapproved
@@ -89,6 +119,9 @@ implements that approved baseline unchanged.
   inputs whose exact intermediate, grouped, payment-sum, or total result overflows the monetary
   maximum MUST fail before persistence with `MONETARY_RANGE_EXCEEDED`.
 - Bound reactive connection-pool acquisition and query duration beneath the request deadline.
+- Bound buyer, IVA, and payment reference-data pool acquisition and every reactive lookup by the
+  minimum of configured database-operation timeout and supplied remaining request budget; do not
+  subscribe to database work when that budget is exhausted.
 - Do not synchronously wait for `Uni`, `CompletionStage`, or future results.
 - Domain work remains synchronous and bounded; a maximum-payload benchmark must show no event-loop
   blocked-thread warning. If it does not, planning must explicitly isolate the CPU work on a
@@ -119,6 +152,9 @@ Correlation is initialized at the HTTP boundary for every request:
   and returns `INVALID_REQUEST` when correlation validation governs;
 - payload-size or Company-context failures retain their higher precedence, but still use a safe
   generated identifier when supplied correlation cannot safely be preserved;
+- on a conclusively selected payload-limit result, correlation classification exists solely to
+  preserve one valid identifier or generate a safe replacement for absent/invalid input; it never
+  emits the normal correlation-validation `400` and no database operation follows;
 - the safe correlation value is returned in `X-Correlation-Id` and propagated through logs/traces;
 - correlation is transport evidence and is excluded from the request fingerprint and Company/key
   idempotency scope.
@@ -134,7 +170,10 @@ Allowed structured fields include:
 - whether correlation was generated or accepted, using a bounded boolean/category rather than the
   value as a metric dimension;
 - bounded line/payment/additional-information counts;
-- database outcome category.
+- database outcome category;
+- for `request_deadline_exceeded_after_response_commit`, the already selected response status and
+  elapsed duration; CompanyId and draftId only when already available and permitted by the existing
+  structured audit policy.
 
 Buyer identification/contact, full request/response payloads, raw idempotency keys, normalized
 fingerprint inputs, SQL, stack traces, internal paths, tokens, and certificates are prohibited.
@@ -153,6 +192,7 @@ Required bounded metrics:
 - monetary-range-exceeded count;
 - persistence duration, unavailable, timeout, and rollback counts;
 - idempotency new/replay/conflict counts;
+- `request_deadline_exceeded_after_response_commit` count without high-cardinality labels;
 - liveness/readiness state.
 
 Labels must be low-cardinality. CompanyId, draftId, correlationId, idempotency keys/fingerprints,
@@ -176,7 +216,14 @@ Plan safe events for:
 - equivalent replay returned;
 - idempotency conflict;
 - persistence unavailable/timeout;
-- operationally significant rollback.
+- operationally significant rollback;
+- request deadline exceeded after HTTP response commitment, containing only correlation identifier,
+  operation name, already selected response status, elapsed duration, and optionally an already
+  available CompanyId/draftId under the existing audit policy.
+
+Buyer identification/contact, full request/response payloads, raw idempotency keys, normalized
+fingerprint inputs, SQL, stack traces, internal paths, tokens, and certificates are prohibited from
+every audit event, including the post-response-commit deadline event.
 
 The durable audit destination and retention are platform operational decisions outside this
 feature unless a later approved requirement makes them document data. Audit failure must not be
@@ -193,6 +240,10 @@ Mandatory JVM evidence:
 - single-capture `requestCreationInstant`, Guayaquil midnight, later-date replay, and representative
   fiscal/monetary maximum/overflow vectors;
 - absent/valid/invalid/combined-precedence correlation vectors;
+- controlled, no-sleep deadline races for payload-size, headers, replay/conflict, validation,
+  calculation, known persistence outcome, unresolved commit, and post-response-commit expiry;
+- reference-data timeout clamping with each side of the minimum, exhausted-before-invocation, and
+  expiry-during-lookup vectors;
 - sensitive-data and high-cardinality-label checks;
 - the performance profiles above.
 

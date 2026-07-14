@@ -203,8 +203,11 @@ introduced.
    same routing boundary registers the exclusive Vert.x status-`413` failure handler for this
    operation. That handler preserves one classified-valid correlation value or uses the already
    generated safe replacement, maps the approved Problem Details response, and never lets Company
-   or correlation invalidity replace the payload-size outcome. It delegates every other method,
-   path, status, and failure through `RoutingContext.next()`.
+   or correlation invalidity replace the payload-size outcome. Correlation classification on this
+   path exists solely for safe response propagation; it never emits stage-3 `INVALID_REQUEST`.
+   After selecting `REQUEST_PAYLOAD_TOO_LARGE`, the handler permits no normal deserialization,
+   idempotency/reference lookup, validation, calculation, persistence, or other database operation.
+   It delegates every other method, path, status, and failure through `RoutingContext.next()`.
 2. After routing and before entity deserialization, one
    `@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
    Jakarta REST `@NameBinding` evaluates Company-header validity, the stored correlation
@@ -224,14 +227,34 @@ safety, but only the request gate may turn invalidity into the stage-3 error, so
 payload-size or Company outcomes.
 
 The earliest route handler is the sole overall-deadline owner. The deadline starts before body
-reading, is never restarted, remains armed through response serialization, and is cancelled when
-the terminal response ends. It returns correlated `REQUEST_TIMEOUT` only if no higher-precedence
-uncommitted terminal outcome has won. The same fixed, transport-independent deadline is mapped into
-`CreateInvoiceDraftCommand`; application work checks it before asynchronous stages, and repository
-calls receive the remaining budget. Pool acquisition and queries are clamped to that remainder, and
-the write transaction is clamped to the lesser of the remainder and five seconds. Expiry after a
-possible commit never triggers compensating deletion; equivalent replay resolves the authoritative
-binding.
+reading from a monotonic elapsed-time source, is never restarted, remains armed through response
+serialization, and is cancelled when the response ends. FR-041 orders conclusive stage outcomes;
+the deadline is cross-cutting rather than a stage-12 persistence result. At every stage, an outcome
+conclusively selected before expiry wins. If expiry occurs first, the handler atomically selects
+correlated `REQUEST_TIMEOUT`; later stage/database completion cannot replace it. A later deadline
+signal likewise cannot replace a terminal outcome selected before expiry.
+
+This arbitration covers slow-body `413`/`504`, header `400`/`504`, replay or conflict/`504`,
+validation or calculation/`504`, and persistence races. Confirmed rollback/failure or confirmed
+commit before expiry selects its approved result. Expiry while commit outcome is unresolved selects
+`504` as an uncertain outcome; the eventual database completion does not change that HTTP result,
+and same-Company/key/content replay determines authoritative state.
+
+The same fixed, transport-independent deadline is mapped into `CreateInvoiceDraftCommand`;
+application work checks it before asynchronous stages, and every aggregate and reference-data
+repository call receives an explicit remaining `Duration`. Each reactive adapter clamps pool
+acquisition and every query subscription to the minimum of configured database-operation timeout
+and that remainder, starts no work when it is zero or negative, and additionally clamps a write
+transaction to the lesser of the effective budget and five seconds. A configured database timeout
+that becomes conclusive while request budget remains maps to `PERSISTENCE_UNAVAILABLE`; only shared
+request-deadline expiry maps to `REQUEST_TIMEOUT`.
+
+Before response commitment, the atomic selection rules govern. Once the HTTP response is committed,
+deadline expiry is telemetry-only: it cannot change status, emit an alternate response/body, start
+another database or domain mutation, or compensate/delete a committed draft or binding. Existing
+serialization may complete normally, and the safe
+`request_deadline_exceeded_after_response_commit` event/counter is recorded. Equivalent replay
+resolves any response loss.
 
 The resource method is invoked only after stage 5. It calls the application `RequestClock` exactly
 once, derives the immutable request instant carried by `CreateInvoiceDraftCommand`, and performs no
@@ -244,10 +267,11 @@ and payload representations never enter application logic.
 
 | Operation | Adapter/port boundary | Classification | Execution context | Timeout/resource bound | Required evidence |
 |-----------|-----------------------|----------------|-------------------|------------------------|-------------------|
-| Header/body mapping, correlation, deadline, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one monotonic 10 s deadline; one request instant | Header/correlation matrix including 413, deadline expiry/cancellation, midnight vector, max payload, blocked-thread check |
+| Header/body mapping, correlation, deadline, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one monotonic 10 s deadline; one request instant | Controlled no-sleep payload/header deadline races; oversized absent/valid/invalid correlation with zero database calls; expiry/cancellation/post-commit telemetry; midnight vector; max payload; blocked-thread check |
 | Fingerprint generation | Application normalization service | Bounded CPU, no I/O | Calling context | ≤2 MiB, SHA-256, version 1 | Vectors and maximum-payload benchmark |
 | Monetary/domain calculation | Pure domain | Synchronous deterministic bounded CPU | Calling context | ≤500 lines | Exact vectors, p99 budget, no event-loop warning |
 | Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query clamped to request's remaining budget | Unavailable, deadline, replay/conflict tests |
+| Buyer/IVA/payment reference lookup | ReferenceDataPort/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Every invocation receives remaining `Duration`; pool/query subscription uses min(configured timeout, remainder); no work at zero/negative remainder | Both minimum branches and mappings (configured timeout→503, shared deadline→504), exhausted-before-call, expiry-during-lookup, cancellation, and zero-state tests |
 | Aggregate/binding write | Repository port/reactive adapter | Non-blocking database I/O | Reactive transaction | Lesser of remaining request budget and 5 seconds | Rollback phase injection, deadline, uncertain-commit recovery, and concurrency |
 | Flyway startup migration | Startup infrastructure | Blocking lifecycle operation outside requests | Controlled startup | Deployment timeout/empty-db evidence | Migration and readiness tests |
 
@@ -303,7 +327,9 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Stable statuses/codes are defined in `error-catalog.md` and represented in OpenAPI.
 - Monetary envelope violations use `BUSINESS_VALIDATION_FAILED` with violation code
   `MONETARY_RANGE_EXCEEDED`; API, calculation, persistence, response, and test limits are identical.
-- Failure evaluation follows FR-041 exactly.
+- Failure evaluation follows FR-041 exactly, with `REQUEST_TIMEOUT` as a cross-cutting arbiter:
+  conclusive stage outcome before expiry wins, otherwise `504` wins, and no later signal replaces
+  the selected result.
 
 **OpenAPI Source of Truth**: `specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml`
 is the only independently authored contract. `src/main/resources/META-INF/openapi.yaml` is a
@@ -321,10 +347,10 @@ no authentication or authorization result.
 
 | Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
 |------------------|---------------------|-------------------|--------------------|---------|-------------------------|--------------------|
-| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | One monotonic 10 s deadline begins before body consumption and is never reset; one request instant is captured after stage 5 passes | Correct request | 400/413/504 or continue |
-| Binding lookup | No new durable state | CompanyId + key hash; fingerprint/version compare | Equivalent replay; different content conflict | Bounded query | Same key safely retried | 200/409 or continue |
-| New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | 5-second write tx | Loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
-| Response delivery | Commit already authoritative | Same equivalent retry | Returns original | 10-second request deadline | Binding reconciles response loss | Original draft observable |
+| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence; each result must become conclusive before expiry | N/A | One monotonic 10 s deadline begins before body consumption and is never reset | 413/400 when classification wins; 504 when deadline wins; no later work after selection | 400/413/504 or continue |
+| Binding/reference lookup | No new durable state | CompanyId + key hash; fingerprint/version compare; effective local catalogs | Equivalent replay; different content conflict | Each call receives remainder and clamps pool/query subscription to min(configured timeout, remainder) | Same key safely retried; no DB call at exhausted budget | 200/409/422/503/504 or continue |
+| New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | Lesser of remaining budget and 5-second write ceiling | Confirmed rollback leaves zero state; unresolved-at-expiry is uncertain; replay reconciles; loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
+| Response delivery | Commit already authoritative and success selected | Same equivalent retry | Returns original | Timer remains armed through serialization; after HTTP commitment expiry is telemetry-only | No status/body rewrite or compensation; serialization may finish; binding reconciles response loss | Selected response or connection-level response loss; original draft replayable |
 
 There is no external-system boundary and no claim of atomicity beyond local PostgreSQL.
 
@@ -405,7 +431,8 @@ src/test/java/com/alexastudillo/taxdocument/
 ├── architecture/
 ├── domain/invoicedraft/
 ├── infrastructure/invoicedraft/
-└── runtime/
+├── runtime/
+└── support/  # FixedRequestClock and DeterministicDraftIdentifierGenerator from T075–T076
 
 src/test/resources/
 ├── application.properties
@@ -427,11 +454,11 @@ is planned.
 | Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | numeric maxima/overflow, invalid/unsupported/calculated input, and midnight/replay vectors |
 | Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
-| API errors/correlation | Contract/integration | ordered upload/header/entity gate; exclusive 413 ownership; exact code/status; safe Problem Details; supplied/generated/replacement correlation | Content-Length/chunked over-limit with absent/valid/invalid correlation; malformed JSON plus earlier header failure; blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
+| API errors/correlation/deadline | Contract/integration with controlled deadline signal | ordered upload/header/entity gate; exclusive 413 ownership; exact code/status; safe Problem Details; supplied/generated/replacement correlation; atomic first-conclusive outcome | Content-Length/chunked over-limit with valid correlation preserved or absent/invalid safely replaced and no DB call; deadline-first slow body/header/replay/validation/calculation; stage-first counterparts; post-response-commit expiry emits no 504/second write and records safe telemetry; malformed JSON plus earlier header failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
 | Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
-| Performance/resources | Warmed packaged JVM + PostgreSQL | one earliest-boundary monotonic deadline, remaining-budget propagation, timer cancellation, and all budgets in operational requirements | maximum valid body ≤2 MiB, 10-second expiry across body/application/persistence/serialization, 50-way contention, pool recovery, no blocked event loop |
+| Performance/resources | Warmed packaged JVM + PostgreSQL | one earliest-boundary monotonic deadline, aggregate and reference-data remaining-budget propagation, timer cancellation, and all budgets in operational requirements | maximum valid body ≤2 MiB, controlled deadline arbitration plus measured 10-second boundary across body/application/persistence/serialization, both database-timeout minimum branches, exhausted reference budget with no query, 50-way contention, pool recovery, no blocked event loop |
 | JVM/native | Packaged JVM; optional native | mandatory JVM critical smoke; native build+runtime if claimed | no native claim from build alone |
 
 `traceability.md` maps each requirement group, acceptance/success evidence, design artifact,
@@ -446,10 +473,15 @@ activates resettable fixed-clock and deterministic-sequence alternatives explici
 independent. No Company, identity, gateway/BFF, or SRI check.
 
 **Structured Observability**: Correlation propagates through safe structured logs/traces. Metrics
-use bounded labels only. CompanyId is never a metric label.
+use bounded labels only. CompanyId is never a metric label. Deadline expiry after response
+commitment increments `request_deadline_exceeded_after_response_commit` and records only safe
+correlation/audit fields; buyer data, request content, raw idempotency keys, and tokens are excluded.
 
-**Audit Events**: New commit, replay, conflict, persistence unavailable/timeout, and significant
-rollback are observable without buyer/raw-key/payload data.
+**Audit Events**: New commit, replay, conflict, persistence unavailable/timeout, significant
+rollback, and post-response-commit deadline expiry are observable without buyer/raw-key/payload
+data. The late-deadline event contains only correlation identifier, operation, selected response
+status, elapsed duration, and optionally an already available CompanyId/draftId under the existing
+safe audit policy.
 
 **External Destination Consistency**: The readiness check uses the same PostgreSQL datasource as
 business persistence. No other destination exists.

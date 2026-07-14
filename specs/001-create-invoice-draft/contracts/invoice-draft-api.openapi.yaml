@@ -28,6 +28,10 @@ paths:
         is payload size, Company context, correlation, idempotency-key syntax, representation,
         normalization, local Company-scoped binding lookup, equivalent replay, idempotency
         conflict, business validation, calculation, and atomic persistence.
+        One monotonic 10-second request deadline arbitrates before and during every stage: a stage
+        outcome conclusively determined before expiry wins; otherwise REQUEST_TIMEOUT wins, and a
+        later signal cannot replace the selected result. An unresolved commit is reconciled by
+        retrying the same CompanyId, idempotency key, and equivalent content.
       parameters:
         - $ref: '#/components/parameters/CompanyContext'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -116,7 +120,9 @@ components:
         colon, or hyphen. A valid supplied value is preserved and returned. When absent, the
         service generates and returns a safe UUID. A blank, repeated, over-length, or otherwise
         unsafe supplied value is never echoed: the service generates a replacement UUID and
-        returns INVALID_REQUEST when correlation validation is the governing failure.
+        returns INVALID_REQUEST when correlation validation is the governing failure. If payload
+        size is already conclusively over limit, classification only chooses the safe correlation
+        returned with REQUEST_PAYLOAD_TOO_LARGE; invalid input does not replace 413 with 400.
       schema:
         $ref: '#/components/schemas/CorrelationIdentifier'
 
@@ -635,7 +641,11 @@ components:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
     PayloadTooLarge:
-      description: REQUEST_PAYLOAD_TOO_LARGE; body exceeds 2,097,152 bytes.
+      description: >-
+        REQUEST_PAYLOAD_TOO_LARGE; body is conclusively observed to exceed 2,097,152 bytes before
+        deadline expiry. One valid correlation value is preserved; absent or invalid input receives
+        a safe generated replacement and never changes 413 to 400. No later processing or database
+        operation occurs.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -668,7 +678,10 @@ components:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
     RequestTimeout:
-      description: REQUEST_TIMEOUT; retry with the same Company, key, and content.
+      description: >-
+        REQUEST_TIMEOUT; the cross-cutting request deadline expired before the current stage or
+        persistence outcome became conclusive. Retry with the same Company, key, and content;
+        unresolved commit state makes no zero-state guarantee and is reconciled by that replay.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'

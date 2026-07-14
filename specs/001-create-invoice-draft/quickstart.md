@@ -158,16 +158,21 @@ Combined-failure vectors MUST prove:
 
 - invalid Company plus invalid correlation returns the applicable Company error, not the
   correlation error, while using a safe replacement UUID;
-- a body over 2 MiB returns `REQUEST_PAYLOAD_TOO_LARGE` before Company evaluation with a generated
-  correlation UUID when absent, the preserved value when valid, or a safe replacement UUID when
-  invalid; correlation invalidity never replaces the 413 outcome;
+- a body conclusively detected over 2 MiB before deadline expiry returns
+  `REQUEST_PAYLOAD_TOO_LARGE` before Company evaluation with a generated correlation UUID when
+  absent, the preserved value when valid, or a safe replacement UUID when invalid; correlation
+  invalidity never replaces the 413 outcome with `400`, and no normal body deserialization,
+  idempotency/reference lookup, validation, calculation, or database operation follows;
+- deadline expiry before payload-size classification is conclusive returns `REQUEST_TIMEOUT`, and a
+  later over-limit observation does not replace that `504`;
 - invalid correlation plus invalid idempotency key returns the correlation `INVALID_REQUEST`;
 - changing, omitting, or invalidating correlation never changes idempotency equivalence.
 
-Run the payload-size vectors both with `Content-Length` and with chunked transfer. The Quarkus HTTP
-upload limit must produce the feature's `413` Problem Details and safe correlation before REST
-entity decoding. For bodies within the limit, the single pre-entity request gate must evaluate
-Company, correlation, and idempotency headers before Jackson/Bean Validation evaluates the body.
+Run the payload-size vectors both with `Content-Length` and with chunked transfer. When over-limit
+classification wins the deadline race, the Quarkus HTTP upload limit must produce the feature's
+`413` Problem Details and safe correlation before REST entity decoding. For bodies within the limit,
+the single pre-entity request gate must evaluate Company, correlation, and idempotency headers before
+Jackson/Bean Validation evaluates the body.
 Malformed JSON or an unknown property combined with an earlier invalid header must therefore return
 the earlier header outcome.
 
@@ -215,27 +220,41 @@ request is stored.
 
 ## 9. Verify Rollback, Availability, and Timeout
 
-Inject a failure after each planned persistence phase. Expected: zero root, child, and binding rows
-from every pre-commit failure.
+Inject a failure after each planned persistence phase. Expect zero root, child, and binding rows
+only when rejection before persistence or complete rollback is confirmed. An unresolved commit
+outcome makes no zero-state claim.
 
 | Failure | Expected outcome |
 |---------|------------------|
 | PostgreSQL unavailable before commit | `503 PERSISTENCE_UNAVAILABLE` |
-| Overall 10-second deadline exceeded | `504 REQUEST_TIMEOUT` |
+| Configured database-operation timeout fires while request budget remains | `503 PERSISTENCE_UNAVAILABLE` |
+| Overall deadline expires before the current outcome is conclusive | `504 REQUEST_TIMEOUT` |
 | Unexpected safe failure | `500 INTERNAL_ERROR` |
 
 Every response returns a safe `X-Correlation-Id` and safe Problem Details. Retry unavailable or
 timeout cases with the same Company/key/content. If commit actually completed before response loss,
 the retry must return the original draft.
 
-Deadline evidence must prove that one monotonic 10-second timer starts at the earliest matched route
-before body consumption, is never restarted by validation or persistence, remains armed through
-serialization, and is cancelled when the terminal response ends. Application and repository probes
-must observe a decreasing remaining budget; pool/query work is clamped to it and a write transaction
-is clamped to the lesser of the remainder and five seconds. Expiry returns correlated
-`REQUEST_TIMEOUT` only while the response is uncommitted and must not overwrite an already selected
-payload-size or Company outcome. An uncertain or completed commit is recovered by equivalent replay,
-not compensating deletion.
+Using a controllable deadline signal rather than real sleeps, prove that one monotonic 10-second
+timer starts at the earliest matched route before body consumption, is never restarted, remains
+armed through serialization, and is cancelled when the response ends. A stage result conclusively
+selected before expiry wins; deadline-first processing returns correlated `REQUEST_TIMEOUT`, and no
+later stage or deadline signal replaces the selected outcome. Cover payload-size `413`/`504`, header
+`400`/`504`, replay/conflict, validation/calculation, confirmed persistence outcome, and
+unresolved-commit races.
+
+Application and both aggregate and reference-data repository probes must observe a decreasing
+remaining `Duration`. Reference lookups clamp every pool/query subscription to the minimum of the
+configured database-operation timeout and remainder, exercise both sides of that minimum, and
+start no database operation for a zero/negative remainder. A write transaction is clamped to the
+lesser of the remainder and five seconds. An unresolved or completed commit is recovered by
+equivalent same-scope replay, never compensating deletion.
+
+After HTTP response commitment, trigger deadline expiry and verify the chosen status/body is not
+rewritten, no `504` or second response is emitted, no domain/database mutation or compensation
+occurs, existing serialization may complete, and only the safe
+`request_deadline_exceeded_after_response_commit` event/counter is recorded without buyer PII,
+request body, raw idempotency key, or token.
 
 ## 10. Verify Fiscal, Monetary, and Boundary Vectors
 
@@ -259,7 +278,8 @@ Using the exact approved baseline identifiers, validate at least:
   a commit crossing Guayaquil midnight, and later-date replay;
 - text and collection maxima plus maximum-plus-one rejection;
 - a body exactly `2,097,152` bytes proceeding to the next validation stage;
-- a larger body returning `413 REQUEST_PAYLOAD_TOO_LARGE` before Company evaluation.
+- a larger body conclusively detected before deadline expiry returning
+  `413 REQUEST_PAYLOAD_TOO_LARGE` before Company evaluation, plus the deadline-first `504` vector.
 
 Numeric-envelope evidence MUST cover all of the following without persistence errors or silent
 rounding/clamping:
@@ -293,8 +313,9 @@ Static and runtime evidence must show:
 
 Run every profile in `operational-requirements.md` with the approved seeded reference baseline.
 Record environment, warm-up, sample count, percentiles, resource usage, event-loop
-blocked-thread evidence, and pool state. Company Service latency must not appear in the workload or
-budget.
+blocked-thread evidence, aggregate/reference budget clamping, controlled deadline arbitration,
+post-response-commit telemetry-only expiry, and pool state. Company Service latency must not appear
+in the workload or budget.
 
 Verify that the one captured `requestCreationInstant` is functional date evidence, not the latency
 timer or commit timestamp. Verify separately that correlation validation/generation is included in
