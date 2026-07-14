@@ -244,10 +244,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 10. **Given** a request body supplies `companyId`, **when** strict
     request-body validation is performed, **then** the property is rejected as unknown or
     prohibited and no draft, child, or idempotency binding is persisted.
-11. **Given** a persistence failure after validation begins, **when** draft creation cannot finish,
-    **then** the internal billing client receives a safe failure outcome and no partial draft, line,
-    tax, payment,
-    or additional-information data remains persisted.
+11. **Given** an injected failure at any root, child, or idempotency-binding write phase before a
+    successful commit, **when** the local transaction is confirmed rolled back, **then** the
+    internal billing client receives a safe failure outcome and no partial draft, line, tax,
+    payment, additional-information, or idempotency-binding data remains persisted.
 12. **Given** a line selects ICE, IRBPNR, another non-IVA tax, no tax treatment, or more than one
     simultaneous tax treatment, **when** draft creation is attempted, **then** the request is
     rejected as unsupported and no draft is persisted.
@@ -496,7 +496,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   zero payment amount, or the rounded grand total are `0.00`.
 - Buyer identifiers and contact data MUST NOT appear in caller-safe errors, logs, metrics, or
   traces as a consequence of validation failure.
-- A draft with 501 invoice lines, 11 payments, or 16 additional-information entries MUST be
+- A draft with 501 invoice lines, 9 payments, or 16 additional-information entries MUST be
   rejected without partial persistence.
 - Leading and trailing whitespace MUST be removed from text before length, format, nonblank,
   uniqueness, persistence, and idempotency-equivalence evaluation. A required or supplied optional

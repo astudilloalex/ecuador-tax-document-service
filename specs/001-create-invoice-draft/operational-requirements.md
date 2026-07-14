@@ -52,6 +52,25 @@ body reading, Company-header validation, safe correlation initialization/validat
 processing, domain work, persistence, and serialization all consume the same 10-second budget.
 Failure precedence determines the observable result; it does not reset the timer.
 
+One earliest-ordered API routing handler owns exactly one transport-independent monotonic request
+deadline for each matched `POST /api/v1/invoice-drafts` attempt. It starts the deadline before body
+consumption, stores the deadline and safe correlation state only in request-local API state, arms one
+non-blocking timer, and keeps that timer active through response serialization. No later stage may
+restart or extend the deadline, and the timer MUST be cancelled when the terminal response ends.
+
+The API maps the same fixed deadline into the application command. Application orchestration checks
+the remaining budget before each asynchronous stage and passes it to local persistence operations.
+The reactive repository adapter bounds pool acquisition and queries by the remaining budget and
+bounds a write transaction by the lesser of that budget and five seconds. It MUST NOT start another
+operation after the budget is exhausted.
+
+When the deadline expires before an uncommitted terminal response has won, the deadline owner returns
+`REQUEST_TIMEOUT` (`504`) with the safe correlation identifier. A higher-precedence terminal outcome
+already selected under FR-041 is not overwritten. If commit may have completed or response delivery
+has begun, the service MUST NOT delete authoritative state; equivalent replay reconciles the result.
+A generic HTTP connection, idle, or body timeout is not sufficient as the sole implementation of
+this end-to-end deadline.
+
 If evidence misses a budget, the plan must be revisited before implementation is considered
 complete. The response is not to add a Company cache, application cache, broker, or unapproved
 distributed component.

@@ -171,9 +171,9 @@ data are complete, and no material planning blocker remains.
 
 ```text
 HTTP request
-  → api: parse/validate X-Company-Id and transport DTOs
+  → api: start one monotonic request deadline; parse/validate X-Company-Id and transport DTOs
   → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
-    inputs, idempotency/correlation)
+    inputs, idempotency/correlation, fixed RequestDeadline)
   → domain: InvoiceDraft aggregate and deterministic calculation
   → application outbound ports
   → infrastructure: reactive Panache/PostgreSQL, local catalogs, clock/identifier adapters
@@ -181,10 +181,10 @@ HTTP request
 
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
-| `api` | Enforce FR-041 stages 1–5, initialize safe correlation for every outcome, capture one request instant after those stages pass, map transport inputs, and return Problem Details | `application` | Persistence entities returned directly; Company/security clients |
-| `application` | Receive an already mapped CompanyId and fixed request instant; enforce FR-041 stages 6–12, idempotency, use-case preconditions, and transaction-port orchestration | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
+| `api` | Own the one monotonic 10-second deadline from earliest routing through response completion; enforce FR-041 stages 1–5; initialize safe correlation for every outcome; capture one request instant after those stages pass; map transport inputs; return Problem Details | `application` | Persistence entities returned directly; Company/security clients |
+| `application` | Receive an already mapped CompanyId, fixed request instant, and transport-independent fixed deadline; enforce FR-041 stages 6–12, remaining-budget propagation, idempotency, use-case preconditions, and transaction-port orchestration | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
 | `domain` | Own immutable CompanyId on Invoice Draft; buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
-| `infrastructure` | Implement local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache | application ports/domain types | Company/SRI/security adapter, shared database, cache |
+| `infrastructure` | Implement local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache and clamp database work to the supplied remaining deadline budget | application ports/domain types | Company/SRI/security adapter, shared database, cache |
 
 Actual outbound boundaries are limited to the Invoice Draft repository, local identification/tax/
 payment catalog access, clock, and identifier generation. No interface named or equivalent to
@@ -193,42 +193,62 @@ introduced.
 
 **Failure-Precedence Ownership**: FR-041 stages 1–5 use one explicit pre-application pipeline:
 
-1. Quarkus HTTP enforces the exact bare-byte setting
-   `quarkus.http.limits.max-body-size=2097152` at its upload-limit route before
-   REST dispatch. A CDI `Router` observer registers a Vert.x failure handler that owns only status
-   `413` for `POST /api/v1/invoice-drafts`, maps it to the approved Problem Details response, and
-   bootstraps a safe correlation value without evaluating Company or correlation validity. It
-   delegates every other method, path, status, and failure through `RoutingContext.next()`.
+1. A CDI `Router` observer registers an earliest-ordered handler for
+   `POST /api/v1/invoice-drafts` before body consumption. It creates one fixed monotonic
+   `RequestDeadline`, initializes safe correlation through the shared API correlation classifier
+   solely for safe propagation, stores both in request-local API state, and arms one non-blocking
+   deadline timer. It neither evaluates Company validity nor emits the stage-3 correlation error.
+   Quarkus HTTP separately enforces the exact bare-byte setting
+   `quarkus.http.limits.max-body-size=2097152` at its upload-limit route before REST dispatch. The
+   same routing boundary registers the exclusive Vert.x status-`413` failure handler for this
+   operation. That handler preserves one classified-valid correlation value or uses the already
+   generated safe replacement, maps the approved Problem Details response, and never lets Company
+   or correlation invalidity replace the payload-size outcome. It delegates every other method,
+   path, status, and failure through `RoutingContext.next()`.
 2. After routing and before entity deserialization, one
    `@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
-   Jakarta REST `@NameBinding` evaluates Company-header validity, correlation validity, and
-   idempotency-key syntax in exactly that order. It stores only the accepted mapped values in
-   request-local API state.
+   Jakarta REST `@NameBinding` evaluates Company-header validity, the stored correlation
+   classification, and idempotency-key syntax in exactly that order. Only this gate emits
+   `INVALID_REQUEST` for correlation invalidity, and only after Company validation passes. It stores
+   only the accepted mapped values in request-local API state.
 3. Jackson deserialization and Bean Validation perform representation validation only after that
    gate passes. `quarkus.jackson.fail-on-unknown-properties=true` enforces strict bodies, and the
    built-in Jackson mismatched-input mapper is disabled with
    `quarkus.rest.exception-mapping.disable-mapper-for=io.quarkus.resteasy.reactive.jackson.runtime.mappers.BuiltinMismatchedInputExceptionMapper`
    so the feature mapper returns the approved stable response.
 
-The route failure handler and request gate share safe correlation initialization: absent input
-generates a UUID, valid input is preserved, and invalid input is replaced without allowing a stage
-3 error to overtake stage 1 or 2. The resource method is invoked only after stage 5. It then calls
-the application `RequestClock` exactly once, derives the immutable request instant carried by
-`CreateInvoiceDraftCommand`, and performs no later clock read for that command. Application
-orchestration begins at normalized-content generation (stage 6), continues through
-replay/conflict, business/reference/domain validation and calculation, and ends with atomic
-persistence (stage 12). HTTP headers, request-local API state, and payload representations never
-enter application logic.
+The route handlers and request gate use one shared API correlation classifier that always returns a
+safe response value plus an absent/valid/invalid classification. Absent input generates a UUID,
+valid input is preserved, and invalid input is replaced. Classification may occur for stage-1
+safety, but only the request gate may turn invalidity into the stage-3 error, so it cannot overtake
+payload-size or Company outcomes.
+
+The earliest route handler is the sole overall-deadline owner. The deadline starts before body
+reading, is never restarted, remains armed through response serialization, and is cancelled when
+the terminal response ends. It returns correlated `REQUEST_TIMEOUT` only if no higher-precedence
+uncommitted terminal outcome has won. The same fixed, transport-independent deadline is mapped into
+`CreateInvoiceDraftCommand`; application work checks it before asynchronous stages, and repository
+calls receive the remaining budget. Pool acquisition and queries are clamped to that remainder, and
+the write transaction is clamped to the lesser of the remainder and five seconds. Expiry after a
+possible commit never triggers compensating deletion; equivalent replay resolves the authoritative
+binding.
+
+The resource method is invoked only after stage 5. It calls the application `RequestClock` exactly
+once, derives the immutable request instant carried by `CreateInvoiceDraftCommand`, and performs no
+later wall-clock read for that command. Application orchestration begins at normalized-content
+generation (stage 6), continues through replay/conflict, business/reference/domain validation and
+calculation, and ends with atomic persistence (stage 12). HTTP headers, Vert.x/REST request state,
+and payload representations never enter application logic.
 
 ## Reactive and Resource Boundary Design
 
 | Operation | Adapter/port boundary | Classification | Execution context | Timeout/resource bound | Required evidence |
 |-----------|-----------------------|----------------|-------------------|------------------------|-------------------|
-| Header/body mapping, correlation, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one request instant | Header/correlation matrix, midnight vector, max payload, blocked-thread check |
+| Header/body mapping, correlation, deadline, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one monotonic 10 s deadline; one request instant | Header/correlation matrix including 413, deadline expiry/cancellation, midnight vector, max payload, blocked-thread check |
 | Fingerprint generation | Application normalization service | Bounded CPU, no I/O | Calling context | ≤2 MiB, SHA-256, version 1 | Vectors and maximum-payload benchmark |
 | Monetary/domain calculation | Pure domain | Synchronous deterministic bounded CPU | Calling context | ≤500 lines | Exact vectors, p99 budget, no event-loop warning |
-| Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query bound below 10 s | Unavailable, timeout, replay/conflict tests |
-| Aggregate/binding write | Repository port/reactive adapter | Non-blocking database I/O | Reactive transaction | 5-second transaction timeout | Rollback phase injection and concurrency |
+| Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query clamped to request's remaining budget | Unavailable, deadline, replay/conflict tests |
+| Aggregate/binding write | Repository port/reactive adapter | Non-blocking database I/O | Reactive transaction | Lesser of remaining request budget and 5 seconds | Rollback phase injection, deadline, uncertain-commit recovery, and concurrency |
 | Flyway startup migration | Startup infrastructure | Blocking lifecycle operation outside requests | Controlled startup | Deployment timeout/empty-db evidence | Migration and readiness tests |
 
 No blocking filesystem/network operation, SOAP, XML, signature, certificate, SRI, or Company call
@@ -301,7 +321,7 @@ no authentication or authorization result.
 
 | Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
 |------------------|---------------------|-------------------|--------------------|---------|-------------------------|--------------------|
-| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | Overall 10 s begins at acceptance; one request instant is captured after stage 5 passes | Correct request | 400/413 or continue |
+| Header/body acceptance | No durable state | Payload → Company → correlation → key → body precedence | N/A | One monotonic 10 s deadline begins before body consumption and is never reset; one request instant is captured after stage 5 passes | Correct request | 400/413/504 or continue |
 | Binding lookup | No new durable state | CompanyId + key hash; fingerprint/version compare | Equivalent replay; different content conflict | Bounded query | Same key safely retried | 200/409 or continue |
 | New aggregate write | Tentative root/children/binding inside one transaction | Binding inserted in same commit | Unique Company/key hash arbitrates race | 5-second write tx | Loser rolls back and re-reads winner | 201/200/409 or safe 503/504/500 |
 | Response delivery | Commit already authoritative | Same equivalent retry | Returns original | 10-second request deadline | Binding reconciles response loss | Original draft observable |
@@ -347,6 +367,7 @@ Key invariants:
 specs/001-create-invoice-draft/
 ├── spec.md
 ├── plan.md
+├── tasks.md
 ├── research.md
 ├── reference-data-baseline.md
 ├── data-model.md
@@ -360,7 +381,8 @@ specs/001-create-invoice-draft/
     └── invoice-draft-api.openapi.yaml
 ```
 
-No Company port contract or task file is generated.
+No Company port contract is generated. `tasks.md` is a separate `$speckit-tasks` output and appears
+in the tree only because this is now the post-task artifact set; this plan did not generate it.
 
 ### Planned Source Boundaries
 
@@ -405,15 +427,20 @@ is planned.
 | Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | numeric maxima/overflow, invalid/unsupported/calculated input, and midnight/replay vectors |
 | Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
-| API errors/correlation | Contract/integration | ordered upload/header/entity gate; exact code/status; safe Problem Details; supplied/generated/replacement correlation | Content-Length/chunked over-limit; malformed JSON plus earlier header failure; blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
+| API errors/correlation | Contract/integration | ordered upload/header/entity gate; exclusive 413 ownership; exact code/status; safe Problem Details; supplied/generated/replacement correlation | Content-Length/chunked over-limit with absent/valid/invalid correlation; malformed JSON plus earlier header failure; blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
 | Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
-| Performance/resources | Warmed packaged JVM + PostgreSQL | all budgets in operational requirements | max payload, 50-way contention, pool recovery, no blocked event loop |
+| Performance/resources | Warmed packaged JVM + PostgreSQL | one earliest-boundary monotonic deadline, remaining-budget propagation, timer cancellation, and all budgets in operational requirements | maximum valid body ≤2 MiB, 10-second expiry across body/application/persistence/serialization, 50-way contention, pool recovery, no blocked event loop |
 | JVM/native | Packaged JVM; optional native | mandatory JVM critical smoke; native build+runtime if claimed | no native claim from build alone |
 
 `traceability.md` maps each requirement group, acceptance/success evidence, design artifact,
 contract/data evidence, test level, and prohibited behavior.
+
+Deterministic clock and draft-identifier evidence uses CDI alternatives confined to
+`src/test/java`; production configuration contains no clock or identifier test switch. The
+production adapters remain the default injectable implementations, while the Quarkus test archive
+activates resettable fixed-clock and deterministic-sequence alternatives explicitly.
 
 **Liveness and Readiness**: PostgreSQL/local initialization only for readiness; liveness remains
 independent. No Company, identity, gateway/BFF, or SRI check.

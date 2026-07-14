@@ -33,7 +33,7 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body exceeds `2,097,152` bytes | Reduce request size | Rejected before Company evaluation; no state |
 | `BUSINESS_VALIDATION_FAILED` | 422 | Buyer, requestCreationInstant-derived emission date, lines, IVA selection, catalogs, text, collections, calculation, discount, zero-value, payment, or numeric-envelope rule fails; any quantity, unit-price, monetary, percentage-rate, exact-intermediate, rounded, grouped, payment-sum, or invoice-total overflow includes violation `MONETARY_RANGE_EXCEEDED` | Correct business content | No draft, children, or binding |
 | `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable or cannot start/continue a transaction before commit | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit is confirmed |
-| `REQUEST_TIMEOUT` | 504 | The 10-second request deadline is exhausted | Retry same Company/key/content | Replay resolves a commit that completed before response loss |
+| `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline is exhausted before an uncommitted terminal response wins | Retry same Company/key/content | Confirmed pre-commit failure leaves no state; replay resolves an uncertain or completed commit after response loss |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
 
 ## Recognized Prohibited Calculated Fields
@@ -101,6 +101,12 @@ Correlation initialization always produces a safe response identifier. If payloa
 context fails before correlation validation, that earlier code governs, but invalid correlation
 input is still never echoed and the response uses a safe replacement UUID. Correlation does not
 affect idempotency equivalence.
+
+The deadline begins before body consumption and is not restarted by any precedence stage. Its
+non-blocking timer remains active through response serialization and is cancelled on response end.
+Application and persistence work receive the same deadline's remaining budget. Deadline expiry does
+not overwrite an earlier payload-size or Company outcome and never authorizes deletion when commit
+status is uncertain or successful.
 
 No authentication, authorization, tenant, Company lookup, Issuer lookup, or emission-point
 ownership outcome participates.

@@ -158,8 +158,9 @@ Combined-failure vectors MUST prove:
 
 - invalid Company plus invalid correlation returns the applicable Company error, not the
   correlation error, while using a safe replacement UUID;
-- a body over 2 MiB plus invalid Company/correlation returns
-  `REQUEST_PAYLOAD_TOO_LARGE`, still with a safe correlation UUID;
+- a body over 2 MiB returns `REQUEST_PAYLOAD_TOO_LARGE` before Company evaluation with a generated
+  correlation UUID when absent, the preserved value when valid, or a safe replacement UUID when
+  invalid; correlation invalidity never replaces the 413 outcome;
 - invalid correlation plus invalid idempotency key returns the correlation `INVALID_REQUEST`;
 - changing, omitting, or invalidating correlation never changes idempotency equivalence.
 
@@ -226,6 +227,15 @@ from every pre-commit failure.
 Every response returns a safe `X-Correlation-Id` and safe Problem Details. Retry unavailable or
 timeout cases with the same Company/key/content. If commit actually completed before response loss,
 the retry must return the original draft.
+
+Deadline evidence must prove that one monotonic 10-second timer starts at the earliest matched route
+before body consumption, is never restarted by validation or persistence, remains armed through
+serialization, and is cancelled when the terminal response ends. Application and repository probes
+must observe a decreasing remaining budget; pool/query work is clamped to it and a write transaction
+is clamped to the lesser of the remainder and five seconds. Expiry returns correlated
+`REQUEST_TIMEOUT` only while the response is uncommitted and must not overwrite an already selected
+payload-size or Company outcome. An uncertain or completed commit is recovered by equivalent replay,
+not compensating deletion.
 
 ## 10. Verify Fiscal, Monetary, and Boundary Vectors
 

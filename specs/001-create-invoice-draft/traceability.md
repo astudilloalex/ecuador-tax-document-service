@@ -37,7 +37,7 @@ reconciled specification and plan contain no active governance blocker.
 | `FR-023` | `plan.md` exclusions and negative architecture boundary | Scenarios 8, 41, 43; `SC-005`, `SC-008`, `SC-023` | Dependency, trace, persistence, and side-effect inspection proves zero fiscal/SRI action |
 | `FR-024` | Repository port contract and `persistence-design.md` scoping | Scenarios 20–25, 34; `SC-012`, `SC-017` | Every existing-draft/binding query takes CompanyId plus local identifier; cross-Company tests |
 | `FR-025` | `error-catalog.md`; observability redaction rules | All failure scenarios; `SC-002`, `SC-006`, `SC-028`, `SC-033` | Stable English codes/messages and sensitive/internal-data leakage tests |
-| `FR-026` | OpenAPI correlation header; `operational-requirements.md` | Scenarios 55–58; `SC-033` | Absent/valid/blank/repeated/65-char/unsafe/combined-failure correlation vectors |
+| `FR-026` | OpenAPI correlation header; shared API correlation classifier; `operational-requirements.md` | Scenarios 55–58; `SC-033` | Absent/valid/blank/repeated/65-char/unsafe vectors plus oversized bodies with absent, valid, and invalid correlation prove safe 413 propagation without stage-3 takeover |
 | `FR-027` | OpenAPI idempotency header; `idempotency-design.md` | Scenarios 20–25, 32; `SC-012`, `SC-016`, `SC-018` | Trim/ASCII/1–128 tests and Company-scope independence |
 | `FR-028` | Identification validation boundary and approved FORMAT_ONLY strategies | Scenarios 7, 13–16; `SC-010` | Exact syntax/length/special-value vectors; zero checksum, online registry, or name lookup |
 | `FR-029` | `idempotency-design.md` canonical content version 1 | Scenarios 20, 21, 25, 37, 38, 52, 56; `SC-012`, `SC-019`, `SC-030`, `SC-033` | Golden fingerprints for property/order/text/decimal/correlation/Company exclusions |
@@ -52,9 +52,9 @@ reconciled specification and plan contain no active governance blocker.
 | `FR-038` | Draft-vs-issuance model exclusions | Scenarios 8, 41, 42, 44; `SC-005`, `SC-022`, `SC-023`, `SC-025` | Schema/response/dependency inspection proves no snapshot or issuance data |
 | `FR-039` | OpenAPI and build/config negative boundary | Scenario 43; `SC-023`, `SC-024` | Zero security scheme/requirement/Auth/401/403/dependency/config tests |
 | `FR-040` | Clean Architecture mapping in `plan.md` | Scenarios 34, 43; `SC-017`, `SC-023` | API maps to application `CompanyId`; dependency tests reject HTTP/security context below API |
-| `FR-041` | `error-catalog.md` precedence; ordered HTTP upload handler/pre-entity gate/application flow | Scenarios 45, 57, 58; `SC-026`, `SC-033` | Content-Length/chunked and combined-failure tables cover all 12 ordered stages, deferred entity decoding, and safe correlation initialization |
-| `FR-042` | Quarkus HTTP upload limit/failure handler; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027` | Exact 2 MiB proceeds; every larger Content-Length or chunked body returns feature Problem Details before Company/correlation validation with safe correlation |
-| `FR-043` | Persistence/error/timeout design | Scenarios 24, 46; `SC-028` | 503/504/500 injection, zero pre-commit state, and post-commit replay recovery |
+| `FR-041` | `error-catalog.md` precedence; shared correlation classifier; ordered HTTP upload handler/pre-entity gate/application flow | Scenarios 45, 57, 58; `SC-026`, `SC-033` | Content-Length/chunked and combined-failure tables cover all 12 ordered stages, exclusive 413 ownership, deferred entity decoding, and safety classification that never lets correlation invalidity overtake payload or Company outcomes |
+| `FR-042` | Quarkus HTTP upload limit and exclusive feature 413 failure handler; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027` | Exact 2 MiB proceeds; every larger Content-Length or chunked body with absent/valid/invalid correlation returns feature Problem Details before Company evaluation with generated/preserved/replacement safe correlation |
+| `FR-043` | Earliest-route monotonic deadline owner; application remaining-budget propagation; persistence/error/timeout design | Scenarios 24, 46; `SC-028` | Deadline begins before body consumption, remains through serialization, clamps repository work, cancels on response end, produces safe 504 without overwriting earlier outcomes, leaves zero state only for confirmed pre-commit rollback, and preserves post-commit replay recovery |
 | `FR-044` | OpenAPI decimal constraints; domain/data numeric envelopes | Scenarios 49, 50; `SC-029` | API/domain/intermediate/group/payment/persistence/response boundary and overflow vectors |
 | `FR-045` | Approved `reference-data-baseline.md` row tables and source register | Scenario 53; `SC-031` | Audit proves every supported row has official facts, target decisions, validity, activity, version, source, and approval |
 | `FR-046` | Published UUIDv5 namespace/names; OpenAPI and quickstart exact IDs | Scenario 54; `SC-032` | Independently recalculate all 14 UUIDs; later contract-to-seed equality and no runtime generation/catalog query |
@@ -119,8 +119,8 @@ reconciled specification and plan contain no active governance blocker.
 | `SC-024` | `FR-001`–`FR-003`, `FR-039` | Static-copy tests plus packaged `/q/openapi` semantic equality prove header-only Company context and zero security/Auth/401/403 constructs in the served contract |
 | `SC-025` | `FR-002`, `FR-005`, `FR-012` | Strict body tests reject Company/Issuer/fiscal snapshot and calculated fields with zero state |
 | `SC-026` | `FR-041`; ordered HTTP gate design | Pairwise/multi-failure suite proves earliest outcome, pre-entity header ordering, and no execution of later stages |
-| `SC-027` | `FR-042` | Content-Length and chunked exact byte-boundary tests: ≤2 MiB continues; >2 MiB returns correlated feature 413 before Company evaluation |
-| `SC-028` | `FR-032`, `FR-043` | 503/504/500 pre-commit failures leave zero state; post-commit loss replays original |
+| `SC-027` | `FR-042` | Content-Length and chunked exact byte-boundary tests: ≤2 MiB continues; >2 MiB with absent/valid/invalid correlation returns the exclusively owned feature 413 before Company evaluation |
+| `SC-028` | `FR-032`, `FR-043` | 503/504/500 confirmed pre-commit failures leave zero state; uncertain/post-commit outcomes make no zero-state claim and equivalent replay resolves the authoritative original |
 | `SC-029` | `FR-010`, `FR-012`–`FR-014`, `FR-044`; `DR-010` | Same numeric envelope at API/domain/intermediate/group/payment/database/response; every breach gives `MONETARY_RANGE_EXCEEDED` |
 | `SC-030` | `FR-006`, `FR-033`; `DR-012`, `DR-017` | Later-date equivalent replay returns original date without validation or mutation |
 | `SC-031` | `FR-045`, `FR-047`; `DR-001` | Baseline audit records zero unverified supported rows and explicitly omits unsupported rows |
@@ -141,7 +141,7 @@ reconciled specification and plan contain no active governance blocker.
 | `AS-008` | `FR-023` | Successful create has zero fiscal/SRI/notification side effects |
 | `AS-009` | `FR-007`, `FR-011`, `FR-013` | Inactive or ineffective reference rejects |
 | `AS-010` | `FR-002`, `FR-005` | Body `companyId` rejects as prohibited/unknown |
-| `AS-011` | `FR-020`, `FR-021` | Injected persistence failure rolls back aggregate and binding |
+| `AS-011` | `FR-020`, `FR-021` | Injected failure at each write phase is confirmed pre-commit/fully rolled back and leaves zero aggregate or binding state |
 | `AS-012` | `FR-011`; `DR-005` | Non-IVA, missing, or multiple tax selection rejects |
 | `AS-013` | `FR-007`, `FR-028`; `DR-014` | Codes 04/05/06/08 follow exact approved FORMAT_ONLY strategies |
 | `AS-014` | `FR-028`; `DR-014` | Valid RUC/Cédula format is not subjected to checksum or legacy algorithm |
@@ -176,7 +176,7 @@ reconciled specification and plan contain no active governance blocker.
 | `AS-043` | `FR-036`, `FR-039`, `FR-040` | Static boundary has no Company/security/cache dependency |
 | `AS-044` | `FR-005`, `FR-038` | Issuer/fiscal/snapshot request fields reject |
 | `AS-045` | `FR-041`, `FR-042` | Payload >2 MiB wins precedence and leaves zero state |
-| `AS-046` | `FR-043` | Persistence timeout/unexpected failure is safe and atomic |
+| `AS-046` | `FR-043` | Confirmed pre-commit persistence timeout/unexpected failure is safe and atomic; uncertain/post-commit handling is covered separately by replay evidence |
 | `AS-047` | `FR-001`, `FR-002` | Malformed/nil Company header returns `COMPANY_CONTEXT_INVALID` |
 | `AS-048` | `FR-001`, `FR-002` | Multiple Company values return `COMPANY_CONTEXT_INVALID` |
 | `AS-049` | `FR-010`, `FR-044`; `DR-010` | Quantity/price/money maxima accept when totals remain in range |
@@ -203,7 +203,7 @@ reconciled specification and plan contain no active governance blocker.
 | `BUSINESS_VALIDATION_FAILED` | `FR-007`–`FR-015`, `FR-028`, `FR-044` | Business rejection scenarios and `AS-050`; safe 422 and zero state |
 | `MONETARY_RANGE_EXCEEDED` | `FR-044`; `DR-010` | `AS-050`; nested violation under `BUSINESS_VALIDATION_FAILED` |
 | `PERSISTENCE_UNAVAILABLE` | `FR-020`, `FR-021`, `FR-043` | `AS-011`, `AS-046`; safe 503 and retry same scope |
-| `REQUEST_TIMEOUT` | `FR-032`, `FR-043` | `AS-024`, `AS-046`; safe 504 and replay recovery |
+| `REQUEST_TIMEOUT` | `FR-032`, `FR-043` | `AS-024`, `AS-046`; earliest-route deadline, remaining-budget propagation, safe 504, timer cancellation, and uncertain/post-commit replay recovery |
 | `INTERNAL_ERROR` | `FR-025`, `FR-043` | `AS-046`; safe 500 without internal/sensitive data |
 
 ## Cross-Cutting Constitutional Evidence

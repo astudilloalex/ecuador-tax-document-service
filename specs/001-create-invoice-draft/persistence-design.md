@@ -169,13 +169,18 @@ root, child, or idempotency row is written.
 
 - Overall create request deadline: 10 seconds.
 - Local write-transaction timeout: 5 seconds.
-- PostgreSQL pool acquisition/query timeouts MUST be bounded beneath the overall request deadline.
+- Every repository operation receives the request's remaining monotonic budget; PostgreSQL pool
+  acquisition and query timeouts MUST be bounded by that remainder.
+- A write transaction uses the lesser of the remaining request budget and 5 seconds, and no new
+  persistence operation starts after the request budget is exhausted.
 - Confirmed pre-commit database unavailability maps to `PERSISTENCE_UNAVAILABLE` (`503`).
 - Deadline exhaustion maps to `REQUEST_TIMEOUT` (`504`).
 - SQL state, query text, table/column names, connection details, and stack traces are never exposed.
 
-If commit status is uncertain or a response is lost after commit, the client retries the same
-CompanyId, idempotency key, and content. The local binding resolves the authoritative result.
+Zero-state guarantees apply only to a confirmed pre-commit failure or a transaction confirmed fully
+rolled back. If commit status is uncertain or a response is lost after commit, the service does not
+claim zero state or attempt compensating deletion; the client retries the same CompanyId,
+idempotency key, and content, and the local binding resolves the authoritative result.
 
 ## Readiness
 
@@ -198,7 +203,7 @@ Liveness remains independent of PostgreSQL availability.
 - same key independent across Companies;
 - 50-way equivalent concurrency yields one root/binding;
 - conflicting concurrency yields one winner and stable conflict;
-- injected failure after every write phase leaves zero partial rows/binding;
+- injected confirmed pre-commit failure after every write phase leaves zero partial rows/binding;
 - unavailable/timeout outcomes are safe and correlated;
 - no buyer payload, raw idempotency key, or normalized request stored in the binding;
 - schema inspection confirms every prohibited Company/identity/snapshot structure is absent;
