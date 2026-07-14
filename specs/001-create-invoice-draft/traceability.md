@@ -22,7 +22,7 @@ reconciled specification and plan contain no active governance blocker.
 | `FR-008` | OpenAPI buyer/contact limits; `data-model.md` buyer fields | Scenarios 31–33; `SC-016` | Address/email/telephone boundary and invalid-format tests |
 | `FR-009` | OpenAPI line cardinality; `data-model.md` aggregate | Scenarios 4, 29, 30; `SC-015` | 1/500 accepted; 0/501 rejected without state |
 | `FR-010` | OpenAPI line numeric/text bounds; `data-model.md` decimals | Scenarios 2, 3, 31, 32, 49, 50; `SC-004`, `SC-016`, `SC-029` | Quantity/price/discount precision, range, text, and overflow vectors |
-| `FR-011` | OpenAPI `taxRuleId`; approved IVA baseline and upstream-selection boundary | Scenarios 9, 12, 40, 53, 54; `SC-009`, `SC-021`, `SC-031`, `SC-032` | Effective IVA-only selection, zero automatic classification, direct code/rate and multiple-tax rejection |
+| `FR-011` | OpenAPI `taxRuleId`; approved IVA baseline and upstream-selection boundary | Scenarios 9, 12, 40, 53, 54; `SC-009`, `SC-021`, `SC-031`, `SC-032` | Active/effective immutable `family=IVA` rule selection, zero parent-category entity or automatic classification, direct code/rate and multiple-tax rejection |
 | `FR-012` | Strict request schema; calculation model; error catalog | Scenarios 2, 28, 49, 50; `SC-003`, `SC-004`, `SC-014`, `SC-029` | Pure calculation, prohibited-field, intermediate/grouped overflow, and no-state tests |
 | `FR-013` | Payment schema/model and local uniqueness constraint | Scenarios 5, 17–19, 29, 30, 39, 50, 53, 54; `SC-011`, `SC-020`, `SC-029`, `SC-032` | Positive/zero payment, cardinality, duplicate method, range, and baseline UUID tests |
 | `FR-014` | Calculation/reconciliation design | Scenarios 5, 17–19, 50; `SC-003`, `SC-011`, `SC-029` | Exact two-decimal equality and payment-sum overflow tests |
@@ -52,8 +52,8 @@ reconciled specification and plan contain no active governance blocker.
 | `FR-038` | Draft-vs-issuance model exclusions | Scenarios 8, 41, 42, 44; `SC-005`, `SC-022`, `SC-023`, `SC-025` | Schema/response/dependency inspection proves no snapshot or issuance data |
 | `FR-039` | OpenAPI and build/config negative boundary | Scenario 43; `SC-023`, `SC-024` | Zero security scheme/requirement/Auth/401/403/dependency/config tests |
 | `FR-040` | Clean Architecture mapping in `plan.md` | Scenarios 34, 43; `SC-017`, `SC-023` | API maps to application `CompanyId`; dependency tests reject HTTP/security context below API |
-| `FR-041` | `error-catalog.md` precedence; application flow | Scenarios 45, 57, 58; `SC-026`, `SC-033` | Combined-failure table covers all 12 ordered stages and safe correlation initialization |
-| `FR-042` | HTTP body limit; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027` | Exact 2 MiB proceeds; 2 MiB+1 rejects before Company/correlation validation with safe correlation |
+| `FR-041` | `error-catalog.md` precedence; ordered HTTP upload handler/pre-entity gate/application flow | Scenarios 45, 57, 58; `SC-026`, `SC-033` | Content-Length/chunked and combined-failure tables cover all 12 ordered stages, deferred entity decoding, and safe correlation initialization |
+| `FR-042` | Quarkus HTTP upload limit/failure handler; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027` | Exact 2 MiB proceeds; every larger Content-Length or chunked body returns feature Problem Details before Company/correlation validation with safe correlation |
 | `FR-043` | Persistence/error/timeout design | Scenarios 24, 46; `SC-028` | 503/504/500 injection, zero pre-commit state, and post-commit replay recovery |
 | `FR-044` | OpenAPI decimal constraints; domain/data numeric envelopes | Scenarios 49, 50; `SC-029` | API/domain/intermediate/group/payment/persistence/response boundary and overflow vectors |
 | `FR-045` | Approved `reference-data-baseline.md` row tables and source register | Scenario 53; `SC-031` | Audit proves every supported row has official facts, target decisions, validity, activity, version, source, and approval |
@@ -107,7 +107,7 @@ reconciled specification and plan contain no active governance blocker.
 | `SC-012` | `FR-024`, `FR-027`–`FR-034`; `DR-017`, `DR-018` | New/replay/conflict/failure/50-way concurrency commits at most one per Company+key scope |
 | `SC-013` | `FR-006`, `FR-019`; `DR-012` | Captured-instant date, midnight crossing, different/impossible date vectors |
 | `SC-014` | `FR-012`; `DR-011` | Every calculated input rejected consistently even when equal to computed value |
-| `SC-015` | `FR-009`, `FR-013`, `FR-015` | Exact collection maxima accepted; maxima+1 reject without state |
+| `SC-015` | `FR-009`, `FR-013`, `FR-015` | Exact 500-line/8-distinct-payment/15-additional maxima accepted; maxima+1 reject without state |
 | `SC-016` | `FR-008`, `FR-010`, `FR-015`, `FR-027`, `FR-035`; `DR-019` | Exact text boundaries accepted; invalid/over/blank/control/contact/duplicate vectors reject |
 | `SC-017` | `FR-024`, `FR-037`; `DR-020` | One immutable canonical CompanyId and local child ownership; zero cross-Company mixing |
 | `SC-018` | `FR-030`, `FR-033`; `DR-017` | Equivalent replay returns original for draft lifetime with no elapsed-time expiry |
@@ -116,10 +116,10 @@ reconciled specification and plan contain no active governance blocker.
 | `SC-021` | `FR-011`; `DR-001`, `DR-011` | Tax code/rate comes only from selected approved rule; caller-supplied code/rate rejects |
 | `SC-022` | `FR-004`, `FR-005`, `FR-037`, `FR-038`; `DR-020`, `DR-023` | Exactly CompanyId+opaque emissionPointId and zero Company/fiscal snapshot fields |
 | `SC-023` | `FR-003`, `FR-023`, `FR-033`, `FR-036`, `FR-039`, `FR-040` | Create/replay traces and architecture show zero Company/auth/cache/replication behavior |
-| `SC-024` | `FR-001`–`FR-003`, `FR-039` | OpenAPI static test finds header-only Company context and zero security/Auth/401/403 constructs |
+| `SC-024` | `FR-001`–`FR-003`, `FR-039` | Static-copy tests plus packaged `/q/openapi` semantic equality prove header-only Company context and zero security/Auth/401/403 constructs in the served contract |
 | `SC-025` | `FR-002`, `FR-005`, `FR-012` | Strict body tests reject Company/Issuer/fiscal snapshot and calculated fields with zero state |
-| `SC-026` | `FR-041`; error precedence design | Pairwise/multi-failure suite proves earliest outcome and no execution of later stages |
-| `SC-027` | `FR-042` | Exact byte-boundary tests: ≤2 MiB continues; >2 MiB returns 413 before Company evaluation |
+| `SC-026` | `FR-041`; ordered HTTP gate design | Pairwise/multi-failure suite proves earliest outcome, pre-entity header ordering, and no execution of later stages |
+| `SC-027` | `FR-042` | Content-Length and chunked exact byte-boundary tests: ≤2 MiB continues; >2 MiB returns correlated feature 413 before Company evaluation |
 | `SC-028` | `FR-032`, `FR-043` | 503/504/500 pre-commit failures leave zero state; post-commit loss replays original |
 | `SC-029` | `FR-010`, `FR-012`–`FR-014`, `FR-044`; `DR-010` | Same numeric envelope at API/domain/intermediate/group/payment/database/response; every breach gives `MONETARY_RANGE_EXCEEDED` |
 | `SC-030` | `FR-006`, `FR-033`; `DR-012`, `DR-017` | Later-date equivalent replay returns original date without validation or mutation |
@@ -159,8 +159,8 @@ reconciled specification and plan contain no active governance blocker.
 | `AS-026` | `FR-006`; `DR-012` | Current Ecuador date accepts from one request instant |
 | `AS-027` | `FR-006`; `DR-012`, `DR-013` | Past/future/impossible date rejects without normalization |
 | `AS-028` | `FR-012`; `DR-011` | Every supplied calculated field rejects |
-| `AS-029` | `FR-009`, `FR-013`, `FR-015` | Exact collection maxima accept |
-| `AS-030` | `FR-009`, `FR-013`, `FR-015` | Collection maxima plus one reject |
+| `AS-029` | `FR-009`, `FR-013`, `FR-015` | 500 lines, 8 distinct positive payments, and 15 additional entries accept |
+| `AS-030` | `FR-009`, `FR-013`, `FR-015` | 501 lines, 9 payments, or 16 additional entries reject |
 | `AS-031` | `FR-008`, `FR-010`, `FR-015`, `FR-035` | Exact text limits accept |
 | `AS-032` | `FR-008`, `FR-010`, `FR-015`, `FR-027`, `FR-035` | Over-limit and malformed text/key reject |
 | `AS-033` | `FR-035` | Blank/control/duplicate canonical text rejects |

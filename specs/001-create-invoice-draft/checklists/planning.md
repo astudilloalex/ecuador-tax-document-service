@@ -72,7 +72,8 @@ not assert that code, migrations, or runtime evidence already exist.
 - [x] CHK012 Does the API contract explicitly omit security schemes, security requirements,
   Authorization headers, and 401/403 outcomes? [Consistency]
   - Evidence: `spec.md` FR-039/SC-024; `plan.md` §API and Error Contract; OpenAPI root,
-    components, and response map.
+    components, and response map; `mp.openapi.scan.disable=true` plus packaged `/q/openapi`
+    semantic-equality evidence planned in T012/T040.
 - [x] CHK013 Are Company existence, state, eligibility, caller entitlement, tenant ownership, and
   Company/Issuer/establishment/emission-point relationship checks explicitly absent? [Completeness]
   - Evidence: `spec.md` FR-003/FR-036/Scenario 35; `plan.md` §Company Master-Data Boundary;
@@ -159,21 +160,25 @@ not assert that code, migrations, or runtime evidence already exist.
   aggregation, and reconciliation ownership unambiguous? [Clarity]
   - Evidence: `spec.md` FR-012–FR-016/DR-002–DR-011; `plan.md` §Technical Context;
     `data-model.md` monetary fields.
-- [x] CHK033 Are one IVA rule per line, four treatment classes, separate zero-tax grouping, and
-  non-IVA/multiple-tax rejection complete? [Coverage]
+- [x] CHK033 Are one active/effective `family=IVA` rule per line, four treatment classes, separate
+  zero-tax grouping, and non-IVA/multiple-tax rejection complete without inventing a parent
+  tax-category entity? [Coverage]
   - Evidence: `spec.md` FR-010–FR-011/DR-005/DR-008; OpenAPI `TaxTreatment`;
-    `data-model.md` §Invoice Line Tax Selection/Grouped Tax Total.
+    `data-model.md` §Invoice Line Tax Selection/Grouped Tax Total; `persistence-design.md` exact IVA
+    catalog structure.
 - [x] CHK034 Are zero-value drafts, explicit tax selection, exactly one zero payment, positive
-  payment rules, exact reconciliation, and duplicate-method rejection complete? [Coverage]
+  payment rules including the eight-method maximum, exact reconciliation, and duplicate-method
+  rejection complete? [Coverage]
   - Evidence: `spec.md` FR-013–FR-014/DR-016/DR-022; `data-model.md` §Payment;
-    `quickstart.md` §Fiscal, Monetary, and Boundary Vectors.
+    `reference-data-baseline.md` eight approved payment methods; `quickstart.md` §Fiscal, Monetary,
+    and Boundary Vectors.
 - [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing,
   commit-instant timestamp, and replay-date semantics complete? [Clarity]
   - Evidence: `spec.md` FR-006/DR-012; `plan.md` §Time Boundary;
     `operational-requirements.md` §Measurement Boundary; `quickstart.md` dynamic date.
 - [x] CHK036 Are text trimming, limits, contact formats, control-character rejection, collection
   maxima, uniqueness, and collection order semantics complete? [Coverage]
-  - Evidence: `spec.md` FR-008–FR-010/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
+  - Evidence: `spec.md` FR-008–FR-010/FR-013/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
     `quickstart.md` §Strict Request Fields/Boundary Vectors.
 - [x] CHK037 Is every caller-supplied calculated field rejected consistently rather than ignored,
   compared, or persisted? [Consistency]
@@ -201,7 +206,8 @@ not assert that code, migrations, or runtime evidence already exist.
 - [x] CHK042 Are stable errors, HTTP statuses, retry actions, persistence guarantees, and the exact
   12-stage failure precedence aligned? [Consistency]
   - Evidence: `spec.md` FR-025/FR-041–FR-044; `error-catalog.md` §Stable Outcomes/Failure
-    Precedence; OpenAPI responses.
+    Precedence; `plan.md` §Failure-Precedence Ownership ordered upload/pre-entity/entity pipeline;
+    OpenAPI responses; T030–T032/T081–T086.
 
 ## Sensitive Data, Correlation, Operations, and Runtime
 

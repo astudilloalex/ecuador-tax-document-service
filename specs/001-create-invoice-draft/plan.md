@@ -35,8 +35,8 @@ domain calculation
 token, role, permission, tenant, or application-level service security behavior.
 
 **Testing**: JUnit 5, REST Assured, `UniAsserter`, real PostgreSQL integration/concurrency tests,
-empty-database Flyway tests, OpenAPI contract tests, architecture tests, pure domain vectors,
-packaged JVM tests, and optional native build/runtime smoke
+empty-database Flyway tests, static and served `/q/openapi` contract tests, ordered HTTP-gate tests,
+architecture tests, pure domain vectors, packaged JVM tests, and optional native build/runtime smoke
 
 **Approved Build Dependencies**: Quarkus-BOM-managed
 `quarkus-rest-jackson`, `quarkus-hibernate-validator`,
@@ -74,7 +74,7 @@ and idempotency partitioning. It is not a credential or entitlement proof.
 s/p99 ≤5 s; replay/conflict p95 ≤250 ms/p99 ≤500 ms; 50 equivalent concurrent requests complete
 within 10 s and create exactly one aggregate/binding
 
-**Constraints**: 2,097,152-byte request-body maximum; 500 lines; 10 payments; 15 additional entries;
+**Constraints**: 2,097,152-byte request-body maximum; 500 lines; 8 payments; 15 additional entries;
 10-second overall request deadline; 5-second local write-transaction timeout; quantity and unit
 price `numeric(12,6)` with maximum `999999.999999`; all money `numeric(17,2)` with maximum
 `999999999999999.99`; percentage rates `numeric(5,2)` from `0.00` through `100.00`; exact
@@ -123,6 +123,10 @@ rows, six IVA tax-rule rows, and eight payment-method rows under
 `FORMAT_ONLY` because no exact governing checksum algorithm was established from the approved
 primary sources for this draft feature. Checksum and registry verification are outside scope, not
 deferred implementation work.
+
+The approved IVA catalog represents tax category only through the immutable `family=IVA` field on
+each versioned rule. Rule activity and effectivity govern selection; this feature has no separate
+parent tax-category entity, active flag, repository, or lifecycle.
 
 **Terminology Mapping Impact**: `Company Identifier`/`CompanyId` remains the canonical opaque
 ownership value from `X-Company-Id`. `Fiscal Context Snapshot` remains reserved for a later
@@ -187,15 +191,34 @@ payment catalog access, clock, and identifier generation. No interface named or 
 `CompanyContextPort`, `ResolveCompanyFiscalContextPort`, or Company authorization/eligibility is
 introduced.
 
-**Failure-Precedence Ownership**: API filters/resource coordination own payload-size enforcement,
-Company-header validation, correlation validation, idempotency-key syntax, and request
-representation (FR-041 stages 1–5). Correlation initialization still produces a safe identifier for
-stage 1 or 2 failures without allowing correlation invalidity to replace the earlier error. Once
-stages 1–5 pass, the API calls the application `RequestClock` exactly once, derives the immutable
-request instant carried by `CreateInvoiceDraftCommand`, and performs no later clock read for that
-command. Application orchestration begins at normalized-content generation (stage 6), continues
-through replay/conflict, business/reference/domain validation and calculation, and ends with atomic
-persistence (stage 12). HTTP headers and payload representations never enter application logic.
+**Failure-Precedence Ownership**: FR-041 stages 1–5 use one explicit pre-application pipeline:
+
+1. Quarkus HTTP enforces the exact bare-byte setting
+   `quarkus.http.limits.max-body-size=2097152` at its upload-limit route before
+   REST dispatch. A CDI `Router` observer registers a Vert.x failure handler that owns only status
+   `413` for `POST /api/v1/invoice-drafts`, maps it to the approved Problem Details response, and
+   bootstraps a safe correlation value without evaluating Company or correlation validity. It
+   delegates every other method, path, status, and failure through `RoutingContext.next()`.
+2. After routing and before entity deserialization, one
+   `@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
+   Jakarta REST `@NameBinding` evaluates Company-header validity, correlation validity, and
+   idempotency-key syntax in exactly that order. It stores only the accepted mapped values in
+   request-local API state.
+3. Jackson deserialization and Bean Validation perform representation validation only after that
+   gate passes. `quarkus.jackson.fail-on-unknown-properties=true` enforces strict bodies, and the
+   built-in Jackson mismatched-input mapper is disabled with
+   `quarkus.rest.exception-mapping.disable-mapper-for=io.quarkus.resteasy.reactive.jackson.runtime.mappers.BuiltinMismatchedInputExceptionMapper`
+   so the feature mapper returns the approved stable response.
+
+The route failure handler and request gate share safe correlation initialization: absent input
+generates a UUID, valid input is preserved, and invalid input is replaced without allowing a stage
+3 error to overtake stage 1 or 2. The resource method is invoked only after stage 5. It then calls
+the application `RequestClock` exactly once, derives the immutable request instant carried by
+`CreateInvoiceDraftCommand`, and performs no later clock read for that command. Application
+orchestration begins at normalized-content generation (stage 6), continues through
+replay/conflict, business/reference/domain validation and calculation, and ends with atomic
+persistence (stage 12). HTTP headers, request-local API state, and payload representations never
+enter application logic.
 
 ## Reactive and Resource Boundary Design
 
@@ -220,11 +243,13 @@ OpenAPI contract defines no security scheme/requirement, Authorization header, `
 `COMPANY_CONTEXT_REQUIRED`; reject repeated/malformed/nil as `COMPANY_CONTEXT_INVALID`; normalize
 accepted UUID to lowercase hyphenated form. CompanyId never appears in path/query/body.
 
-**Correlation Contract**: Initialize correlation at the HTTP boundary after Company validation and
-before idempotency-key validation. Preserve one trimmed safe value of 1–64 approved ASCII
-characters; generate a UUID when absent. Blank, repeated, over-length, or unsafe supplied values
-MUST NOT be echoed; generate a safe replacement UUID and return `INVALID_REQUEST` when correlation
-validation governs. Correlation never affects idempotency equivalence.
+**Correlation Contract**: Bootstrap one safe correlation value at the earliest HTTP boundary so
+payload-size and Company errors also carry it; evaluate correlation validity as FR-041 stage 3,
+after Company validation and before idempotency-key validation. Preserve one trimmed safe value of
+1–64 approved ASCII characters and generate a UUID when absent. Blank, repeated, over-length, or
+unsafe supplied values MUST NOT be echoed; generate a safe replacement UUID and return
+`INVALID_REQUEST` only when correlation validation governs. Correlation never affects idempotency
+equivalence.
 
 **Company Ownership Scoping**: API maps to application `CompanyId`; the command carries it; the
 aggregate stores it immutably; response returns it. Existing-draft repository reads/mutations use
@@ -264,7 +289,10 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 is the only independently authored contract. `src/main/resources/META-INF/openapi.yaml` is a
 byte-for-byte runtime publication copy created from that canonical file and MUST NOT be edited as a
 second contract. Contract tests parse and resolve both files and fail unless their bytes and
-semantics are identical.
+semantics are identical. Runtime configuration MUST set `mp.openapi.scan.disable=true`, preventing
+SmallRye OpenAPI from merging annotation-scanned endpoint models into the static contract. The
+packaged JVM suite MUST fetch `/q/openapi`, resolve the served document, prove semantic equality to
+the canonical contract, and reassert SC-024 against what the running service actually publishes.
 
 The contract contains no Company-not-found/inactive/unavailable/timeout/authorization result and
 no authentication or authorization result.
@@ -377,7 +405,8 @@ is planned.
 | Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | numeric maxima/overflow, invalid/unsupported/calculated input, and midnight/replay vectors |
 | Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
-| API errors/correlation | Contract/integration | exact code/status, safe Problem Details, supplied/generated/replacement correlation | blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
+| API errors/correlation | Contract/integration | ordered upload/header/entity gate; exact code/status; safe Problem Details; supplied/generated/replacement correlation | Content-Length/chunked over-limit; malformed JSON plus earlier header failure; blank/repeated/unsafe/over-length correlation; 400/409/413/422/503/504/500; no 401/403 |
+| Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
 | Performance/resources | Warmed packaged JVM + PostgreSQL | all budgets in operational requirements | max payload, 50-way contention, pool recovery, no blocked event loop |

@@ -39,7 +39,7 @@ never starts, stops, partitions, or otherwise changes a performance measurement.
 | Profile | Load | Required outcome |
 |---------|------|------------------|
 | Typical new draft | At most 10 lines, 2 payments, 5 additional entries; warmed JVM | p95 ≤ 750 ms; p99 ≤ 1.5 s |
-| Maximum valid draft | 500 lines, 10 payments, 15 additional entries, body ≤ 2 MiB | p95 ≤ 3 s; p99 ≤ 5 s |
+| Maximum valid draft | 500 lines, 8 payments, 15 additional entries, body ≤ 2 MiB | p95 ≤ 3 s; p99 ≤ 5 s |
 | Equivalent replay | Existing binding and complete aggregate | p95 ≤ 250 ms; p99 ≤ 500 ms |
 | Idempotency conflict | Existing binding, different fingerprint | p95 ≤ 250 ms; p99 ≤ 500 ms |
 | Same-scope concurrency | 50 concurrent equivalent commands | All terminate within 10 s; exactly one draft and binding; no pool starvation after completion |
@@ -63,7 +63,7 @@ implements that approved baseline unchanged.
 
 ## Capacity and Resource Safety
 
-- Accept at most 500 invoice lines, 10 payments, and 15 additional-information entries.
+- Accept at most 500 invoice lines, 8 payments, and 15 additional-information entries.
 - Bound request body at 2,097,152 bytes.
 - Enforce quantity `numeric(12,6)`, monetary `numeric(17,2)`, and percentage-rate `numeric(5,2)`
   envelopes in representation, calculation, persistence, and response paths. Individually valid

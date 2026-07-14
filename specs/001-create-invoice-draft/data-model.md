@@ -304,7 +304,7 @@ InvoiceDraft (companyId, id)
 ├── 1..500 InvoiceLine
 │   └── exactly 1 InvoiceLineTax
 ├── 1..n InvoiceTaxTotal
-├── 1..10 InvoicePayment
+├── 1..8 InvoicePayment
 ├── 0..15 InvoiceAdditionalInformation
 └── exactly 1 InvoiceDraftIdempotency after successful creation
 ```

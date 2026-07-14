@@ -163,6 +163,13 @@ Combined-failure vectors MUST prove:
 - invalid correlation plus invalid idempotency key returns the correlation `INVALID_REQUEST`;
 - changing, omitting, or invalidating correlation never changes idempotency equivalence.
 
+Run the payload-size vectors both with `Content-Length` and with chunked transfer. The Quarkus HTTP
+upload limit must produce the feature's `413` Problem Details and safe correlation before REST
+entity decoding. For bodies within the limit, the single pre-entity request gate must evaluate
+Company, correlation, and idempotency headers before Jackson/Bean Validation evaluates the body.
+Malformed JSON or an unknown property combined with an earlier invalid header must therefore return
+the earlier header outcome.
+
 ## 7. Verify Strict Request Fields
 
 Add each prohibited property separately:
@@ -236,6 +243,8 @@ Using the exact approved baseline identifiers, validate at least:
 - caller selection of the appropriate published tax rule without service-side product
   classification, including the 5% construction-material applicability boundary;
 - payment mismatch and duplicate payment method;
+- exactly 8 distinct approved positive payment methods accepted when amounts reconcile, and 9
+  payments rejected before persistence;
 - current date derived from the single `requestCreationInstant`, past/future/impossible rejection,
   a commit crossing Guayaquil midnight, and later-date replay;
 - text and collection maxima plus maximum-plus-one rejection;
@@ -285,7 +294,9 @@ request duration but correlation values never become metric labels or idempotenc
 
 The packaged JVM smoke suite is mandatory and covers migration, startup, OpenAPI, health, create,
 normalization, date capture, monetary envelopes, replay, conflict, rollback, unavailable/timeout,
-and correlation using the exact approved seeds.
+and correlation using the exact approved seeds. Its OpenAPI check fetches `/q/openapi` from the
+running service, resolves it, compares it semantically with the canonical contract, and verifies
+header-only Company context plus the absence of security, Authorization, `401`, and `403` content.
 
 Native support is optional. If claimed, record both build and runtime evidence for the same critical
 paths using the approved seeds. Otherwise document native as deferred or unsupported with evidence

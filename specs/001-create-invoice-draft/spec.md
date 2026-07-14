@@ -11,7 +11,9 @@ for review before any fiscal identifier allocation or SRI interaction."
 
 **Approval Note**: Constitution v2.0.0 is approved on `main` and `origin/main`; the requirements
 checklist is complete; the reference-data baseline is approved; no material Pending Functional
-Validation remains; and this feature may proceed to task generation.
+Validation remains; and this feature may proceed to task generation. Post-generation analysis
+remediation aligns the positive-payment capacity with the eight approved unique methods and
+clarifies that IVA category is the rule's immutable family rather than a separate entity.
 
 ## Clarifications
 
@@ -63,7 +65,7 @@ Validation remains; and this feature may proceed to task generation.
 - Q: How should draft creation handle client-supplied calculated monetary fields? → A: Reject every
   request containing a system-calculated input field; such values are never ignored, compared, or
   persisted.
-- Q: What maximum collection counts should one draft allow? → A: At most 500 invoice lines, 10
+- Q: What maximum collection counts should one draft allow? → A: At most 500 invoice lines, 8
   payments, and 15 additional-information entries.
 - Q: What text-boundary policy should draft inputs use? → A: SRI-aligned bounded text: 25-character
   product codes; 300-character descriptions, buyer names, addresses, and additional-information
@@ -237,7 +239,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 8. **Given** a valid draft request, **when** creation succeeds, **then** no official sequential
    number is reserved, no access key is generated, no XML is generated or signed, no certificate
    is required, no notification is sent, and no SRI communication occurs.
-9. **Given** an inactive buyer identification type, tax rule, tax category, or payment method,
+9. **Given** an inactive buyer identification type, IVA tax rule, or payment method,
    **when** draft creation is attempted, **then** the request is rejected and no draft is persisted.
 10. **Given** a request body supplies `companyId`, **when** strict
     request-body validation is performed, **then** the property is rejected as unknown or
@@ -302,10 +304,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     tax base, tax amount, grouped tax total, subtotal before taxes, total discount, or grand total,
     **when** draft creation is attempted, **then** a stable calculated-field validation error is
     returned and no draft or child data is persisted.
-29. **Given** otherwise valid data containing exactly 500 invoice lines, 10 positive payments, and
+29. **Given** otherwise valid data containing exactly 500 invoice lines, 8 positive payments, and
     15 additional-information entries, **when** the payment sum matches the positive grand total,
     **then** the collection counts are accepted.
-30. **Given** a request containing more than 500 invoice lines, more than 10 payments, or more than
+30. **Given** a request containing more than 500 invoice lines, more than 8 payments, or more than
     15 additional-information entries, **when** draft creation is attempted, **then** the request is
     rejected and no draft or child data is persisted.
 31. **Given** otherwise valid text values exactly at their approved maximum lengths and formats,
@@ -437,8 +439,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - A caller MUST select an effective tax rule and MUST NOT supply a tax code or rate as line input.
   A catalog tax rule whose configured rate exceeds two decimal places MUST be rejected as invalid
   reference data rather than rounded.
-- Every line MUST select exactly one tax rule from the IVA tax family. The rule and its parent tax
-  category MUST be active, and the rule's effective period MUST include the emission date.
+- Every line MUST select exactly one active tax rule whose immutable family is `IVA`, and the
+  rule's effective period MUST include the emission date. There is no separate parent tax-category
+  lifecycle or reference entity in this feature.
 - Configured percentage-rate IVA, IVA 0%, not subject to IVA, and exempt from IVA MUST be supported.
   IVA 0%, not subject to IVA, and exempt from IVA MUST remain distinct treatments and tax-total
   groups even though each produces a zero tax amount.
@@ -558,7 +561,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   selected IVA tax rule. Quantity and unit price MUST contain no more than six fractional digits.
   The code MUST contain 1 to 25 SRI-valid alphanumeric characters and the description MUST contain
   1 to 300 characters.
-- **FR-011**: Each selected IVA tax rule and its tax category MUST be active, and the rule's
+- **FR-011**: Each selected tax rule MUST be active, MUST have immutable family `IVA`, and its
   effective period MUST include the draft emission date. Supported rules MUST represent configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA. Any other tax or multiple
   simultaneous taxes on one line MUST be rejected as unsupported. The caller MUST select the tax
@@ -575,7 +578,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-013**: A draft MUST contain at least one payment and every payment MUST select an active
   payment method. When the rounded grand total is greater than `0.00`, every payment amount MUST be
   greater than `0.00` and no greater than `999999999999999.99`, and the draft MUST contain no more
-  than 10 payments. When the rounded grand total is `0.00`, the draft MUST contain exactly one
+  than 8 payments. When the rounded grand total is `0.00`, the draft MUST contain exactly one
   payment with amount `0.00`. A selected payment method MUST appear at most once within the draft.
 - **FR-014**: The exact sum of two-decimal payment amounts MUST equal the system-calculated
   two-decimal grand total after the DR-010 rounding pipeline is applied.
@@ -840,7 +843,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   non-negative unit price and discount, exactly one applicable IVA tax rule, and calculated
   amounts.
 - **Tax Rule**: Approved, versioned, effective rule identified by a stable published UUID and
-  combining an official code, tax category, treatment, rate, applicability period, active state,
+  combining an official code, immutable `IVA` family, treatment, rate, applicability period, active state,
   catalog version, official source, and calculation behavior. It represents configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA and is captured for review at
   draft creation.
@@ -903,7 +906,7 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-014**: Every request containing one or more system-calculated monetary fields is rejected
   with the same stable error category and persists no draft or child data, regardless of whether a
   supplied value matches the system's calculation.
-- **SC-015**: Drafts at the limits of 500 invoice lines, 10 positive payments, and 15
+- **SC-015**: Drafts at the limits of 500 invoice lines, 8 positive payments, and 15
   additional-information entries are accepted when otherwise valid, and every request exceeding
   any limit is rejected without persisted draft data.
 - **SC-016**: Every text field at its approved length and format boundary is accepted when otherwise

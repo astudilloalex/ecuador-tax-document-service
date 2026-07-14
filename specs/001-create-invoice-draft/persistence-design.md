@@ -64,6 +64,10 @@ independently ordered; `source_valid_to` requires `source_valid_from`; and Flywa
 overlapping active target intervals for the same official tax/percentage code. Every column is
 `NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
+There is no separate tax-category table or lifecycle. The rule's immutable `family=IVA` value is
+the complete category representation for this feature, while the rule row owns activity and
+effectivity.
+
 `payment_method_catalog` contains exactly: `id uuid`, `official_code varchar(8)`,
 `official_label varchar(160)`, `display_name varchar(100)`, `source_valid_from date`, nullable
 `source_valid_to date`, `target_valid_from date`, nullable `target_valid_to date`, `active boolean`,

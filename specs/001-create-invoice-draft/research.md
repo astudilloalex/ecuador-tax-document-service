@@ -305,3 +305,36 @@ No exact governing checksum algorithm was located in the approved sources for dr
 Ecuadorian identity-card validation. Under the approved feature policy, both use explicitly named
 `FORMAT_ONLY` strategies. This is a resolved scope decision: checksum and registry verification are
 outside Create Invoice Draft, not deferred implementation work.
+
+## 14. Ordered HTTP Gate and Authoritative Runtime OpenAPI
+
+**Decision**: Enforce the 2,097,152-byte request limit at the Quarkus HTTP upload-limit route,
+before Quarkus REST dispatch. A CDI `Router` observer registers a Vert.x failure handler that owns
+only status `413` for `POST /api/v1/invoice-drafts`, converts that failure into the approved Problem
+Details response, and bootstraps a safe correlation identifier without evaluating Company or
+correlation validity; every other failure continues to its existing handler. After routing and
+before entity deserialization, one `@ServerRequestFilter(nonBlocking = true)` restricted to the
+create resource method by a custom Jakarta REST `@NameBinding` evaluates Company, correlation, and
+idempotency-key headers in FR-041 order. Only a request that passes those header stages reaches
+Jackson deserialization and Bean Validation. Strict unknown-property rejection is explicitly
+enabled, and Quarkus' built-in Jackson input mapper is disabled so the feature's stable mapper owns
+representation failures.
+
+The canonical OpenAPI file remains the only independently authored contract. Runtime publication
+sets `mp.openapi.scan.disable=true`, because Quarkus otherwise combines a static document with a
+model scanned from application endpoints. Static-file equality is verified separately from a
+packaged-runtime test that fetches `/q/openapi`, resolves the served document, and proves semantic
+equality plus the SC-024 Company-header and security-absence invariants.
+
+**Rationale**: The upload-limit route precedes REST processing, so a Jakarta REST mapper alone
+cannot prove the required earliest failure or safe correlation response. One pre-entity header gate
+prevents typed DTO decoding from overtaking header precedence. Disabling OpenAPI scanning prevents
+runtime annotations or extension defaults from silently augmenting the approved static contract.
+
+**Official evidence**:
+
+- [Quarkus HTTP route ordering and upload-limit route](https://quarkus.io/guides/http-reference#built-in-route-order-values)
+- [Quarkus CDI `Router` observation](https://quarkus.io/guides/reactive-routes#using-the-vert-x-web-router)
+- [Quarkus REST request filters and Jackson exception mapping](https://quarkus.io/guides/rest#request-or-response-filters)
+- [Quarkus strict Jackson unknown-property configuration](https://quarkus.io/guides/rest-json#configuring-json-support)
+- [Quarkus static OpenAPI publication and scan disabling](https://quarkus.io/guides/openapi-swaggerui#loading-openapi-schema-from-static-files)
