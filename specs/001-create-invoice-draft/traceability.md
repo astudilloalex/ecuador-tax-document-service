@@ -8,11 +8,29 @@ rows, and 8 payment rows under `SRI-OFFLINE-2.32-TARGET-1`, using deterministic 
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`. Constitution v2.0.0 is approved on `main`, and the
 reconciled specification and plan contain no active governance blocker.
 
+## Scenario Timing Model
+
+All request-processing evidence in this matrix uses one of these normative timing classes:
+
+1. **Non-deadline scenario precondition**: unless a scenario explicitly tests deadline
+   arbitration, its controlled request deadline remains unexpired until the tested stage
+   conclusively selects the described terminal outcome. This includes success, Company/correlation
+   header validation, replay/conflict, business validation, calculation, and persistence outcomes
+   conclusively known before expiry.
+2. **Deadline-race behavior**: deadline-focused evidence independently controls stage completion
+   and deadline expiry; the first conclusively selected terminal outcome wins and cannot be
+   replaced by a later signal.
+3. **Deadline-first behavior**: when expiry occurs before another outcome is conclusively selected,
+   FR-041 requires `504 REQUEST_TIMEOUT`.
+
+The non-deadline precondition isolates the business behavior under test and never weakens or
+overrides FR-041.
+
 ## Functional Requirements
 
 | ID | Design and contract evidence | Acceptance / success evidence | Planned verification |
 |----|------------------------------|-------------------------------|----------------------|
-| `FR-001` | OpenAPI `X-Company-Id`; `error-catalog.md` Company errors | Scenarios 1, 6, 47, 48; `SC-006` | API presence, blank, repeated, malformed, nil, safe-correlation, and zero-state tests |
+| `FR-001` | OpenAPI `X-Company-Id`; `error-catalog.md` Company errors | Scenarios 1, 6, 47, 48; `SC-006`; non-deadline outcomes require conclusive classification before expiry | T029/T032 presence, blank, repeated, malformed, nil, safe-correlation, and zero-state tests prove stage-first `400`; T032 separately proves deadline-first `504` and that a selected `400` is not replaced |
 | `FR-002` | OpenAPI operation/header/body; `plan.md` API boundary | Scenarios 1, 10, 34, 47, 48; `SC-024`, `SC-025` | Contract test proves canonical UUID and no Company path/query/body field |
 | `FR-003` | `plan.md` Company boundary; no Company port contract | Scenarios 35, 41, 43; `SC-023` | Valid externally unknown UUID succeeds; architecture test proves zero lookup |
 | `FR-004` | OpenAPI `emissionPointId`; `data-model.md` root | Scenarios 1, 34; `SC-007`, `SC-022` | UUID syntax/canonicalization, persistence, response, and no ownership lookup |
@@ -52,7 +70,7 @@ reconciled specification and plan contain no active governance blocker.
 | `FR-038` | Draft-vs-issuance model exclusions | Scenarios 8, 41, 42, 44; `SC-005`, `SC-022`, `SC-023`, `SC-025` | Schema/response/dependency inspection proves no snapshot or issuance data |
 | `FR-039` | OpenAPI and build/config negative boundary | Scenario 43; `SC-023`, `SC-024` | Zero security scheme/requirement/Auth/401/403/dependency/config tests |
 | `FR-040` | Clean Architecture mapping in `plan.md` | Scenarios 34, 43; `SC-017`, `SC-023` | API maps to application `CompanyId`; dependency tests reject HTTP/security context below API |
-| `FR-041` | `error-catalog.md` ordered stages plus cross-cutting deadline; shared correlation classifier; atomic terminal-outcome state | Scenarios 45–46, 57–58; `SC-026`, `SC-033` | Controlled no-sleep stage-first/deadline-first matrices cover payload, headers, replay/conflict, validation, calculation, known persistence outcome, and unresolved commit; no later signal replaces the winner |
+| `FR-041` | `error-catalog.md` ordered stages plus cross-cutting deadline; shared correlation classifier; atomic terminal-outcome state; global Scenario Timing Assumption | Scenarios 45–46, 57–58; `SC-026`, `SC-033` | T032 configures non-deadline scenarios so the tested stage completes conclusively before expiry, while controlled no-sleep deadline races independently drive stage-first and deadline-first payload, header, replay/conflict, validation, calculation, known-persistence, and unresolved-commit outcomes; first conclusive selection wins and deadline-first returns `504` |
 | `FR-042` | Quarkus HTTP upload limit and exclusive feature 413 failure handler; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027`, `SC-033` | Exact 2 MiB proceeds; over-limit-first Content-Length/chunked bodies preserve valid correlation or replace absent/invalid input, never emit correlation `400`, perform no database operation, and return 413; deadline-first bodies return 504 |
 | `FR-043` | Earliest-route monotonic deadline owner; aggregate/reference remaining-budget propagation; persistence/error/timeout and post-response-commit design | Scenarios 24, 45–46; `SC-002`, `SC-012`, `SC-026`, `SC-028` | Controlled deadline races, both DB-timeout minimum branches, exhausted reference budget with no query, confirmed rollback zero state, unresolved-commit replay, and post-response-commit telemetry-only/no-second-write evidence |
 | `FR-044` | OpenAPI decimal constraints; domain/data numeric envelopes | Scenarios 49, 50; `SC-029` | API/domain/intermediate/group/payment/persistence/response boundary and overflow vectors |
@@ -93,12 +111,12 @@ reconciled specification and plan contain no active governance blocker.
 
 | ID | Requirements and design traced | Observable evidence |
 |----|--------------------------------|---------------------|
-| `SC-001` | `FR-016`–`FR-022`, `FR-037`; aggregate, response and transaction designs | Every logically new valid vector commits exactly one complete USD `DRAFT` and returns every `FR-022` field |
+| `SC-001` | `FR-016`–`FR-023`, `FR-030`, `FR-037`, `FR-041`; aggregate, response, idempotency, and transaction designs | Under the non-deadline precondition, every logically new valid vector conclusively selects success before expiry, atomically commits exactly one complete USD `DRAFT` plus children and Company-scoped binding, returns the approved `201`/every `FR-022` field and has no SRI side effect; deadline-first uses `504 REQUEST_TIMEOUT` instead |
 | `SC-002` | `FR-001`, `FR-020`, `FR-021`, `FR-032`, `FR-042`–`FR-044` | Row-count assertions show zero root/child/binding state only for confirmed pre-commit rejection or complete rollback; uncertain/post-commit vectors assert same-scope replay and no duplicate |
 | `SC-003` | `FR-012`, `FR-014`; `DR-002`–`DR-010` | Golden calculations identical across repetitions, persistence, packaged JVM, and claimed native runtime |
 | `SC-004` | `DR-002`–`DR-005`, `DR-009`, `DR-010` | `2 × 10.00 − 5.00` at 15% always yields `20.00/15.00/2.25/17.25` |
 | `SC-005` | `FR-017`, `FR-018`, `FR-023`, `FR-038` | Dependency/trace/storage audit records zero issuance/SRI/PDF/notification effects |
-| `SC-006` | `FR-001`, `FR-002`, `FR-025`, `FR-026` | Complete Company-header matrix returns correct safe code/correlation and zero state |
+| `SC-006` | `FR-001`, `FR-002`, `FR-025`, `FR-026`, `FR-041` | Under the non-deadline precondition, the complete Company-header matrix conclusively selects the applicable safe correlated `400` and zero state before expiry; controlled races prove deadline-first `504` and that a stage-first Company `400` remains authoritative |
 | `SC-007` | `FR-004`, `FR-016`–`FR-019`, `FR-022`; `DR-020`, `DR-023` | Accepted/replayed representation lets client review CompanyId, opaque emissionPointId, buyer, lines, taxes, payments, USD totals, DRAFT and timestamps without issuance |
 | `SC-008` | `FR-017`, `FR-023`, `FR-038` | Acceptance suite runs without update/delete/issuance/XML/signature/SRI/PDF/notification facilities |
 | `SC-009` | `FR-010`, `FR-011`; `DR-001`, `DR-005`, `DR-008` | Exactly one effective IVA rule per accepted line; unsupported/multiple rejected without state |
@@ -129,14 +147,21 @@ reconciled specification and plan contain no active governance blocker.
 
 ## Acceptance Scenario Coverage
 
+Every request-processing row below that does not explicitly test a deadline race inherits the
+non-deadline scenario precondition defined above; its unqualified success, replay, conflict, `400`,
+`422`, `500`, or `503` outcome therefore means that the tested stage conclusively completed before
+expiry. AS-045 and AS-046 explicitly exercise deadline arbitration and instead prove both the
+stage-first winner and deadline-first `504`. Non-request readiness or static boundary-review rows
+do not define a deadline oracle.
+
 | Scenario | Primary trace | Planned observable evidence |
 |----------|---------------|-----------------------------|
-| `AS-001` | `FR-001`, `FR-020`, `FR-022`, `FR-037` | Valid header and content commit one complete draft |
+| `AS-001` | `FR-001`, `FR-020`, `FR-022`, `FR-037`, `FR-041` | Under the non-deadline precondition, valid header and content conclusively select success and commit one complete draft; deadline-first follows FR-041 |
 | `AS-002` | `FR-012`; `DR-002`–`DR-005` | 15% mathematical vector yields 20.00/15.00/2.25/17.25 without universal-rate claim |
 | `AS-003` | `FR-010`; `DR-003`, `DR-004` | Discount greater than gross rejects with zero state |
 | `AS-004` | `FR-009` | Empty line collection rejects with zero state |
 | `AS-005` | `FR-014` | Payment mismatch rejects with zero state |
-| `AS-006` | `FR-001`, `FR-025` | Missing/blank Company header returns `COMPANY_CONTEXT_REQUIRED` |
+| `AS-006` | `FR-001`, `FR-025`, `FR-041` | Missing/blank Company classification completed before expiry returns `COMPANY_CONTEXT_REQUIRED`; deadline-first returns `REQUEST_TIMEOUT` |
 | `AS-007` | `FR-007`, `FR-028`; `DR-014` | Invalid approved buyer format rejects |
 | `AS-008` | `FR-023` | Successful create has zero fiscal/SRI/notification side effects |
 | `AS-009` | `FR-007`, `FR-011`, `FR-013` | Inactive or ineffective reference rejects |
@@ -177,8 +202,8 @@ reconciled specification and plan contain no active governance blocker.
 | `AS-044` | `FR-005`, `FR-038` | Issuer/fiscal/snapshot request fields reject |
 | `AS-045` | `FR-026`, `FR-041`, `FR-042` | Over-limit-first body returns 413, preserves valid or safely replaces absent/invalid correlation without 400 or DB work; deadline-first slow body returns 504 |
 | `AS-046` | `FR-021`, `FR-032`, `FR-041`, `FR-043` | Confirmed pre-deadline rollback/failure returns its approved outcome and zero state; unresolved-at-deadline returns uncertain 504 and same-scope replay prevents duplication |
-| `AS-047` | `FR-001`, `FR-002` | Malformed/nil Company header returns `COMPANY_CONTEXT_INVALID` |
-| `AS-048` | `FR-001`, `FR-002` | Multiple Company values return `COMPANY_CONTEXT_INVALID` |
+| `AS-047` | `FR-001`, `FR-002`, `FR-041` | Malformed/nil Company classification completed before expiry returns `COMPANY_CONTEXT_INVALID`; deadline-first returns `REQUEST_TIMEOUT` |
+| `AS-048` | `FR-001`, `FR-002`, `FR-041` | Multiple-value Company classification completed before expiry returns `COMPANY_CONTEXT_INVALID`; deadline-first returns `REQUEST_TIMEOUT` |
 | `AS-049` | `FR-010`, `FR-044`; `DR-010` | Quantity/price/money maxima accept when totals remain in range |
 | `AS-050` | `FR-044`; `DR-010` | Any input/intermediate/group/total overflow returns `MONETARY_RANGE_EXCEEDED` |
 | `AS-051` | `FR-006`, `FR-019`; `DR-012` | Pre-midnight request retains derived date across commit |
@@ -210,13 +235,14 @@ reconciled specification and plan contain no active governance blocker.
 
 | Controlled race | Required winner | Focused evidence |
 |-----------------|-----------------|------------------|
+| Non-deadline acceptance scenario | Tested stage conclusively selects its described terminal outcome before expiry | T032 configures a non-expiring or sufficiently remaining controlled deadline; this is stage-first evidence and not a competing `504` oracle |
 | Payload size becomes conclusively over 2 MiB before expiry | `413 REQUEST_PAYLOAD_TOO_LARGE` | T030–T032 preserve valid or replace absent/invalid correlation, emit no `400`, and prove no database call |
 | Deadline expires before payload size is conclusive | `504 REQUEST_TIMEOUT` | T031–T032 controlled slow-body deadline signal; later size result cannot replace 504 |
 | Company/correlation/idempotency invalidity becomes conclusive before expiry | Approved `400` | T029–T032 controlled stage-first header vectors |
 | Deadline expires before header classification is conclusive | `504 REQUEST_TIMEOUT` | T032 controlled deadline-first header vectors; no entity decode or later work |
 | Replay/conflict, validation/calculation, rollback/failure, or commit becomes conclusive before expiry | Approved `200`/`201`/`409`/`422`/`500`/`503` result | T027/T032/T036 controlled stage-first application and persistence vectors |
 | Deadline expires while lookup or commit outcome is unresolved | `504 REQUEST_TIMEOUT`, uncertain when commit may be in flight | T027/T032/T036 same-Company/key/content replay resolves state without a duplicate |
-| Deadline expires after HTTP response commitment | Existing status/body remains authoritative; telemetry only | T032/T038/T039/T090 prove no 504, second response/database write, mutation, or compensation and record the safe event |
+| Deadline expires after HTTP response commitment | Existing status/body remains authoritative; telemetry only | T032/T038/T039/T083 prove no 504, second response/database write, mutation, or compensation and record the safe event |
 
 ## Cross-Cutting Constitutional Evidence
 

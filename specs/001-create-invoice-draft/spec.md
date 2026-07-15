@@ -198,6 +198,20 @@ Category`, `Tax Rate`, `Tax Rule`, `Payment Method`, `Payment`, `Additional Info
 `docs/migration/terminology-mapping.md`. Exact official terms such as `RUC`, SRI catalog codes,
 `Access Key`, and `Official Sequential Number` retain their mapped scope.
 
+## Scenario Timing Assumption
+
+Unless an acceptance scenario explicitly tests request-deadline arbitration, the scenario assumes
+that the request deadline remains unexpired until the described terminal outcome is conclusively
+selected. This global assumption governs all non-deadline acceptance scenarios, including normal
+successful creation; Company-header and correlation-header validation; idempotency replay and
+conflict; business validation; calculation; and persistence outcomes conclusively known before
+deadline expiry.
+
+This assumption exists only to isolate the business behavior under test. It does not override the
+cross-cutting deadline rules. If the request deadline expires before the described stage
+conclusively determines its outcome, FR-041 applies and the terminal response is `REQUEST_TIMEOUT`
+according to the approved deadline-arbitration rules.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Create and Review an Invoice Draft (Priority: P1)
@@ -929,8 +943,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 
 ### Measurable Outcomes
 
-- **SC-001**: In the approved acceptance suite, 100% of logically new valid create commands persist
-  exactly one complete invoice draft and return all fields required by FR-022.
+- **SC-001**: In the approved acceptance suite, 100% of logically new valid create commands whose
+  successful creation outcome is conclusively selected before the request deadline expires
+  atomically persist exactly one complete Invoice Draft aggregate with all child records and its
+  Company-scoped idempotency binding, retain the deterministic calculated values, return the
+  approved `201` successful response with every field required by FR-022, and perform no SRI
+  issuance side effect. If the deadline expires before successful creation is conclusively
+  selected, FR-041 governs and requires `REQUEST_TIMEOUT` under the approved deadline-arbitration
+  rules.
 - **SC-002**: In the approved validation and failure suite, 100% of confirmed pre-commit rejections
   and confirmed complete rollbacks leave zero draft, child, and idempotency-binding records, and
   rolled-back keys remain reusable. Uncertain commit and post-commit response-delivery outcomes make
@@ -944,9 +964,13 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **SC-005**: Every successful or failed draft-creation test records zero official sequential
   reservations, access keys, XML artifacts, signature operations, certificate reads, SRI calls,
   asynchronous integration jobs, notification events, PDFs, and notifications.
-- **SC-006**: Every tested missing, repeated, blank, malformed, or nil `X-Company-Id` is rejected with
-  `COMPANY_CONTEXT_REQUIRED` or `COMPANY_CONTEXT_INVALID` as applicable and leaves zero draft,
-  child, or idempotency records.
+- **SC-006**: Every tested missing, repeated, blank, malformed, or nil `X-Company-Id` condition that
+  is conclusively classified before the request deadline expires returns the approved HTTP `400`
+  `COMPANY_CONTEXT_REQUIRED` or `COMPANY_CONTEXT_INVALID` outcome as applicable, uses safe
+  correlation behavior, and leaves zero draft, child, or idempotency records. If the deadline
+  expires before Company-header classification completes, FR-041 requires HTTP `504`
+  `REQUEST_TIMEOUT`. A Company HTTP `400` conclusively selected before expiry remains authoritative
+  and MUST NOT be replaced by a later deadline signal.
 - **SC-007**: All accepted drafts expose enough persisted captured and calculated information for a
   billing client to review Company identifier, opaque emission-point identifier, buyer, lines,
   taxes, payments, totals, status, and timestamps without invoking any fiscal-issuance capability.

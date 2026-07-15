@@ -207,7 +207,7 @@ not assert that code, migrations, or runtime evidence already exist.
   12-stage failure precedence aligned? [Consistency]
   - Evidence: `spec.md` FR-025/FR-041–FR-044; `error-catalog.md` §Stable Outcomes/Failure
     Precedence; `plan.md` §Failure-Precedence Ownership ordered upload/pre-entity/entity pipeline;
-    OpenAPI responses; T030–T032/T081–T086.
+    OpenAPI responses; T030–T032/T081–T082/T084–T087.
 
 ## Sensitive Data, Correlation, Operations, and Runtime
 
