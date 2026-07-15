@@ -43,13 +43,13 @@ controls precede its evidence-first implementation; Definition of Done validatio
 **Purpose**: Establish the approved Java 25, Quarkus 3.33.2.1 LTS, Clean Architecture, and test
 tooling baseline before feature dependencies or source implementation.
 
-- [ ] T001 Align both Quarkus plugin and platform versions to 3.33.2.1 LTS per the approved runtime decision in `gradle.properties`
-- [ ] T002 Configure exactly the Quarkus-BOM-managed `quarkus-rest-jackson`, `quarkus-hibernate-validator`, `quarkus-hibernate-reactive-panache`, `quarkus-reactive-pg-client`, `quarkus-flyway`, `quarkus-jdbc-postgresql`, `quarkus-smallrye-openapi`, `quarkus-smallrye-health`, `quarkus-micrometer`, `quarkus-opentelemetry`, `quarkus-junit`, `quarkus-test-vertx`, `quarkus-test-hibernate-reactive-panache`, and `io.rest-assured:rest-assured` dependencies; Spotless `8.8.0` with google-java-format `1.35.0`; and JDK 25 `-Xlint:all -Werror` in `build.gradle.kts`
-- [ ] T003 [P] Establish the API capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/api/invoicedraft/package-info.java`
-- [ ] T004 [P] Establish the application capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/application/invoicedraft/package-info.java`
-- [ ] T005 [P] Establish the framework-free domain capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/domain/invoicedraft/package-info.java`
-- [ ] T006 [P] Establish the infrastructure capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/package-info.java`
-- [ ] T007 Configure sanitized Quarkus Database Dev Services with `docker.io/library/postgres:18.4`, Flyway, bounded persistence timeouts, and observability for tests in `src/test/resources/application.properties`; do not add clock or identifier test switches to configuration
+- [X] T001 Align both Quarkus plugin and platform versions to 3.33.2.1 LTS per the approved runtime decision in `gradle.properties`
+- [X] T002 Configure exactly the Quarkus-BOM-managed `quarkus-rest-jackson`, `quarkus-hibernate-validator`, `quarkus-hibernate-reactive-panache`, `quarkus-reactive-pg-client`, `quarkus-flyway`, `quarkus-jdbc-postgresql`, `quarkus-smallrye-openapi`, `quarkus-smallrye-health`, `quarkus-micrometer`, `quarkus-opentelemetry`, `quarkus-junit`, `quarkus-test-vertx`, `quarkus-test-hibernate-reactive-panache`, and `io.rest-assured:rest-assured` dependencies; Spotless `8.8.0` with google-java-format `1.35.0`; and JDK 25 `-Xlint:all -Werror` in `build.gradle.kts`
+- [X] T003 [P] Establish the API capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/api/invoicedraft/package-info.java`
+- [X] T004 [P] Establish the application capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/application/invoicedraft/package-info.java`
+- [X] T005 [P] Establish the framework-free domain capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/domain/invoicedraft/package-info.java`
+- [X] T006 [P] Establish the infrastructure capability boundary documented by the plan in `src/main/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/package-info.java`
+- [X] T007 Configure sanitized Quarkus Database Dev Services with `docker.io/library/postgres:18.4`, Flyway, bounded persistence timeouts, and observability for tests in `src/test/resources/application.properties`; do not add clock or identifier test switches to configuration
 
 **Checkpoint**: The build and four production boundaries match the approved plan without adding
 identity, Company, cache, broker, or fiscal-issuance capabilities.
