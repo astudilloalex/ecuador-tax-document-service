@@ -28,7 +28,7 @@ Logical persistence name: `invoice_draft`.
 | `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from `requestCreationInstant` in `America/Guayaquil` |
 | `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
 | `buyerIdentificationCatalogVersion` | approved version | `varchar(64)` | Yes | Version of the identification rule used for validation |
-| `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation |
+| `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation; codes `06`/`08` use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` |
 | `buyerLegalName` | validated text | `varchar(300)` | Yes | Trimmed, nonblank, no control characters |
 | `buyerAddress` | optional text | `varchar(300)` | No | Trimmed and valid when present |
 | `buyerEmail` | optional text | `varchar(254)` | No | One syntactically valid address |
@@ -38,7 +38,7 @@ Logical persistence name: `invoice_draft`.
 | `subtotalBeforeTaxes` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
 | `totalDiscount` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
 | `grandTotal` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
-| `createdAt` | `Instant` | `timestamptz` | Yes | Unambiguous commit-time audit instant |
+| `createdAt` | `Instant` | `timestamptz` | Yes | UTC value captured once inside the transaction after successful business validation and immediately before root persistence; persisted/returned unchanged after commit |
 | `updatedAt` | `Instant` | `timestamptz` | Yes | Initially equal to or after `createdAt` |
 
 Mandatory root constraints:
@@ -50,11 +50,22 @@ Mandatory root constraints:
 - non-negative stored totals;
 - a local composite reference from buyer identification code and catalog version to the approved
   identification-type catalog row;
+- type-conditional locale-independent ASCII checks, including `^[A-Za-z0-9]{1,20}$` for buyer
+  codes `06` and `08`;
 - `updated_at >= created_at`;
 - `UNIQUE (company_id, id)` to support local Company-consistent composite references.
 
-Every repository read or mutation that addresses an existing draft carries both CompanyId and
-draftId. This is persistence partitioning and aggregate consistency, not authorization.
+Every repository query or mutation involving the Invoice Draft aggregate or its idempotency binding
+includes and enforces authoritative CompanyId. Draft lookup uses CompanyId plus draftId; binding
+lookup uses CompanyId plus key hash; creation/mutation enforces CompanyId on root and composite
+binding integrity. Global VAT, payment-method, identification-type, and other immutable SRI
+reference catalogs are not Company-owned and have no Company filter or column. This is persistence
+partitioning and aggregate consistency, not authorization.
+
+`createdAt` is not PostgreSQL's physical commit timestamp. Persistence does not query or
+reconstruct it after commit and does not require `track_commit_timestamp`. The injectable clock
+returns one `java.time.Instant` inside the transaction at the point above; rollback prevents that
+value from becoming an exposed resource, and replay returns the originally persisted value.
 
 Correlation identifiers are not persisted on the aggregate. They remain request/response,
 structured-log, trace, and operational-event evidence because no approved business requirement
@@ -69,7 +80,7 @@ Logical persistence name: `invoice_line`.
 | `id` | `uuid` | Local primary key |
 | `invoiceDraftId` | `uuid` | Required local foreign key to `invoice_draft.id` |
 | `position` | `integer` | 1–500; unique within the draft; business-significant order |
-| `productCode` | `varchar(25)` | Trimmed approved alphanumeric value |
+| `productCode` | `varchar(25)` | Case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` after one surrounding SP/HTAB trim; no other normalization |
 | `description` | `varchar(300)` | Trimmed, nonblank text |
 | `quantity` | `numeric(12,6)` | `0.000001`–`999999.999999` |
 | `unitPrice` | `numeric(12,6)` | `0.000000`–`999999.999999` |
@@ -78,7 +89,8 @@ Logical persistence name: `invoice_line`.
 | `netAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
 | `lineTotal` | `numeric(17,2)` | Net plus tax; `0.00`–`999999999999999.99` |
 
-Constraints include `UNIQUE (invoice_draft_id, position)` and row-local non-negative/scale checks.
+Constraints include `UNIQUE (invoice_draft_id, position)`, locale-independent
+`CHECK (product_code ~ '^[A-Za-z0-9]{1,25}$')`, and row-local non-negative/scale checks.
 The maximum collection count is enforced before persistence and verified after aggregate loading;
 no speculative trigger is introduced.
 
@@ -169,7 +181,7 @@ Logical persistence name: `invoice_draft_idempotency`.
 | `requestFingerprint` | `bytea` | Yes | 32-byte SHA-256 of normalized client business content |
 | `normalizationVersion` | `smallint` | Yes | Positive version; initial value `1` |
 | `invoiceDraftId` | `uuid` | Yes | Bound local draft identifier |
-| `createdAt` | `timestamptz` | Yes | Successful binding instant |
+| `createdAt` | `timestamptz` | Yes | Same immutable transaction-captured UTC value as the bound draft |
 
 Required constraints:
 
@@ -284,8 +296,9 @@ Every column is `NOT NULL` except `source_valid_to` and `target_valid_to`.
 Flyway alone owns schema creation, initial baseline rows, and later catalog versions. The runtime
 has no catalog administration write path. A later official change adds a new immutable migration
 and versioned rows; it does not rewrite a committed migration or silently reinterpret a row used
-by an existing draft. These catalogs are local tax-document reference data, not Company master
-data.
+by an existing draft. These catalogs are locally persisted but globally governed tax-document
+reference data, not Company master data. They contain no `company_id`, and aggregate Company
+scoping does not apply to their reference lookups.
 
 ## Numeric Storage Boundary
 
@@ -317,8 +330,10 @@ behavior is not introduced by this plan.
 
 1. Capture `requestCreationInstant` exactly once and initialize safe correlation at the API
    boundary.
-2. Validate and normalize CompanyId, then validate correlation, idempotency key, and request
-   representation in the FR-041 order.
+2. Validate and normalize CompanyId, then validate correlation; in the API enforce exactly one
+   Idempotency-Key field value, trim surrounding ASCII SP/HTAB once, apply its stable
+   required/invalid/multiple outcome, and only then validate request representation in FR-041
+   order.
 3. Derive the expected emission date once in `America/Guayaquil`, then compute the key hash and
    request fingerprint under normalization version 1.
 4. Look up a binding by CompanyId and key hash.
@@ -326,14 +341,18 @@ behavior is not introduced by this plan.
    `IDEMPOTENCY_CONFLICT` when different.
 6. For an unbound command, validate local catalogs/domain rules and calculate all amounts using the
    fixed expected date.
-7. Persist root, children, and binding in one reactive PostgreSQL transaction; `createdAt` is the
-   confirmed commit instant, not the emission-date source.
+7. After all business validations succeed and inside one reactive PostgreSQL transaction, call the
+   injectable clock once immediately before root persistence; persist that UTC `Instant` unchanged
+   as draft/binding `createdAt`, then persist root, children, and binding. It becomes externally
+   observable only after commit is confirmed and is not the emission-date source or physical
+   commit timestamp.
 8. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
    in a fresh Company-scoped read.
 
 Every pre-commit failure leaves no aggregate or binding. A committed binding remains authoritative
 after response loss and has no time-based expiration while its draft exists. Equivalent replay
-returns the original emission date without current-date revalidation.
+returns the original emission date and originally persisted `createdAt` without current-date
+revalidation or timestamp reconstruction.
 
 ## Explicitly Excluded Data
 

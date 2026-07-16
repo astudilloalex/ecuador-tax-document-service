@@ -4,6 +4,9 @@
 
 **Input**: Clarified feature specification with Constitution v2.0.0 Company-context decisions
 
+**Implementation progression**: **BLOCKED before T017** by `GATE-GOV-001`. See
+`governance-nonconformity.md`; T001–T016 require retrospective review and real owner approval.
+
 ## Summary
 
 Deliver one synchronous internal `POST /invoice-drafts` operation under `/api/v1`. The API reads
@@ -84,8 +87,12 @@ unbounded retry
 
 **Time Boundary**: The API boundary captures one `requestCreationInstant` per new request and derives
 the expected emission date once in `America/Guayaquil`. The derived date remains fixed when commit
-crosses midnight. `createdAt` is the confirmed commit instant, and an equivalent replay returns the
-original date without current-date revalidation.
+crosses midnight. Separately, `createdAt` is the UTC `java.time.Instant` captured exactly once
+inside the persistence transaction, after all business validations succeed and immediately before
+the new Invoice Draft is persisted. The same immutable value is persisted and returned only after
+commit confirmation; rollback never exposes it and replay returns the original. It is not a
+PostgreSQL physical commit timestamp, requires no `track_commit_timestamp`, and is never queried or
+reconstructed after commit. The clock remains injectable and deterministic for tests.
 
 **Scale/Scope**: One Company partition and one Invoice Draft per logical command; no draft update,
 delete, fiscal issuance, other tax-document type, or Company administration
@@ -157,15 +164,19 @@ authoritative `main` and `origin/main` commit `137d1c8c59cc98402f0a1fed211a6cacc
 | Boundary consistency | PASS — idempotency/failure precedence approved | PASS — fingerprint, race arbitration, timeout/recovery outcomes complete |
 | API/async quality | PASS — synchronous observable result, stable errors | PASS — strict OpenAPI, Problem Details, correlation, no opaque job |
 | External adapters | PASS — none applicable | PASS — no Company/SRI/security port/client/health destination |
-| Testing | PASS — 58 scenarios and 33 success criteria | PASS — traceability maps every FR-001–FR-047, DR-001–DR-024, and SC-001–SC-033 |
+| Testing | PASS — 61 scenarios and 33 success criteria | PASS — traceability maps every FR-001–FR-047, DR-001–DR-024, SC-001–SC-033, and AS-001–AS-061 |
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
+| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **NON-CONFORMANT** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; `GOV-001` and `GATE-GOV-001` block T017 and later work |
 
-No constitutional deviation or complexity exception is requested. Phase 1 design and reference
-data are complete, and no material planning blocker remains.
+No constitutional complexity exception is requested. A workflow non-conformity exists because
+T001–T016 were implemented before the mandatory analysis gate; it is recorded without
+retroactive correction in `governance-nonconformity.md`.
 
-**Final planning gate**: PASS — Eligible for pre-task checklist regeneration
+**Current implementation gate**: **BLOCKED before T017** — retrospective review, deviation
+disposition, explicit owner approval, and a new analysis with no related CRITICAL finding are
+required.
 
 ## Clean Architecture Mapping
 
@@ -181,7 +192,7 @@ HTTP request
 
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
-| `api` | Own the one monotonic 10-second deadline from earliest routing through response completion; enforce FR-041 stages 1–5; initialize safe correlation for every outcome; capture one request instant after those stages pass; map transport inputs; return Problem Details | `application` | Persistence entities returned directly; Company/security clients |
+| `api` | Own the one monotonic 10-second deadline from earliest routing through response completion; enforce FR-041 stages 1–5, including exact Idempotency-Key cardinality/normalization/errors; initialize safe correlation; capture one request instant; map transport inputs; return Problem Details | `application` | Persistence entities returned directly; Company/security clients; HTTP/header concerns passed to domain |
 | `application` | Receive an already mapped CompanyId, fixed request instant, and transport-independent fixed deadline; enforce FR-041 stages 6–12, remaining-budget propagation, idempotency, use-case preconditions, and transaction-port orchestration | `domain`, Mutiny, application ports | HTTP headers/requests, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
 | `domain` | Own immutable CompanyId on Invoice Draft; buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
 | `infrastructure` | Implement local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache and clamp database work to the supplied remaining deadline budget | application ports/domain types | Company/SRI/security adapter, shared database, cache |
@@ -211,7 +222,8 @@ introduced.
 2. After routing and before entity deserialization, one
    `@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
    Jakarta REST `@NameBinding` evaluates Company-header validity, the stored correlation
-   classification, and idempotency-key syntax in exactly that order. Only this gate emits
+   classification, and idempotency-key presence/cardinality/one-time SP/HTAB trim/normalized
+   grammar in exactly that order. Only this gate emits
    `INVALID_REQUEST` for correlation invalidity, and only after Company validation passes. It stores
    only the accepted mapped values in request-local API state.
 3. Jackson deserialization and Bean Validation perform representation validation only after that
@@ -257,11 +269,14 @@ serialization may complete normally, and the safe
 resolves any response loss.
 
 The resource method is invoked only after stage 5. It calls the application `RequestClock` exactly
-once, derives the immutable request instant carried by `CreateInvoiceDraftCommand`, and performs no
-later wall-clock read for that command. Application orchestration begins at normalized-content
+once to derive the immutable request instant carried by `CreateInvoiceDraftCommand`. That instant
+is not reused as `createdAt`. For a logically new command only, persistence calls the injectable
+clock exactly once inside the transaction after all business validations succeed and immediately
+before root persistence, then stores that returned UTC Instant as immutable `createdAt`. There is no
+post-commit clock/database timestamp read. Application orchestration begins at normalized-content
 generation (stage 6), continues through replay/conflict, business/reference/domain validation and
 calculation, and ends with atomic persistence (stage 12). HTTP headers, Vert.x/REST request state,
-and payload representations never enter application logic.
+and payload representations never enter application or domain logic.
 
 ## Reactive and Resource Boundary Design
 
@@ -285,7 +300,19 @@ OpenAPI contract defines no security scheme/requirement, Authorization header, `
 
 **Company Header Contract**: Exactly one `X-Company-Id` is required. Trim; reject blank/missing as
 `COMPANY_CONTEXT_REQUIRED`; reject repeated/malformed/nil as `COMPANY_CONTEXT_INVALID`; normalize
-accepted UUID to lowercase hyphenated form. CompanyId never appears in path/query/body.
+accepted UUID to lowercase hyphenated form. Company identifiers are forbidden in request bodies
+and input schemas, and no path/query/token/session value substitutes for the header. Canonical
+`companyId` appears in the response only because the approved contract explicitly requires it.
+
+**Idempotency Header Contract**: `Idempotency-Key` is mandatory and single-valued after HTTP
+parsing. The API trims leading/trailing ASCII SP/HTAB exactly once, preserves internal characters
+and case, then validates 1–128 characters against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`.
+Missing returns `IDEMPOTENCY_KEY_REQUIRED`; blank/whitespace-only, over-length, control, non-ASCII,
+or other non-comma grammar failure returns `IDEMPOTENCY_KEY_INVALID`; repeated/parser-multiple or
+any comma-containing/comma-combined ambiguous value returns `IDEMPOTENCY_KEY_MULTIPLE`. No first
+value is selected. Only the normalized value enters lookup, hashing, and persistence. These rules
+remain in `api`; domain tests receive already normalized and validated values.
 
 **Correlation Contract**: Bootstrap one safe correlation value at the earliest HTTP boundary so
 payload-size and Company errors also carry it; evaluate correlation validity as FR-041 stage 3,
@@ -296,13 +323,21 @@ unsafe supplied values MUST NOT be echoed; generate a safe replacement UUID and 
 equivalence.
 
 **Company Ownership Scoping**: API maps to application `CompanyId`; the command carries it; the
-aggregate stores it immutably; response returns it. Existing-draft repository reads/mutations use
-CompanyId plus draftId. Idempotency uses CompanyId plus key hash. This is partitioning, not
-authorization.
+aggregate stores it immutably; response returns it. Every repository query or mutation involving
+the Invoice Draft aggregate or its idempotency binding includes and enforces authoritative
+CompanyId. This includes creation, draft lookup, duplicate/idempotency lookup, binding create/read,
+aggregate persistence mutation, and future feature operations for that aggregate. Global VAT,
+payment-method, identification-type, and other immutable SRI reference catalogs are not
+Company-owned and receive no Company columns or automatic Company filter. This is partitioning,
+not authorization.
 
 **Company Master-Data Boundary**: No Company/Issuer/establishment/emission lookup, validation,
 port, client, adapter, repository, table, shared persistence, cross-service foreign key/transaction,
 cache, replication, retry/timeout, health/readiness, fiscal context, or snapshot exists.
+
+The feature-level meaning of the Constitution's unqualified “bodies” and repository-scoping phrases,
+and the pending formal constitutional clarification, are recorded in
+`governance-nonconformity.md`. This plan does not amend Constitution v2.0.0 or its version metadata.
 
 **Sensitive Data**: Raw idempotency keys, normalized request content, buyer data, payloads, SQL,
 and internals are absent from errors/observability/binding storage. SHA-256 fingerprints and a
@@ -315,12 +350,15 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 
 - Effective operation: `POST /api/v1/invoice-drafts` (`/api/v1` server base plus
   `/invoice-drafts` resource path).
-- Required headers: `X-Company-Id`, `Idempotency-Key`.
+- Required headers: exactly one `X-Company-Id` and exactly one parsed field value for
+  `Idempotency-Key`; the latter follows the normalization, grammar, and three stable error codes
+  above.
 - Optional `X-Correlation-Id`: preserve one valid supplied value; generate a UUID when absent; for
   invalid input, never echo it, generate a safe replacement UUID, and return `INVALID_REQUEST` when
   that validation step governs.
-- Strict body schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown properties, and
-  calculated fields.
+- Strict request/input schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown
+  properties, and calculated fields. The response's explicitly contracted canonical `companyId`
+  does not weaken the input prohibition.
 - Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
   commercial/calculated draft, `createdAt`, and `updatedAt`.
 - New commit returns `201`; equivalent replay returns `200`; both identify replay state.
@@ -343,6 +381,22 @@ the canonical contract, and reassert SC-024 against what the running service act
 The contract contains no Company-not-found/inactive/unavailable/timeout/authorization result and
 no authentication or authorization result.
 
+## Executable Text-Repertoire Design
+
+`productCode` uses the existing authoritative OpenAPI rule, made explicit as case-sensitive ASCII
+`^[A-Za-z0-9]{1,25}$`. Passport (`06`) and foreign identification (`08`) use case-sensitive ASCII
+`^[A-Za-z0-9]{1,20}$`. For all three, the API trims leading/trailing ASCII SP/HTAB once, changes no
+internal character or case, and performs no case folding or Unicode normalization. Valid/invalid
+vectors are `ABC123`/`sku9` versus `ABC-123`/`ÁBC1`/26 characters for product codes, and
+`A1234567`/`EC9Z` versus `A-123`/`Á123`/21 characters for buyer values.
+
+OpenAPI patterns and bounds, Java API validation, domain invariants over normalized values,
+locale-independent PostgreSQL checks, and test fixtures MUST be equivalent. PostgreSQL POSIX
+`[[:alnum:]]` is not equivalent to these ASCII expressions. Because committed Flyway migrations
+are immutable and this remediation changes no migration, the observed T015 constraint differences
+are recorded for retrospective review in `governance-nonconformity.md`; any later correction must
+use a new migration after governance release.
+
 ## Data and External Consistency Design
 
 | Boundary/command | Intermediate states | Retry/idempotency | Duplicate handling | Timeout | Recovery/reconciliation | Observable outcome |
@@ -363,10 +417,16 @@ Detailed schema/constraint/transaction decisions are in `data-model.md` and
 Key invariants:
 
 - root `company_id uuid NOT NULL` and non-nil;
+- root `created_at timestamptz NOT NULL` stores the single immutable UTC Instant captured once
+  inside the write transaction after validation and immediately before persistence; the response
+  and replay return that exact value, with no physical-commit-timestamp query;
 - quantity/unit price columns use `numeric(12,6)`; monetary columns use `numeric(17,2)`; tax-rate
   columns use `numeric(5,2)` with range checks mirrored by pre-persistence validation;
+- product and applicable buyer-identification checks use the exact locale-independent ASCII
+  expressions above;
 - local children reference only the draft/line;
-- existing-root operations use CompanyId + draftId;
+- every aggregate/binding query or mutation uses authoritative CompanyId; global reference-catalog
+  reads do not;
 - binding uniqueness is `UNIQUE (company_id, idempotency_key_hash)`;
 - binding-to-root composite Company/draft foreign key;
 - SHA-256 key hash and request fingerprint are 32 bytes;
@@ -403,6 +463,7 @@ specs/001-create-invoice-draft/
 ├── operational-requirements.md
 ├── traceability.md
 ├── quickstart.md
+├── governance-nonconformity.md
 └── contracts/
     └── invoice-draft-api.openapi.yaml
 ```
@@ -448,13 +509,13 @@ is planned.
 
 | Requirement/risk | Level/environment | Observable invariant | Required negative/boundary evidence |
 |------------------|-------------------|----------------------|-------------------------------------|
-| Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company body/path/query rejected |
+| Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company request body/input/path/query rejected while explicit response CompanyId remains present |
 | Clean layer handoff | Architecture + application | Command has explicit CompanyId; aggregate immutable CompanyId | no HTTP/security/thread-local/Gateway types below API |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
 | Draft business rules | Domain/application | official buyer/IVA/date/decimal/zero/payment/text/collection outcomes | numeric maxima/overflow, invalid/unsupported/calculated input, and midnight/replay vectors |
-| Persistence/Flyway | Real PostgreSQL from empty | constraints, local child ownership, Company-scoped root access | no prohibited tables/fields; all write-phase rollbacks |
+| Persistence/Flyway | Real PostgreSQL from empty | exact ASCII constraints, local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, and immutable transaction-captured `createdAt` | no prohibited tables/fields/Company catalog columns; all write-phase rollbacks; no physical commit timestamp dependency |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
-| API errors/correlation/deadline | Contract/integration with controlled deadline signal | ordered upload/header/entity gate; exclusive 413 ownership; exact code/status; safe Problem Details; supplied/generated/replacement correlation; atomic first-conclusive outcome | Content-Length/chunked over-limit with valid correlation preserved or absent/invalid safely replaced and no DB call; deadline-first slow body/header/replay/validation/calculation; stage-first counterparts; post-response-commit expiry emits no 504/second write and records safe telemetry; malformed JSON plus earlier header failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
+| API errors/correlation/deadline | Contract/integration with controlled deadline signal | ordered upload/header/entity gate; mandatory exactly-one normalized Idempotency-Key and three stable errors; exclusive 413 ownership; exact code/status; safe Problem Details; supplied/generated/replacement correlation; atomic first-conclusive outcome | Missing/blank/whitespace/repeated/comma/over-length/grammar key vectors never select first; Content-Length/chunked over-limit with valid correlation preserved or absent/invalid safely replaced and no DB call; deadline-first slow body/header/replay/validation/calculation; stage-first counterparts; post-response-commit expiry emits no 504/second write and records safe telemetry; malformed JSON plus earlier header failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
 | Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
@@ -512,9 +573,13 @@ custom authentication framework.
 - Phase 1 API contract: `contracts/invoice-draft-api.openapi.yaml`.
 - Phase 1 validation guide: `quickstart.md`.
 - Supporting designs: `error-catalog.md`, `persistence-design.md`,
-  `idempotency-design.md`, `operational-requirements.md`, and `traceability.md`.
+  `idempotency-design.md`, `operational-requirements.md`, `traceability.md`, and the blocking
+  `governance-nonconformity.md` record.
 
-The requirements-quality artifacts are complete. Constitution v2.0.0 is approved on `main` and
-`origin/main`, `6-ft-1` descends from that approved mainline, and the Constitution Check now passes.
-This plan is eligible for honest pre-task checklist regeneration and does not itself generate
-implementation tasks.
+The requirements-quality content checks are complete. Constitution v2.0.0 is approved on `main`
+and `origin/main`, and `6-ft-1` descends from that approved mainline. The design-content rows of the
+Constitution Check pass, but overall workflow conformance does not: the recorded pre-analysis
+implementation sequence cannot be corrected retroactively. This plan remains eligible for
+requirements-quality checklist review but is not eligible for T017 or later implementation while
+`GATE-GOV-001` is blocked. It does not itself generate implementation tasks or fabricate owner
+approval.

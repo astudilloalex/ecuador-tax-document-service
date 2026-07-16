@@ -21,6 +21,9 @@ published contract MUST agree byte-for-byte with the complete approved baseline.
 
 ## Prerequisites
 
+- `GATE-GOV-001` in `tasks.md` released only after the retrospective T001–T016 review, every
+  deviation disposition, explicit real owner approval, and a new analysis with no related CRITICAL
+  finding; until then this guide is validation design, not authorization to continue implementation;
 - Java 25;
 - repository Gradle wrapper;
 - PostgreSQL 18.4-compatible database or approved PostgreSQL test container;
@@ -122,6 +125,9 @@ Expected new result:
 - response `companyId` is canonical lowercase hyphenated UUID text;
 - status is `DRAFT` and currency is exactly `USD`;
 - the response includes every captured and calculated field required by `FR-022`;
+- response `createdAt` equals the immutable UTC Instant captured once inside the persistence
+  transaction after business validation and immediately before persistence; it is not a physical
+  commit timestamp;
 - no Issuer/establishment/emission fiscal snapshot exists;
 - no sequence, access key, XML, signature, certificate, SRI, PDF, queue, or notification effect
   occurs.
@@ -176,6 +182,27 @@ Jackson/Bean Validation evaluates the body.
 Malformed JSON or an unknown property combined with an earlier invalid header must therefore return
 the earlier header outcome.
 
+### Idempotency-Key header matrix
+
+The header is mandatory and must yield exactly one field value after HTTP parsing. The API trims
+only leading/trailing ASCII SP/HTAB once, preserves internal characters and case, and validates the
+normalized value against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`.
+
+| Input | Expected outcome |
+|-------|------------------|
+| Missing header | `400 IDEMPOTENCY_KEY_REQUIRED`; no lookup/state |
+| One blank or SP/HTAB-only value | `400 IDEMPOTENCY_KEY_INVALID`; no lookup/state |
+| One normalized 129-character value | `400 IDEMPOTENCY_KEY_INVALID`; no lookup/state |
+| One value with a control, non-ASCII character, or other non-comma grammar failure | `400 IDEMPOTENCY_KEY_INVALID`; no lookup/state |
+| Repeated header fields | `400 IDEMPOTENCY_KEY_MULTIPLE`; first value is never selected; no lookup/state |
+| Parser-produced multiple values | `400 IDEMPOTENCY_KEY_MULTIPLE`; no lookup/state |
+| Any comma-containing/comma-combined value such as `key-a,key-b` | `400 IDEMPOTENCY_KEY_MULTIPLE`; no lookup/state |
+| `  Draft Key 42  ` using only surrounding SP/HTAB | Continue with normalized case-sensitive `Draft Key 42`; use identical value for lookup/hash/persistence |
+
+Domain tests MUST NOT reproduce this matrix. They receive already normalized and validated values
+and know nothing about HTTP headers, cardinality, trimming adapters, or HTTP error responses.
+
 ## 7. Verify Strict Request Fields
 
 Add each prohibited property separately:
@@ -194,8 +221,9 @@ Expected:
 - recognized calculated fields produce `PROHIBITED_CALCULATED_FIELD`;
 - no state is persisted.
 
-A Company path or query value cannot substitute for the required header. OpenAPI must contain no
-Company path/query/body parameter.
+A Company path or query value cannot substitute for the required header. Company identifiers are
+forbidden in request bodies and input schemas. OpenAPI must contain no Company path/query input,
+while canonical response `companyId` remains required by the feature contract.
 
 ## 8. Verify Idempotency
 
@@ -212,7 +240,8 @@ Company path/query/body parameter.
    committed draft and binding; all successful outcomes identify that draft.
 8. Simulate response loss after commit and retry equivalent content. Expect the original draft.
 9. Advance the test clock to a later Ecuadorian date and replay. Expect the original draft and
-   emission date without current-date revalidation.
+   emission date without current-date revalidation, plus the identical originally persisted
+   `createdAt`.
 
 Database inspection must show only key/fingerprint hashes and normalization version in the binding;
 no raw key, correlation value, CompanyId duplication in the fingerprint, or normalized buyer
@@ -266,6 +295,11 @@ Using the exact approved baseline identifiers, validate at least:
 - all four supported IVA treatments and separate zero-tax grouping;
 - unsupported ICE/IRBPNR/multiple-tax rejection;
 - all supported buyer identification types and final-consumer threshold;
+- passport/foreign-identification case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`: accept `A1234567`
+  and `EC9Z`; reject `A-123`, `A 123`, `Á123`, empty, and 21 characters after the one permitted
+  surrounding SP/HTAB trim;
+- product-code case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`: accept `ABC123` and `sku9`; reject
+  `ABC-123`, `ABC 123`, `ÁBC1`, empty, and 26 characters after the one permitted trim;
 - zero-value draft with IVA 0% rule `84cb3f03-574b-54de-9e73-efb8d485476a` only when that
   treatment is appropriate, and exactly one `0.00` payment using
   `639f2b7e-10a3-5d92-a1a3-28223896f5b5`;
@@ -307,6 +341,8 @@ Static and runtime evidence must show:
 - no HTTP request/header/security/thread-local/Gateway object in application or domain;
 - no Company/SRI/security outbound span or invocation;
 - no Company, tenant, subject, role, authorization, or fiscal-snapshot persistence;
+- authoritative CompanyId on every aggregate/binding query or mutation, with no `company_id`
+  column or Company filter on global VAT/payment/identification/SRI reference catalogs;
 - no application cache.
 
 ## 12. Record Operational and Performance Evidence
@@ -327,7 +363,8 @@ The packaged JVM smoke suite is mandatory and covers migration, startup, OpenAPI
 normalization, date capture, monetary envelopes, replay, conflict, rollback, unavailable/timeout,
 and correlation using the exact approved seeds. Its OpenAPI check fetches `/q/openapi` from the
 running service, resolves it, compares it semantically with the canonical contract, and verifies
-header-only Company context plus the absence of security, Authorization, `401`, and `403` content.
+header-only Company input, explicitly contracted response CompanyId, plus the absence of security,
+Authorization, `401`, and `403` content.
 
 Native support is optional. If claimed, record both build and runtime evidence for the same critical
 paths using the approved seeds. Otherwise document native as deferred or unsupported with evidence

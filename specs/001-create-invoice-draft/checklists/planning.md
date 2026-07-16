@@ -16,13 +16,19 @@ contract, reference baseline, data model, and supporting design artifacts
 implementation test. `[x]` means the cited documents objectively satisfy the criterion; it does
 not assert that code, migrations, or runtime evidence already exist.
 
+**Governance supersession**: The historical requirements-quality PASS did not satisfy or evidence
+the later mandatory post-task `$speckit-analyze` gate. `governance-nonconformity.md` and
+`GATE-GOV-001` now block T017 and later work; the checked items below do not constitute
+retrospective owner approval.
+
 ## Governance and Authority
 
 - [x] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
   feature task generation? [Dependency, Governance]
   - Evidence: authoritative `main` and `origin/main` commit
     `137d1c8c59cc98402f0a1fed211a6caccad4c883` contains `.specify/memory/constitution.md` v2.0.0;
-    `spec.md` is Approved for Task Generation; `plan.md` §Constitution Check records PASS.
+    `spec.md` is Approved for Task Generation; `plan.md` §Constitution Check records the approved
+    constitutional baseline separately from the later workflow non-conformity.
 - [x] CHK002 Is the source-authority order applied and are official facts distinguished from
   target-service decisions? [Consistency, Evidence]
   - Evidence: `spec.md` §Authority and Evidence/Source Conflicts;
@@ -41,8 +47,9 @@ not assert that code, migrations, or runtime evidence already exist.
   `POST /api/v1/invoice-drafts`? [Consistency]
   - Evidence: `spec.md` §In Scope; `plan.md` §Summary/API and Error Contract; OpenAPI `servers` and
     `paths./invoice-drafts.post`.
-- [x] CHK006 Is CompanyId accepted exclusively through required `X-Company-Id`, with path, query,
-  body, token, session, and thread-local alternatives prohibited? [Coverage]
+- [x] CHK006 Is authoritative CompanyId input accepted exclusively through required
+  `X-Company-Id`, with request-body/input/path/query/token/session/thread-local alternatives
+  prohibited while explicitly contracted response CompanyId remains allowed? [Coverage]
   - Evidence: `spec.md` FR-001–FR-003/FR-040; OpenAPI `CompanyContext` and
     `CreateInvoiceDraftRequest`; `plan.md` §Company Context and Sensitive-Data Design.
 - [x] CHK007 Are header presence, one-value cardinality, trimming, nonblank content, UUID syntax,
@@ -57,8 +64,8 @@ not assert that code, migrations, or runtime evidence already exist.
   without leaking HTTP abstractions below the API boundary? [Traceability]
   - Evidence: `spec.md` FR-037/FR-040; `plan.md` §Clean Architecture Mapping;
     `data-model.md` §Invoice Draft Aggregate Root/Boundary Rules.
-- [x] CHK010 Is CompanyId consistently described as persistence/idempotency partitioning rather
-  than authentication, authorization, or proof of entitlement? [Consistency]
+- [x] CHK010 Does every aggregate/binding repository query or mutation enforce CompanyId as
+  partitioning—not authorization—while global SRI reference catalogs remain unscoped? [Consistency]
   - Evidence: `spec.md` FR-024/DR-018/Key Entities; `plan.md` §Company Ownership Scoping;
     `docs/migration/terminology-mapping.md` Company entries.
 
@@ -109,8 +116,8 @@ not assert that code, migrations, or runtime evidence already exist.
 ## Reference-Data Baseline
 
 - [x] CHK020 Is the supported buyer-identification baseline complete for official codes 04–08,
-  with labels, English names, validation strategies, target validity, activity, version, source,
-  and approval? [Completeness]
+  with labels, English names, executable ASCII repertoires, case/normalization rules, validation
+  strategies, target validity, activity, version, source, and approval? [Completeness]
   - Evidence: `reference-data-baseline.md` §Approved Buyer-Identification Types.
 - [x] CHK021 Are buyer strategies evidence-bounded and explicit that RUC/Cédula checksum and online
   registry/name verification are outside this feature? [Evidence, Clarity]
@@ -172,12 +179,14 @@ not assert that code, migrations, or runtime evidence already exist.
   - Evidence: `spec.md` FR-013–FR-014/DR-016/DR-022; `data-model.md` §Payment;
     `reference-data-baseline.md` eight approved payment methods; `quickstart.md` §Fiscal, Monetary,
     and Boundary Vectors.
-- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing,
-  commit-instant timestamp, and replay-date semantics complete? [Clarity]
+- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing, separate
+  once-only in-transaction `createdAt`, rollback/non-physical-commit semantics, and replay-date/
+  timestamp semantics complete? [Clarity]
   - Evidence: `spec.md` FR-006/DR-012; `plan.md` §Time Boundary;
     `operational-requirements.md` §Measurement Boundary; `quickstart.md` dynamic date.
-- [x] CHK036 Are text trimming, limits, contact formats, control-character rejection, collection
-  maxima, uniqueness, and collection order semantics complete? [Coverage]
+- [x] CHK036 Are text trimming, exact product/passport/foreign ASCII patterns, case/normalization,
+  limits, contact formats, control-character rejection, collection maxima, uniqueness, and order
+  semantics complete? [Coverage]
   - Evidence: `spec.md` FR-008–FR-010/FR-013/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
     `quickstart.md` §Strict Request Fields/Boundary Vectors.
 - [x] CHK037 Is every caller-supplied calculated field rejected consistently rather than ignored,
@@ -187,7 +196,8 @@ not assert that code, migrations, or runtime evidence already exist.
 
 ## Persistence, Idempotency, and Failure Semantics
 
-- [x] CHK038 Is Company-scoped idempotency exactly CompanyId plus key hash, with uniqueness
+- [x] CHK038 Is Idempotency-Key mandatory/exactly single-valued with stable missing/invalid/multiple
+  outcomes and one-time normalization, then scoped exactly by CompanyId plus key hash with
   `UNIQUE (company_id, idempotency_key_hash)`? [Clarity]
   - Evidence: `spec.md` FR-027–FR-030; `data-model.md` §Local Idempotency Binding;
     `persistence-design.md` §Concurrency Arbitration.
@@ -245,7 +255,12 @@ not assert that code, migrations, or runtime evidence already exist.
 - Total items: 48
 - Checked items: 48
 - Unchecked items: 0
-- Remaining material items: 0
+- Remaining requirements-quality items: 0
+- Remaining implementation-governance conditions: 4 unchecked conditions in `GATE-GOV-001`
 
-**Result**: PASS — every item was re-evaluated against current objective evidence; no material
-requirements-quality gap or task-generation prohibition remains.
+**Historical requirements-quality result**: PASS — the written requirements have no remaining
+material quality gap.
+
+**Current implementation progression**: **BLOCKED before T017** by `GATE-GOV-001`. The real
+retrospective review and owner approval remain outstanding; this checklist does not release the
+gate.

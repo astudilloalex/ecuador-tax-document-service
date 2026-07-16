@@ -32,6 +32,13 @@ remain fixed if commit crosses midnight, and MUST NOT be replaced by `createdAt`
 may capture an operational request instant but MUST NOT use it to revalidate or mutate the original
 emission date.
 
+`createdAt` is separate functional persistence evidence: one UTC `java.time.Instant` is obtained
+from the injectable deterministic clock exactly once inside the persistence transaction, after all
+business validations succeed and immediately before root persistence. The same immutable value is
+persisted, returned after commit confirmation, and returned on replay; rollback never exposes it.
+It is not a PostgreSQL physical commit timestamp, is never queried or reconstructed after commit,
+and does not require `track_commit_timestamp`. It is not a latency measurement source.
+
 Correlation initialization/validation time is included in request duration. Correlation identity
 never starts, stops, partitions, or otherwise changes a performance measurement.
 

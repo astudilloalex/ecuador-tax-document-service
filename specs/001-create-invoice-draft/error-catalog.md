@@ -27,7 +27,10 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 |------|------|---------------|--------------|-----------------------|
 | `COMPANY_CONTEXT_REQUIRED` | 400 | `X-Company-Id` missing, blank after trimming, or without a usable value | Supply exactly one value | No draft, children, or binding |
 | `COMPANY_CONTEXT_INVALID` | 400 | Company header repeated/ambiguous, malformed UUID, or nil UUID | Supply one non-nil UUID | No draft, children, or binding |
-| `INVALID_REQUEST` | 400 | Invalid idempotency syntax; blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; or unknown/prohibited non-calculated property such as `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
+| `IDEMPOTENCY_KEY_REQUIRED` | 400 | `Idempotency-Key` is missing after HTTP header parsing | Supply exactly one header-field value | No lookup, draft, children, or binding |
+| `IDEMPOTENCY_KEY_INVALID` | 400 | Exactly one value is blank/whitespace-only after one ASCII SP/HTAB trim, longer than 128 normalized characters, or fails the approved non-comma ASCII grammar | Supply one valid normalized value | No lookup, draft, children, or binding |
+| `IDEMPOTENCY_KEY_MULTIPLE` | 400 | Repeated fields, a parser result with multiple values, or any comma-containing/comma-combined ambiguous value is present | Supply exactly one unambiguous field value; no first value is selected | No lookup, draft, children, or binding |
+| `INVALID_REQUEST` | 400 | Blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; or unknown/prohibited non-calculated property such as request `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
 | `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
@@ -54,6 +57,20 @@ The API maintains a stable set derived from the response/calculation model, incl
 Presence produces `PROHIBITED_CALCULATED_FIELD` even when the supplied value equals the service
 calculation. Other unknown fields produce `INVALID_REQUEST`.
 
+## Idempotency Header Classification
+
+After HTTP parsing, exactly one `Idempotency-Key` field value is mandatory. The API trims only
+leading/trailing ASCII SP (`U+0020`) and HTAB (`U+0009`) once, preserves internal characters and
+case, and validates the normalized value against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`.
+The normalized value is used unchanged for lookup, hashing, and persistence.
+
+Classification is deterministic: absence is `IDEMPOTENCY_KEY_REQUIRED`; a single blank,
+whitespace-only, over-length, control, non-ASCII, or other non-comma grammar failure is
+`IDEMPOTENCY_KEY_INVALID`; repeated/parser-multiple or any comma-containing/comma-combined value is
+`IDEMPOTENCY_KEY_MULTIPLE`. The comma classification prevents an HTTP implementation from silently
+choosing the first combined value. The raw rejected value never appears in the response.
+
 ## Numeric Envelope Violation
 
 `BUSINESS_VALIDATION_FAILED` MUST contain violation code `MONETARY_RANGE_EXCEEDED` when a
@@ -73,10 +90,13 @@ persistence error. It does not round, clamp, truncate, or wrap an out-of-range v
 
 The request boundary captures `requestCreationInstant` exactly once and derives the expected
 date-only value using `America/Guayaquil`. That date remains fixed through validation and commit,
-including a midnight crossing. `createdAt` is the confirmed commit instant and does not determine
-the accepted emission date. An equivalent replay returns the original draft without current-date
-revalidation. `requestCreationInstant` is operational application input, not an API request-body
-property.
+including a midnight crossing. Separately, `createdAt` is the UTC `java.time.Instant` captured
+exactly once inside the persistence transaction after all business validations succeed and
+immediately before the new draft is persisted. The same immutable value is persisted and returned
+only after commit confirmation; rollback never exposes it and replay returns the original. It is
+not a physical PostgreSQL commit timestamp, is not queried or reconstructed after commit, and does
+not require `track_commit_timestamp`. It does not determine the accepted emission date.
+`requestCreationInstant` is operational application input, not an API request-body property.
 
 ## Failure Precedence
 
@@ -85,7 +105,9 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
 1. `REQUEST_PAYLOAD_TOO_LARGE`;
 2. `COMPANY_CONTEXT_REQUIRED` or `COMPANY_CONTEXT_INVALID`;
 3. `INVALID_REQUEST` for `X-Correlation-Id` validation when Company context is valid;
-4. `INVALID_REQUEST` for idempotency-key syntax;
+4. `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_INVALID`, or
+   `IDEMPOTENCY_KEY_MULTIPLE` for idempotency-header presence, parsed cardinality, one-time ASCII
+   SP/HTAB trim, or normalized grammar;
 5. `INVALID_REQUEST` or `PROHIBITED_CALCULATED_FIELD` for representation/properties;
 6. normalization failure as `INVALID_REQUEST` when representation caused it;
 7. local Company-scoped binding lookup infrastructure outcome;

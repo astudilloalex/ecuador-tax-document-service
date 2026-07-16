@@ -10,6 +10,9 @@ Persistence owns only the local Invoice Draft aggregate, local tax-document refe
 and the local idempotency binding. It does not own or validate Company, Issuer, establishment, or
 emission-point master data.
 
+The reference catalogs are locally stored but globally governed and immutable for their published
+version. They are not Company-owned, have no `company_id`, and are not filtered by Company.
+
 Hibernate Reactive with Panache is used for business persistence. Panache models remain in
 `infrastructure` and are never returned through the API or used as domain entities. Flyway uses its
 supported migration datasource during controlled startup; production schema auto-generation is
@@ -88,19 +91,24 @@ catalog versions MUST NOT reinterpret historical drafts.
 
 For a logically new command:
 
-1. Complete payload/header/key/body validation and fingerprint generation before opening the write
-   transaction.
+1. Complete payload, Company/correlation header, exact single-valued Idempotency-Key
+   presence/cardinality/one-time SP/HTAB normalization/grammar, request-body validation, and
+   fingerprint generation before opening the write transaction. Only the normalized accepted key
+   proceeds; repeated or comma-combined input never selects a first value.
 2. Resolve applicable local reference-catalog rows and domain values without external calls. Every
    reference-data invocation receives the explicit remaining `Duration` derived from the one
    application `RequestDeadline`; its reactive adapter clamps pool acquisition and every query
    subscription to the minimum of configured database-operation timeout and that remainder and
    starts no database operation when the remainder is zero or negative.
 3. Start one bounded reactive PostgreSQL transaction.
-4. Persist the Invoice Draft root.
-5. Persist every line and exactly one line-tax selection per line.
-6. Persist grouped tax totals, payments, and additional-information rows.
-7. Persist the idempotency binding last.
-8. Commit once; return `201` only after commit is confirmed.
+4. After all business validations have succeeded and immediately before root persistence, call the
+   injectable application clock exactly once inside the transaction to obtain `createdAt` as a UTC
+   `java.time.Instant`.
+5. Persist the Invoice Draft root with that immutable value.
+6. Persist every line and exactly one line-tax selection per line.
+7. Persist grouped tax totals, payments, and additional-information rows.
+8. Persist the idempotency binding last with the same `createdAt` value.
+9. Commit once; return `201` only after commit is confirmed, exposing the same persisted value.
 
 A failure at any write step rolls back the root, all children, and the binding. No external call,
 filesystem write, event publication, SRI operation, or Company operation occurs within or adjacent
@@ -109,6 +117,10 @@ to this transaction.
 Catalog resolution MUST reject an inactive, not-yet-target-effective, target-expired, unknown, or
 ambiguous row before persistence. Initial valid references are exactly those published in
 `SRI-OFFLINE-2.32-TARGET-1`; product/tax legal classification remains upstream responsibility.
+
+`createdAt` is not PostgreSQL's physical commit timestamp. Persistence MUST NOT query or reconstruct
+it after commit and MUST NOT require `track_commit_timestamp`. Rollback means it is never exposed as
+a created resource; equivalent replay loads and returns the originally persisted value.
 
 ## Concurrency Arbitration
 
@@ -127,22 +139,29 @@ PostgreSQL `READ COMMITTED` plus the unique constraint is sufficient. `SERIALIZA
 locks, application mutexes, caches, and reservation rows are not introduced without evidence that
 the approved invariant cannot otherwise be met.
 
-## Company-Scoped Reads and Mutations
+## Company-Scoped Aggregate and Binding Operations
 
-Any repository operation that addresses an existing draft uses both CompanyId and draftId. A
-binding-to-draft load also uses CompanyId. The binding composite foreign key guarantees that a
-binding cannot reference a draft in another Company partition.
+Every repository query or mutation involving the Invoice Draft aggregate or its idempotency binding
+includes and enforces authoritative CompanyId. This covers creation, draft lookup, duplicate and
+idempotency lookup, binding creation/retrieval, aggregate persistence mutations, and any future
+repository operation introduced by this feature for the aggregate. Existing-draft access uses
+CompanyId plus draftId; binding access uses CompanyId plus key hash; binding-to-draft load uses
+CompanyId. The composite foreign key prevents a cross-Company binding.
 
 Child loads occur through the already Company-scoped root and local foreign keys; CompanyId is not
 duplicated on children. This is aggregate consistency and data partitioning, not caller
 authorization.
 
+This scope does not automatically apply to global VAT, payment-method, identification-type, or
+other immutable global SRI reference catalogs. Their reads use the applicable global code/version/
+effective-date keys and their tables contain no Company column.
+
 ## Required Constraints and Indexes
 
 | Structure | Required persistence evidence |
 |-----------|-------------------------------|
-| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; fixed status/currency; non-negative totals |
-| `invoice_line` | Local FK; `UNIQUE (invoice_draft_id,position)`; `numeric(12,6)` quantity/unit-price and `numeric(17,2)` money checks; FK index |
+| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; type-conditional case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` for buyer codes 06/08; fixed status/currency; immutable `created_at`; non-negative totals |
+| `invoice_line` | Local FK; `UNIQUE (invoice_draft_id,position)`; locale-independent case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` product code; `numeric(12,6)` quantity/unit-price and `numeric(17,2)` money checks; FK index |
 | `invoice_line_tax` | Local FK; `UNIQUE (invoice_line_id)`; IVA treatment/rate checks |
 | `invoice_tax_total` | Local FK; unique complete grouping key; non-negative totals |
 | `invoice_payment` | Local FK; `UNIQUE (invoice_draft_id,payment_method_id)`; amount checks |
@@ -216,6 +235,8 @@ Liveness remains independent of PostgreSQL availability.
 - migration repeatability and production auto-generation disabled;
 - real PostgreSQL constraint tests;
 - aggregate load through CompanyId plus draftId;
+- every aggregate/binding query and mutation enforces CompanyId while global catalogs have no
+  Company column or filter;
 - composite binding-to-draft Company integrity;
 - same key independent across Companies;
 - 50-way equivalent concurrency yields one root/binding;
@@ -231,11 +252,19 @@ Liveness remains independent of PostgreSQL availability.
 - schema inspection confirms every prohibited Company/identity/snapshot structure is absent;
 - numeric boundary tests confirm overflow and excess precision are rejected before persistence and
   never surface as PostgreSQL errors.
+- product/passport/foreign-identification database checks use the same locale-independent ASCII
+  expressions as OpenAPI/Java/domain tests, never POSIX `[[:alnum:]]`;
+- `createdAt` capture occurs once at the defined in-transaction point, persists/returns unchanged,
+  is absent from rolled-back resources, replays unchanged, and uses no physical commit timestamp.
 
-## Planning Gate
+## Governance and Planning Gate
 
 The reference-data planning gate is complete. `reference-data-baseline.md` separates official
 facts from target decisions, publishes UUIDv5 namespace
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`, and approves every initial row. Flyway remains the sole
 future schema/seed owner. Constitution v2.0.0 is approved on `main`, the reconciled plan passes its
-Constitution Check, and no persistence-design blocker remains for pre-task checklist evaluation.
+Constitution Check, but `GATE-GOV-001` blocks T017 and all later implementation. The completed
+T013–T016 persistence artifacts require retrospective review, including the exact ASCII constraint
+deviations recorded in `governance-nonconformity.md`. No committed migration is edited by this
+remediation; any correction requires a later immutable migration after real owner approval and a
+clean analysis gate.

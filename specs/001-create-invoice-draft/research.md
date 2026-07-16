@@ -98,15 +98,18 @@ running the current minor for a supported major. It provides the UUID, exact num
 ## 4. Company Context and API Shape
 
 **Decision**: Expose `POST /invoice-drafts` under the existing `/api/v1` base. Require exactly one
-`X-Company-Id` header and one `Idempotency-Key` header. Accept an optional `X-Correlation-Id`.
+`X-Company-Id` header and exactly one parsed field value for the mandatory `Idempotency-Key`
+header. Accept an optional `X-Correlation-Id`.
 
 The Company header is trimmed, parsed as a non-nil UUID, and normalized to lowercase hyphenated
 form. It is mapped by the API layer to an application `CompanyId`; the application command carries
 that value explicitly; the aggregate stores it immutably.
 
 **Rationale**: This is the definitive constitutional business-context boundary. CompanyId is an
-ownership and idempotency partition, not a credential. No Company path, query, body, token,
-session, principal, or thread-local source is allowed.
+ownership and idempotency partition, not a credential. Company identifiers are forbidden in
+request bodies and input schemas; no path, query, token, session, principal, or thread-local source
+is allowed. Canonical CompanyId appears in the response only because the feature contract
+explicitly requires it.
 
 **Alternatives considered**:
 
@@ -115,6 +118,15 @@ session, principal, or thread-local source is allowed.
 - Body or query CompanyId: prohibited by the approved API contract.
 - Authentication-derived Company context: impossible by design because this feature has no
   application identity state.
+
+**Idempotency header decision**: The API trims leading/trailing ASCII SP/HTAB once, preserves
+internal characters and case, validates 1–128 normalized characters against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`,
+and passes only the normalized value onward. Missing uses `IDEMPOTENCY_KEY_REQUIRED`; a single
+blank/whitespace-only, over-length, control, non-ASCII, or other non-comma grammar failure uses
+`IDEMPOTENCY_KEY_INVALID`; repeated/parser-multiple or any comma-containing/comma-combined
+ambiguous value uses `IDEMPOTENCY_KEY_MULTIPLE`. Choosing the first value is prohibited. This is
+an API concern; the domain receives already normalized and validated values.
 
 ## 5. Correlation Contract
 
@@ -142,6 +154,9 @@ generated identifiers remain UUIDs.
 |------|-------------|----------------------|
 | `COMPANY_CONTEXT_REQUIRED` | 400 | Correct request |
 | `COMPANY_CONTEXT_INVALID` | 400 | Correct request |
+| `IDEMPOTENCY_KEY_REQUIRED` | 400 | Supply exactly one key |
+| `IDEMPOTENCY_KEY_INVALID` | 400 | Correct the normalized key |
+| `IDEMPOTENCY_KEY_MULTIPLE` | 400 | Remove repeated/comma-combined values |
 | `INVALID_REQUEST` | 400 | Correct request |
 | `PROHIBITED_CALCULATED_FIELD` | 422 | Correct request |
 | `IDEMPOTENCY_CONFLICT` | 409 | Use a new key or original content |
@@ -162,7 +177,7 @@ A retry uses the same Company and key because commit may have succeeded before r
 
 **Decision**: Persist two separate 32-byte SHA-256 values:
 
-- a domain-separated hash of the trimmed `Idempotency-Key`;
+- a domain-separated hash of the API-normalized `Idempotency-Key`;
 - a domain-separated fingerprint of normalized client-controlled business content.
 
 Persist `normalization_version = 1`. Do not persist the raw idempotency key or complete normalized
@@ -202,10 +217,11 @@ records, and the idempotency binding. Use `UNIQUE (company_id, idempotency_key_h
 arbiter under PostgreSQL `READ COMMITTED`.
 
 Before the transaction, perform the approved request/fingerprint checks and a Company-scoped
-binding lookup. If no binding exists, validate local catalogs and domain rules, calculate, then
-write the aggregate and binding atomically. If concurrent insertion loses the uniqueness race, its
-transaction rolls back completely; a fresh Company-scoped lookup compares the winner's
-fingerprint and returns replay or conflict.
+binding lookup. If no binding exists, validate global local-storage catalogs and domain rules,
+calculate, then capture `createdAt` once inside the transaction after validation and immediately
+before root persistence, and write the aggregate and binding atomically. If concurrent insertion
+loses the uniqueness race, its transaction rolls back completely; a fresh Company-scoped lookup
+compares the winner's fingerprint and returns replay or conflict.
 
 **Rationale**: The uniqueness constraint provides cross-process arbitration without application
 locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordination.
@@ -214,11 +230,17 @@ locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordi
 
 **Decision**: Store `company_id uuid NOT NULL` on `invoice_draft`, enforce a non-nil check, and add
 `UNIQUE (company_id, id)` so idempotency can reference the root through a composite local foreign
-key. Every existing-draft repository operation requires CompanyId and draftId.
+key. Every repository query or mutation involving the aggregate or binding includes and enforces
+authoritative CompanyId, including creation, draft/duplicate/idempotency lookup, binding
+create/read, persistence mutation, and future feature operations for the aggregate.
 
 Children store only local foreign keys to the root or owning line. They do not repeat CompanyId and
 do not represent Company master data. Deletion behavior is not invented because draft deletion is
 out of scope.
+
+Global VAT, payment-method, identification-type, and other immutable SRI reference catalogs are
+not Company-owned; their lookups do not receive Company filters and their tables have no Company
+column.
 
 No tenant, subject, role, authorization, Company/Issuer/establishment/emission master table,
 Company-context version/time, fiscal snapshot, or cross-database foreign key is allowed.
@@ -242,9 +264,21 @@ through `100.00`. Every input, intermediate, rounded, grouped, payment-sum, or f
 rejected before persistence as `BUSINESS_VALIDATION_FAILED` with
 `MONETARY_RANGE_EXCEEDED`.
 
+`productCode` uses case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`; passport (`06`) and foreign
+identification (`08`) use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`. Each receives one
+leading/trailing ASCII SP/HTAB trim and no other normalization. OpenAPI, Java/API validation,
+domain invariants, locale-independent PostgreSQL checks, and test vectors use those exact
+expressions; POSIX `[[:alnum:]]`, Unicode classes, case folding, and locale-dependent matching are
+rejected because no approved fiscal evidence justifies a broader repertoire.
+
 Capture one `requestCreationInstant` at the request boundary and derive the expected emission date
 once using `America/Guayaquil`. Commit crossing midnight does not change the accepted date;
-`createdAt` records the confirmed commit instant; equivalent replay does not revalidate the date.
+`createdAt` is separately captured once as a UTC `java.time.Instant` inside the persistence
+transaction after all business validations succeed and immediately before root persistence. That
+same immutable value is persisted/returned after commit and replayed unchanged; rollback does not
+expose it. It is not a physical PostgreSQL commit timestamp, uses no post-commit reconstruction or
+`track_commit_timestamp`, and the injectable clock stays deterministic for tests. Equivalent
+replay does not revalidate the date.
 Versioned local reference catalogs are managed and seeded only by Flyway; codes, rates, validity,
 and identifiers are not hard-coded or startup-generated.
 

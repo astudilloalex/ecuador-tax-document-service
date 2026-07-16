@@ -1,6 +1,6 @@
 # Idempotency Design: Create Invoice Draft
 
-**Scope**: canonical CompanyId + trimmed `Idempotency-Key`
+**Scope**: canonical CompanyId + API-normalized `Idempotency-Key`
 **Initial normalization version**: `1`
 
 ## Binding Contract
@@ -23,13 +23,34 @@ UNIQUE (company_id, idempotency_key_hash)
 The same raw key may be used independently by different Companies. Changing
 `X-Company-Id` changes the binding scope even when the key and business content are unchanged.
 
+Every binding lookup, binding create/read, winner re-read, or aggregate load in this flow includes
+and enforces authoritative CompanyId. This does not apply Company scope to global VAT,
+payment-method, identification-type, or other immutable SRI reference catalogs.
+
+## Transport Header Contract
+
+`Idempotency-Key` is a mandatory single-valued request header owned by the API adapter. Exactly one
+field value must remain after HTTP header parsing. The adapter trims leading/trailing ASCII SP
+(`U+0020`) and HTAB (`U+0009`) once, changes no internal character or case, and validates the
+normalized 1–128-character value against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`.
+
+- missing → `IDEMPOTENCY_KEY_REQUIRED`;
+- one blank/whitespace-only, over-length, control, non-ASCII, or other non-comma invalid value →
+  `IDEMPOTENCY_KEY_INVALID`;
+- repeated fields, parser-produced multiple values, or any comma-containing/comma-combined
+  ambiguous value → `IDEMPOTENCY_KEY_MULTIPLE`.
+
+No first value is selected. Only the normalized value is passed below the API for lookup/hash use;
+the domain has no HTTP, header-name, trimming, cardinality, or HTTP-error responsibility.
+
 ## Key Hash
 
-Version 1 hashes the UTF-8 bytes of the trimmed, validated key with SHA-256 and explicit domain
+Version 1 hashes the UTF-8 bytes of the API-normalized, validated key with SHA-256 and explicit domain
 separation:
 
 ```text
-SHA-256("invoice-draft-idempotency-key:v1\n" || trimmedKeyUtf8)
+SHA-256("invoice-draft-idempotency-key:v1\n" || normalizedKeyUtf8)
 ```
 
 The persisted value is exactly 32 bytes. The raw key is not persisted, logged, traced, or exposed
@@ -101,7 +122,8 @@ completion nor a later deadline signal replaces the selected outcome.
 2. Validate and canonicalize Company header.
 3. Initialize and validate correlation: preserve one valid value, generate a UUID when absent, or
    generate a safe replacement and return `INVALID_REQUEST` without echoing invalid input.
-4. Validate and hash idempotency key.
+4. In the API adapter, enforce idempotency-key presence/cardinality, normalize once, validate with
+   the three stable error classifications, and hash only the accepted normalized key.
 5. Validate request representation and prohibited properties.
 6. Normalize business content and compute fingerprint.
 7. Look up binding by CompanyId plus key hash.
@@ -124,7 +146,8 @@ completion never changes the already selected HTTP result, and no correctly comm
 committed draft is compensated or deleted because its response was not received.
 
 Replay does not call Company Service, validate current Company/Issuer/emission-point state,
-authenticate, authorize, recalculate, or mutate the original draft.
+authenticate, authorize, recalculate, or mutate the original draft. It returns the originally
+persisted immutable `createdAt`, never a replay-time or reconstructed timestamp.
 
 ## Concurrent Creation
 
@@ -160,3 +183,7 @@ participates.
 - deadline-first unresolved-commit replay proves at most one draft without a zero-state assumption;
 - response-commit deadline expiry changes no selected status or persisted state and triggers no
   compensation.
+- missing, blank, whitespace-only, repeated, parser-multiple, comma-combined, over-length, and
+  grammar-invalid headers produce their exact stable errors before any lookup;
+- one accepted SP/HTAB-trimmed key uses identical normalized bytes for lookup, hashing, and
+  persistence, without any domain HTTP dependency.
