@@ -128,6 +128,13 @@ target validity, and target active state are target-service decisions.
 Payment methods remain unique per draft. The zero-value invoice example uses the approved UUID in
 the payment-code `01` row above with amount `0.00`.
 
+For Invoice Draft validation, repository lookup receives `(paymentMethodId, emissionDate)`. A row
+is usable only when it exists, is active, `target_valid_from <= emissionDate`, and
+`target_valid_to IS NULL OR emissionDate <= target_valid_to`; both boundaries are inclusive.
+Server current date, request arrival time, transaction time, and `createdAt` are not validity
+inputs. Shared vectors cover both exact boundaries, before/after, open end, inactive-but-effective,
+and active-but-ineffective rows.
+
 ## Excluded Initial Rows
 
 | Official row | Reason excluded from `SRI-OFFLINE-2.32-TARGET-1` |

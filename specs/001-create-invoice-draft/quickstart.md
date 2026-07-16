@@ -21,9 +21,8 @@ published contract MUST agree byte-for-byte with the complete approved baseline.
 
 ## Prerequisites
 
-- `GATE-GOV-001` in `tasks.md` released only after the retrospective T001–T016 review, every
-  deviation disposition, explicit real owner approval, and a new analysis with no related CRITICAL
-  finding; until then this guide is validation design, not authorization to continue implementation;
+- `GATE-GOV-001` is released by `astudilloalex`; the mandatory current `$speckit-analyze` gate
+  remains before T017, while T017/T018 remain pending and T019 remains blocked until both pass;
 - Java 25;
 - repository Gradle wrapper;
 - PostgreSQL 18.4-compatible database or approved PostgreSQL test container;
@@ -45,6 +44,8 @@ database:
 Expected evidence:
 
 - Flyway creates the complete schema and every approved local reference row from empty state;
+- immutable V3 is followed by pending T017 V5 and T018 proves the exact final ASCII constraints,
+  five-migration history, and successful Flyway validation;
 - each seeded tax-rule and payment-method UUID matches the published baseline;
 - production schema auto-generation is disabled;
 - no Company/Issuer/establishment/emission-point master table exists;
@@ -127,7 +128,8 @@ Expected new result:
 - the response includes every captured and calculated field required by `FR-022`;
 - response `createdAt` equals the immutable UTC Instant captured once inside the persistence
   transaction after business validation and immediately before persistence; it is not a physical
-  commit timestamp;
+  commit timestamp; T076 is the only persistence-clock caller, uses one call for draft and binding,
+  and T063 neither supplies nor overwrites it;
 - no Issuer/establishment/emission fiscal snapshot exists;
 - no sequence, access key, XML, signature, certificate, SRI, PDF, queue, or notification effect
   occurs.
@@ -139,7 +141,7 @@ Execute each case and inspect API results and database row counts:
 | Case | Expected outcome | Expected state |
 |------|------------------|----------------|
 | Missing header | `400 COMPANY_CONTEXT_REQUIRED` | No draft/children/binding |
-| Whitespace-only header | `400 COMPANY_CONTEXT_REQUIRED` | No state |
+| ASCII SP/HTAB-only header | `400 COMPANY_CONTEXT_REQUIRED` | No state |
 | Malformed UUID | `400 COMPANY_CONTEXT_INVALID` | No state |
 | Nil UUID | `400 COMPANY_CONTEXT_INVALID` | No state |
 | Multiple header values | `400 COMPANY_CONTEXT_INVALID` | No state |
@@ -154,7 +156,7 @@ ownership, or emission-point ownership validation.
 | Correlation input | Expected outcome |
 |-------------------|------------------|
 | Header absent | Generate one safe UUID and return it on the terminal response |
-| One value satisfying the 1–64 character safe grammar | Trim, preserve, and return it unchanged |
+| One value satisfying the 1–64 ASCII-character safe grammar | Trim surrounding ASCII SP/HTAB once, preserve, and return normalized value |
 | Blank value | `400 INVALID_REQUEST`; return a generated safe UUID; never echo input; no state |
 | Repeated values | `400 INVALID_REQUEST`; return a generated safe UUID; never echo input; no state |
 | 65-character value | `400 INVALID_REQUEST`; return a generated safe UUID; never echo input; no state |
@@ -266,11 +268,13 @@ the retry must return the original draft.
 
 Using a controllable deadline signal rather than real sleeps, prove that one monotonic 10-second
 timer starts at the earliest matched route before body consumption, is never restarted, remains
-armed through serialization, and is cancelled when the response ends. A stage result conclusively
-selected before expiry wins; deadline-first processing returns correlated `REQUEST_TIMEOUT`, and no
-later stage or deadline signal replaces the selected outcome. Cover payload-size `413`/`504`, header
-`400`/`504`, replay/conflict, validation/calculation, confirmed persistence outcome, and
-unresolved-commit races.
+armed through serialization, and is cancelled when the response ends. Prove the API adapter alone
+races the application `Uni`, atomically accepts exactly one terminal result, discards late
+application/database results, and maps Company `400`, timeout `504`, and every other HTTP outcome
+only afterward. Deadline-first processing returns correlated `REQUEST_TIMEOUT`; stage-first remains
+selected. Application, domain, and repositories expose only transport-neutral outcomes and no HTTP
+status, exception, envelope, or arbiter. Cover payload-size, headers, replay/conflict,
+validation/calculation, confirmed persistence, and unresolved-commit races.
 
 Application and both aggregate and reference-data repository probes must observe a decreasing
 remaining `Duration`. Reference lookups clamp every pool/query subscription to the minimum of the
@@ -289,6 +293,12 @@ request body, raw idempotency key, or token.
 
 Using the exact approved baseline identifiers, validate at least:
 
+- Stage 10 only evaluates calculation-independent structure/catalog/text/basic amount rules;
+  Stage 11A calculates gross/discount/base/tax/line/subtotal/invoice/payment-reference values; and
+  Stage 11B evaluates exact order: range/overflow, discount-over-gross, final-consumer total limit,
+  total-dependent payment shape/positivity, then payment reconciliation. Use competing-failure
+  vectors that would expose any different order;
+
 - `2 × 10.00 − 5.00` with tax rule
   `5b34b038-931c-50e3-a84c-10af272fdcd4`, yielding gross `20.00`, net `15.00`, IVA `2.25`, and
   contribution `17.25`; this is a mathematical vector, not a claim of universal 15% applicability;
@@ -306,10 +316,20 @@ Using the exact approved baseline identifiers, validate at least:
 - caller selection of the appropriate published tax rule without service-side product
   classification, including the 5% construction-material applicability boundary;
 - payment mismatch and duplicate payment method;
+- payment-method lookup passes `(paymentMethodId, emissionDate)` and accepts exactly-on
+  `effectiveFrom`, exactly-on finite `effectiveTo`, and open-ended active rows; rejects before-start,
+  after-end, inactive-but-temporally-effective, and active-but-ineffective rows without consulting
+  server current date, request arrival, transaction time, or `createdAt`;
 - exactly 8 distinct approved positive payment methods accepted when amounts reconcile, and 9
   payments rejected before persistence;
 - current date derived from the single `requestCreationInstant`, past/future/impossible rejection,
   a commit crossing Guayaquil midnight, and later-date replay;
+- general human-readable text vectors shared across layers: NFC accented Latin;
+  decomposed/composed equivalence; surrounding and repeated internal `U+0020`; tab, newline, NBSP,
+  `U+2028`, `U+2029`, and zero-width `Cf` rejection; assigned emoji `So` acceptance when field
+  format/length permits; case preservation; Unicode-code-point maximum/max+1. Verify
+  `canonicalName` is NFC → surrounding U+0020 trim → collapse U+0020 runs → Java `Locale.ROOT`
+  lowercase, is persisted, and is not recalculated by PostgreSQL locale;
 - text and collection maxima plus maximum-plus-one rejection;
 - a body exactly `2,097,152` bytes proceeding to the next validation stage;
 - a larger body conclusively detected before deadline expiry returning

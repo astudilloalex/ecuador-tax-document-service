@@ -5,7 +5,7 @@ traceability before task generation
 
 **Created**: 2026-07-12
 
-**Regenerated**: 2026-07-13 against Constitution v2.0.0 and the reconciled specification, plan,
+**Regenerated**: 2026-07-15 against Constitution v2.0.1 and the reconciled specification, plan,
 contract, reference baseline, data model, and supporting design artifacts
 
 **Feature**: [`spec.md`](../spec.md) and [`plan.md`](../plan.md)
@@ -17,18 +17,16 @@ implementation test. `[x]` means the cited documents objectively satisfy the cri
 not assert that code, migrations, or runtime evidence already exist.
 
 **Governance supersession**: The historical requirements-quality PASS did not satisfy or evidence
-the later mandatory post-task `$speckit-analyze` gate. `governance-nonconformity.md` and
-`GATE-GOV-001` now block T017 and later work; the checked items below do not constitute
-retrospective owner approval.
+the later mandatory post-task `$speckit-analyze` gate. `astudilloalex` approved the retrospective
+and `GATE-GOV-001` is released; the checked items below remain requirement-quality evidence, not a
+substitute for the current analysis or T017/T018 implementation evidence.
 
 ## Governance and Authority
 
-- [x] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
-  feature task generation? [Dependency, Governance]
-  - Evidence: authoritative `main` and `origin/main` commit
-    `137d1c8c59cc98402f0a1fed211a6caccad4c883` contains `.specify/memory/constitution.md` v2.0.0;
-    `spec.md` is Approved for Task Generation; `plan.md` §Constitution Check records the approved
-    constitutional baseline separately from the later workflow non-conformity.
+- [x] CHK001 Is the historical v2.0.0 baseline preserved and the requested Company-boundary
+  clarification applied through a formal PATCH amendment? [Dependency, Governance]
+  - Evidence: historical commit `137d1c8c59cc98402f0a1fed211a6caccad4c883`; current
+    `.specify/memory/constitution.md` v2.0.1 Sync Impact Report/version/date and aligned templates.
 - [x] CHK002 Is the source-authority order applied and are official facts distinguished from
   target-service decisions? [Consistency, Evidence]
   - Evidence: `spec.md` §Authority and Evidence/Source Conflicts;
@@ -80,7 +78,7 @@ retrospective owner approval.
   Authorization headers, and 401/403 outcomes? [Consistency]
   - Evidence: `spec.md` FR-039/SC-024; `plan.md` §API and Error Contract; OpenAPI root,
     components, and response map; `mp.openapi.scan.disable=true` plus packaged `/q/openapi`
-    semantic-equality evidence planned in T012/T040.
+    semantic-equality evidence planned in T012/T042.
 - [x] CHK013 Are Company existence, state, eligibility, caller entitlement, tenant ownership, and
   Company/Issuer/establishment/emission-point relationship checks explicitly absent? [Completeness]
   - Evidence: `spec.md` FR-003/FR-036/Scenario 35; `plan.md` §Company Master-Data Boundary;
@@ -217,7 +215,7 @@ retrospective owner approval.
   12-stage failure precedence aligned? [Consistency]
   - Evidence: `spec.md` FR-025/FR-041–FR-044; `error-catalog.md` §Stable Outcomes/Failure
     Precedence; `plan.md` §Failure-Precedence Ownership ordered upload/pre-entity/entity pipeline;
-    OpenAPI responses; T030–T032/T081–T082/T084–T087.
+    OpenAPI responses; T032–T034/T083–T084/T086–T089.
 
 ## Sensitive Data, Correlation, Operations, and Runtime
 
@@ -250,17 +248,39 @@ retrospective owner approval.
   - Evidence: `traceability.md` §Functional Requirements/Domain Rules/Success Criteria/Acceptance
     Scenario Coverage/Stable Error Coverage/Cross-Cutting Constitutional Evidence.
 
+## Latest Analysis Remediation Quality
+
+- [x] CHK049 Does the governance record contain an inspected row for every T001–T016 task and leave
+  owner fields empty? [Governance] — Evidence: `governance-retrospective-review.md`,
+  `governance-owner-approval.md`.
+- [x] CHK050 Are immutable V3, pending T017 V5, pending T018 cross-layer/PostgreSQL vectors, and the
+  block before T017 explicit? [Persistence] — Evidence: `tasks.md`, `persistence-design.md`, GOV-001.
+- [x] CHK051 Is FR-041 executable as Stage 10, Stage 11A, exact ordered Stage 11B, with deadline and
+  HTTP ownership exclusively in API? [Architecture] — Evidence: spec/plan/error catalog/tasks.
+- [x] CHK052 Does the general-text policy define NFC, prohibited categories/separators, only
+  `U+0020`, code-point lengths, comparison, emoji, and persisted Java `canonicalName` vectors?
+  [Clarity] — Evidence: spec, OpenAPI, data model, quickstart, traceability.
+- [x] CHK053 Does payment lookup use `(paymentMethodId, emissionDate)` with inclusive boundaries and
+  all required activity/effectivity vectors? [Consistency] — Evidence: FR-013, scenarios 62–68,
+  reference baseline, plan/tasks.
+- [x] CHK054 Is T076 the sole persistence-clock invocation owner and T063 explicitly unable to
+  invoke/supply/replace `createdAt`? [Ownership] — Evidence: FR-019/DR-012, plan/data/persistence,
+  tasks T027/T036/T059/T063/T076/T077.
+- [x] CHK055 Are Constitution v2.0.1 Company request/response and owned-aggregate/global-catalog
+  semantics aligned without Company columns/predicates on global SRI catalogs? [Governance] —
+  Evidence: Constitution, spec, plan, data model, tasks, OpenAPI.
+
 ## Gate Result
 
-- Total items: 48
-- Checked items: 48
+- Total items: 55
+- Checked items: 55
 - Unchecked items: 0
 - Remaining requirements-quality items: 0
-- Remaining implementation-governance conditions: 4 unchecked conditions in `GATE-GOV-001`
+- Remaining implementation-governance conditions: current analysis before T017; pending T017/T018
 
 **Historical requirements-quality result**: PASS — the written requirements have no remaining
 material quality gap.
 
-**Current implementation progression**: **BLOCKED before T017** by `GATE-GOV-001`. The real
-retrospective review and owner approval remain outstanding; this checklist does not release the
-gate.
+**Current implementation progression**: `GATE-GOV-001` is **RELEASED**. The current analysis gate
+remains before T017; T017/T018 are pending, and T019 remains blocked until both pass. This
+checklist does not satisfy those implementation conditions.

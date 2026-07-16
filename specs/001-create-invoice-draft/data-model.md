@@ -1,7 +1,7 @@
 # Data Model: Create Invoice Draft
 
 **Feature**: `001-create-invoice-draft`
-**Constitution**: v2.0.0
+**Constitution**: v2.0.1
 **Source**: `specs/001-create-invoice-draft/spec.md`
 
 ## Boundary Rules
@@ -29,8 +29,8 @@ Logical persistence name: `invoice_draft`.
 | `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
 | `buyerIdentificationCatalogVersion` | approved version | `varchar(64)` | Yes | Version of the identification rule used for validation |
 | `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation; codes `06`/`08` use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` |
-| `buyerLegalName` | validated text | `varchar(300)` | Yes | Trimmed, nonblank, no control characters |
-| `buyerAddress` | optional text | `varchar(300)` | No | Trimmed and valid when present |
+| `buyerLegalName` | normalized text | `varchar(300)` | Yes | NFC once, surrounding `U+0020` trimmed, 1–300 code points, prohibited categories/separators rejected |
+| `buyerAddress` | optional normalized text | `varchar(300)` | No | Same general-text policy; 1–300 code points when supplied |
 | `buyerEmail` | optional text | `varchar(254)` | No | One syntactically valid address |
 | `buyerTelephone` | optional text | `varchar(20)` | No | Approved character and digit-count rules |
 | `status` | `DraftStatus` | `varchar(16)` | Yes | Exactly `DRAFT` |
@@ -63,9 +63,12 @@ reference catalogs are not Company-owned and have no Company filter or column. T
 partitioning and aggregate consistency, not authorization.
 
 `createdAt` is not PostgreSQL's physical commit timestamp. Persistence does not query or
-reconstruct it after commit and does not require `track_commit_timestamp`. The injectable clock
-returns one `java.time.Instant` inside the transaction at the point above; rollback prevents that
-value from becoming an exposed resource, and replay returns the originally persisted value.
+reconstruct it after commit and does not require `track_commit_timestamp`. The T076 transactional
+persistence operation is the sole persistence-clock owner: it obtains one `java.time.Instant`
+inside the active transaction at the point above and writes that same value to root and binding.
+T063 orchestration neither calls this clock nor supplies, replaces, or overwrites the value. A
+second call in one creation attempt is prohibited; rollback prevents exposure, and replay returns
+the originally persisted value.
 
 Correlation identifiers are not persisted on the aggregate. They remain request/response,
 structured-log, trace, and operational-event evidence because no approved business requirement
@@ -81,7 +84,7 @@ Logical persistence name: `invoice_line`.
 | `invoiceDraftId` | `uuid` | Required local foreign key to `invoice_draft.id` |
 | `position` | `integer` | 1–500; unique within the draft; business-significant order |
 | `productCode` | `varchar(25)` | Case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` after one surrounding SP/HTAB trim; no other normalization |
-| `description` | `varchar(300)` | Trimmed, nonblank text |
+| `description` | `varchar(300)` | General NFC/U+0020 policy; 1–300 Unicode code points |
 | `quantity` | `numeric(12,6)` | `0.000001`–`999999.999999` |
 | `unitPrice` | `numeric(12,6)` | `0.000000`–`999999.999999` |
 | `discount` | `numeric(17,2)` | `0.00`–`999999999999999.99`; no greater than gross amount |
@@ -89,8 +92,9 @@ Logical persistence name: `invoice_line`.
 | `netAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
 | `lineTotal` | `numeric(17,2)` | Net plus tax; `0.00`–`999999999999999.99` |
 
-Constraints include `UNIQUE (invoice_draft_id, position)`, locale-independent
-`CHECK (product_code ~ '^[A-Za-z0-9]{1,25}$')`, and row-local non-negative/scale checks.
+The final V3→V5 schema includes `UNIQUE (invoice_draft_id, position)`, locale-independent
+`CHECK (product_code ~ '^[A-Za-z0-9]{1,25}$')`, and row-local non-negative/scale checks. V3 is
+immutable; pending V5 replaces only the affected product/buyer constraints with exact ASCII rules.
 The maximum collection count is enforced before persistence and verified after aggregate loading;
 no speculative trigger is introduced.
 
@@ -152,7 +156,10 @@ Logical persistence name: `invoice_payment`.
 | `catalogVersion` | `varchar(64)` | Applied catalog version |
 
 `UNIQUE (invoice_draft_id, payment_method_id)` prevents duplicate payment methods. Cross-row
-payment reconciliation remains a domain/application invariant verified before commit.
+payment reconciliation remains a calculated-value invariant verified in Stage 11B. The selected
+catalog row must exist, be active, and satisfy `target_valid_from <= emission_date` and
+`target_valid_to IS NULL OR emission_date <= target_valid_to`; lookup receives `emissionDate`, not
+server current date, request/transaction time, or `createdAt`.
 
 ## Child: Additional Information
 
@@ -163,12 +170,13 @@ Logical persistence name: `invoice_additional_information`.
 | `id` | `uuid` | Local primary key |
 | `invoiceDraftId` | `uuid` | Required local foreign key |
 | `position` | `integer` | Stable response order |
-| `name` | `varchar(300)` | Trimmed, nonblank, no control characters |
-| `canonicalName` | `varchar(300)` | Canonical uniqueness value |
-| `value` | `varchar(300)` | Trimmed, nonblank, no control characters |
+| `name` | `varchar(300)` | NFC once, surrounding `U+0020` trimmed, display case/internal punctuation/spaces preserved, 1–300 code points |
+| `canonicalName` | `varchar(300)` | Persisted Java canonical value: NFC → U+0020 trim → collapse U+0020 runs → `Locale.ROOT` lowercase |
+| `value` | `varchar(300)` | Same general display-text policy, 1–300 code points |
 
 Constraints include `UNIQUE (invoice_draft_id, canonical_name)` and
-`UNIQUE (invoice_draft_id, position)`. At most 15 entries are accepted.
+`UNIQUE (invoice_draft_id, position)`. At most 15 entries are accepted. PostgreSQL requires stored
+non-null/nonempty/bounded canonical values but never recalculates Java NFC or `Locale.ROOT` behavior.
 
 ## Local Idempotency Binding
 
@@ -300,6 +308,22 @@ by an existing draft. These catalogs are locally persisted but globally governed
 reference data, not Company master data. They contain no `company_id`, and aggregate Company
 scoping does not apply to their reference lookups.
 
+## General Unicode Storage Boundary
+
+General human-readable text is normalized to NFC once at the API/application boundary. That
+boundary rejects categories `Cc`, `Cf`, `Cs`, `Co`, `Cn`, `U+2028`, and `U+2029`; accepts only
+`U+0020` as spacing; rejects tabs, CR, LF, NBSP, and every other Unicode separator; trims
+surrounding `U+0020`; preserves internal punctuation, internal `U+0020`, and display case; and
+counts Unicode code points afterward. Comparison is case-sensitive unless a field rule overrides
+it. Assigned emoji such as `U+1F600` (`So`) is accepted when field format/length permits.
+
+OpenAPI documents format/length. API/application performs normalization and prohibited-code-point
+validation. Domain receives normalized values. PostgreSQL enforces nullability, nonempty values,
+maximum stored length, and required `canonical_name` but does not claim to reproduce Java Unicode
+normalization. Cross-layer tests use identical accented/decomposed, `U+0020`, tab/newline/NBSP,
+zero-width, emoji, case, and code-point-boundary vectors. Explicit ASCII product/passport/foreign-
+identification rules override this section.
+
 ## Numeric Storage Boundary
 
 Quantity and unit price use `numeric(12,6)`, money uses `numeric(17,2)`, and tax rates use
@@ -328,8 +352,9 @@ behavior is not introduced by this plan.
 
 ## Creation and Replay Lifecycle
 
-1. Capture `requestCreationInstant` exactly once and initialize safe correlation at the API
-   boundary.
+1. Capture `requestCreationInstant` exactly once, initialize safe correlation and neutral
+   `RequestDeadline`, and let the API adapter exclusively race the eventual application `Uni`,
+   arbitrate one terminal result, and perform HTTP mapping.
 2. Validate and normalize CompanyId, then validate correlation; in the API enforce exactly one
    Idempotency-Key field value, trim surrounding ASCII SP/HTAB once, apply its stable
    required/invalid/multiple outcome, and only then validate request representation in FR-041
@@ -339,14 +364,17 @@ behavior is not introduced by this plan.
 4. Look up a binding by CompanyId and key hash.
 5. Return the original Company-scoped draft when the stored fingerprint is equal, or return
    `IDEMPOTENCY_CONFLICT` when different.
-6. For an unbound command, validate local catalogs/domain rules and calculate all amounts using the
-   fixed expected date.
-7. After all business validations succeed and inside one reactive PostgreSQL transaction, call the
-   injectable clock once immediately before root persistence; persist that UTC `Instant` unchanged
-   as draft/binding `createdAt`, then persist root, children, and binding. It becomes externally
-   observable only after commit is confirmed and is not the emission-date source or physical
-   commit timestamp.
-8. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
+6. For an unbound command, Stage 10 validates only calculation-independent structure, catalogs,
+   normalized text, and payment-method existence/activity/effectiveness against `emissionDate`.
+7. Stage 11A calculates amounts. Stage 11B then validates, in order: calculated range/overflow;
+   discount-over-gross; final-consumer total limit; total-dependent payment shape/positivity; exact
+   payment reconciliation.
+8. After those validations succeed, T076 opens/owns one reactive PostgreSQL transaction, invokes
+   the persistence clock exactly once immediately before root persistence, and persists the same
+   UTC `Instant` unchanged as draft/binding `createdAt`, then root, children, and binding. T063 does
+   not supply that value. It becomes externally observable only after commit confirmation and is
+   neither the emission-date source nor a physical commit timestamp.
+9. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
    in a fresh Company-scoped read.
 
 Every pre-commit failure leaves no aggregate or binding. A committed binding remains authoritative

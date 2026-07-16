@@ -4,21 +4,22 @@
 
 **Created**: 2026-07-12
 
-**Status**: Approved for Task Generation — Implementation Blocked before T017
+**Status**: Governance Approved — Current Analyze Required before T017
 
 **Input**: User description: "Create and persist a complete Company-scoped electronic invoice draft
 for review before any fiscal identifier allocation or SRI interaction."
 
-**Approval Note**: Constitution v2.0.0 is approved on `main` and `origin/main`; the requirements
-checklist is complete; the reference-data baseline is approved; no material Pending Functional
-Validation remains; and this feature may proceed to task generation. Post-generation analysis
-remediation aligns the positive-payment capacity with the eight approved unique methods and
-clarifies that IVA category is the rule's immutable family rather than a separate entity.
+**Approval Note**: Constitution v2.0.1 is the current PATCH-amended governance text. The
+requirements checklist and reference-data baseline remain approved; the amendment clarifies the
+request/input versus response Company boundary and the Company-owned aggregate versus immutable
+global-catalog scope without expanding the feature.
 
 **Implementation Governance Gate**: T001–T016 were implemented before the mandatory post-task
-analysis gate. `governance-nonconformity.md` records the non-retroactive violation. T017 and every
-later implementation task remain blocked pending retrospective review, deviation disposition,
-explicit owner approval, and a new `$speckit-analyze` report with no related CRITICAL finding.
+analysis gate. `governance-retrospective-review.md` records the completed task-by-task review and
+the T010/T015 deviations; `astudilloalex` approved the retrospective with mandatory T017/T018
+corrective actions in `governance-owner-approval.md`, and `GATE-GOV-001` is released. The current
+`$speckit-analyze` gate remains required before T017. T019 remains blocked until T017 and T018
+complete successfully.
 
 ## Clarifications
 
@@ -105,9 +106,8 @@ explicit owner approval, and a new `$speckit-analyze` report with no related CRI
 - Q: May CompanyId appear in a response even though clients cannot supply it in a body? → A:
   Company identifiers are forbidden in request bodies and input schemas. The authoritative Company
   context is obtained only from the approved request header. A Company identifier may appear in a
-  response representation when explicitly required by the feature contract. The unqualified
-  constitutional word “bodies” remains pending formal constitutional clarification as recorded in
-  `governance-nonconformity.md`; Constitution v2.0.0 is not amended here.
+  response representation when explicitly required by the feature contract. Constitution v2.0.1
+  now governs this distinction formally and never permits request data to override Company context.
 - Q: Which repository work is Company-scoped? → A: Every repository query or mutation involving
   the Invoice Draft aggregate or its idempotency binding must include and enforce the authoritative
   Company identifier. Global VAT, payment-method, identification-type, and other immutable SRI
@@ -116,6 +116,22 @@ explicit owner approval, and a new `$speckit-analyze` report with no related CRI
   uses case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`; passport (`06`) and foreign identification
   (`08`) use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`. Each field permits one leading/trailing
   ASCII SP/HTAB trim before validation and no other normalization.
+- Q: What policy governs general human-readable text? → A: Normalize to NFC once at the
+  API/application boundary; reject Unicode categories `Cc`, `Cf`, `Cs`, `Co`, and `Cn`, plus
+  `U+2028` and `U+2029`; permit only ASCII SPACE `U+0020` as spacing inside canonical single-line
+  text; trim surrounding `U+0020`; preserve internal punctuation and display case; and count
+  Unicode code points after normalization and trimming. Field-specific ASCII rules remain stricter.
+- Q: Which date governs payment-method validity? → A: The invoice `emissionDate`. A method is valid
+  only when it exists, is active, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
+  emissionDate <= effectiveTo`; both finite boundaries are inclusive.
+- Q: Which component owns deadline arbitration? → A: The API adapter alone races the application
+  `Uni` against the monotonic deadline, accepts exactly one terminal result, discards late outcomes,
+  and selects/maps HTTP status and Problem Details. Application and repositories remain
+  transport-neutral and receive deadline context only for cooperative budget checks.
+- Q: Who invokes the persistence clock? → A: The transactional persistence operation represented
+  by T076 invokes the injected clock exactly once inside its active transaction after all business
+  validation and immediately before root persistence. Use-case orchestration never invokes,
+  supplies, replaces, or overwrites `createdAt`.
 
 ## Scope and Evidence *(mandatory)*
 
@@ -188,7 +204,7 @@ issued electronic invoice, or triggering any SRI side effect.
 |-----------|-------------------------|---------------------------|
 | Applicable Ecuadorian legislation | [Regulation for Sales, Withholding, and Complementary Documents, SRI consolidated copy dated 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf), together with [later amendments listed by the SRI](https://www.sri.gob.ec/facturacion-electronica) | Establishes invoices as sales documents and governs issuer responsibility and required invoice information. This feature creates only an internal pre-issuance draft. |
 | Official SRI technical documentation | [Electronic Tax Documents Offline Scheme Technical Sheet v2.32, updated 2025-10-08](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/29562323-2e76-42f5-abb6-cb7ac542c3c6/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.32.pdf) and the [SRI electronic invoicing page](https://www.sri.gob.ec/facturacion-electronica), which lists invoice XSD/XML versions 1.0.0 through 2.1.0 updated in 2022-02 | Governs official catalogs, invoice fields, tax and payment representations, and the later generation/authorization process. XML generation and XSD selection are excluded here. |
-| Project constitution | `.specify/memory/constitution.md` v2.0.0 | Governs authority, target-first scope, `X-Company-Id`, caller-agnostic Company scoping, Company master-data exclusion, fiscal-stage separation, atomic persistence, testing, and workflow. |
+| Project constitution | `.specify/memory/constitution.md` v2.0.1 | Governs authority, target-first scope, precise Company request/response and owned/global scoping, Company master-data exclusion, fiscal-stage separation, atomic persistence, testing, and workflow. |
 | Approved target requirements | This specification and its recorded clarification decisions | Governs the internal `DRAFT` behavior and the explicit absence of fiscal side effects. |
 | Legacy evidence | `docs/legacy/as-is/04-data-model.md`; `docs/legacy/as-is/05-business-rules.md`; `docs/legacy/as-is/06-validation-rules.md`; `docs/legacy/as-is/07-process-flows.md`; `docs/legacy/as-is/10-security-access-control.md`; `docs/legacy/as-is/14-pending-functional-validation.md` | Supplies historical scenarios for invoice graphs, calculations, validation gaps, persistence, side effects, and tenant risks. It is not target authority. |
 
@@ -280,14 +296,16 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
    **then** gross amount is `20.00`, net amount is `15.00`, tax is `2.25`, and that line contributes
    `17.25` to the grand total; this scenario does not state that 15% is universally applicable.
 3. **Given** a line with gross amount `20.00` and discount `21.00`, **when** draft creation is
-   attempted, **then** a business validation error is returned and no draft or child data is
-   persisted.
+   attempted, **then** Stage 10 accepts the independently valid discount format, Stage 11A
+   calculates gross amount, and Stage 11B rejects `discount > gross` in its defined position; no
+   draft or child data is persisted.
 4. **Given** otherwise valid data with no invoice lines, **when** draft creation is attempted,
    **then** the request is rejected and no draft is persisted.
 5. **Given** a calculated grand total of `100.00` and payments totaling `90.00`, **when** draft
    creation is attempted, **then** a payment-total validation error is returned and no draft is
    persisted.
-6. **Given** `X-Company-Id` is missing or contains no usable value after trimming, **when** draft
+6. **Given** `X-Company-Id` is missing or contains no usable value after one surrounding ASCII
+   SP/HTAB trim, **when** draft
    creation is attempted, **then** `COMPANY_CONTEXT_REQUIRED` is returned in a safe English error
    response with a correlation identifier and no draft, child, or idempotency binding is persisted.
 7. **Given** buyer identification that fails the approved rule for its active identification type,
@@ -296,7 +314,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 8. **Given** a valid draft request, **when** creation succeeds, **then** no official sequential
    number is reserved, no access key is generated, no XML is generated or signed, no certificate
    is required, no notification is sent, and no SRI communication occurs.
-9. **Given** an inactive buyer identification type, IVA tax rule, or payment method,
+9. **Given** an inactive buyer identification type or IVA tax rule, or a payment method that is
+   inactive or not effective on the invoice `emissionDate`,
    **when** draft creation is attempted, **then** the request is rejected and no draft is persisted.
 10. **Given** a request body supplies `companyId`, **when** strict
     request-body validation is performed, **then** the property is rejected as unknown or
@@ -320,12 +339,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     grand total at or below the effective SRI final-consumer threshold, **when** draft creation is
     attempted, **then** the final-consumer identification is valid; **and given** any mismatch in
     that type, value, or name, or a grand total above the threshold, **then** the request is rejected
-    and no draft is persisted.
+    and no draft is persisted. Type, value, and name are Stage 10 checks; the calculated-total
+    threshold is checked only in Stage 11B after Stage 11A.
 16. **Given** an unknown, inactive, not-yet-effective, expired, or unresolved identification type,
     **when** draft creation is attempted, **then** the request is rejected and no draft is
     persisted.
 17. **Given** at least one valid line, explicitly selected applicable tax treatment on every line,
-    a rounded grand total of `0.00`, and exactly one active payment method with amount `0.00`,
+    a rounded grand total of `0.00`, and exactly one active payment method effective on
+    `emissionDate` with amount `0.00`,
     **when** draft creation is attempted, **then** the complete zero-value draft is accepted and
     persisted.
 18. **Given** a rounded grand total of `0.00`, **when** the request contains no payment, more than
@@ -370,17 +391,19 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     15 additional-information entries, **when** draft creation is attempted, **then** the request is
     rejected and no draft or child data is persisted.
 31. **Given** otherwise valid text values exactly at their approved maximum lengths and formats,
-    **when** draft creation is attempted, **then** the text values are accepted after required
-    leading and trailing whitespace removal; `productCode` and buyer types `06`/`08` satisfy their
-    exact case-sensitive ASCII expressions without case folding or Unicode normalization.
+    **when** draft creation is attempted, **then** general text is accepted after one NFC pass and
+    surrounding `U+0020` trimming with length counted in Unicode code points; `productCode` and
+    buyer types `06`/`08` instead satisfy their stricter exact case-sensitive ASCII expressions
+    after their one surrounding SP/HTAB trim, without case folding or Unicode normalization.
 32. **Given** a product code, description, buyer name, contact field, additional-information name or
     value, or idempotency key exceeding its maximum length, **when** draft creation is attempted,
     **then** the applicable stable validation error is returned—`IDEMPOTENCY_KEY_INVALID` for the
     over-length header—and no draft, child, or idempotency binding is persisted.
-33. **Given** a required text value that is blank after trimming, text containing a control
-    character, an invalid email or telephone, or a duplicate additional-information name after
-    trimming, **when** draft creation is attempted, **then** the request is rejected and no draft or
-    child data is persisted.
+33. **Given** a required general text value empty after surrounding `U+0020` trimming, text
+    containing a category `Cc`, `Cf`, `Cs`, `Co`, or `Cn` code point, `U+2028`, `U+2029`, tab,
+    carriage return, line feed, non-breaking space, or another non-`U+0020` separator, an invalid
+    email or telephone, or a duplicate persisted `canonicalName`, **when** draft creation is
+    attempted, **then** the request is rejected and no draft or child data is persisted.
 34. **Given** a valid Company header and opaque emission-point identifier, **when** otherwise valid
     draft creation succeeds, **then** the draft is owned by that immutable Company UUID and retains
     the emission-point identifier without resolving Company fiscal context.
@@ -493,9 +516,27 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     or idempotency binding is created.
 61. **Given** exactly one `Idempotency-Key` value with leading or trailing ASCII SP/HTAB and valid
     internal characters, **when** the API validates it, **then** the API trims the surrounding
-    ASCII whitespace exactly once, preserves internal characters and case, validates the
+    ASCII SP/HTAB exactly once, preserves internal characters and case, validates the
     normalized 1–128-character value, and uses that identical normalized value for idempotency
     lookup, hashing, and persistence; replay returns the original persisted `createdAt`.
+62. **Given** a payment method whose `effectiveFrom` equals the invoice `emissionDate`, **when** it
+    exists and is active, **then** it is accepted because the lower boundary is inclusive.
+63. **Given** a payment method with finite `effectiveTo` equal to the invoice `emissionDate`,
+    **when** it exists and is active, **then** it is accepted because the upper boundary is
+    inclusive.
+64. **Given** a payment method whose `effectiveFrom` is after the invoice `emissionDate`, **when**
+    independent business validation runs, **then** it is rejected as not yet effective.
+65. **Given** a payment method whose finite `effectiveTo` is before the invoice `emissionDate`,
+    **when** independent business validation runs, **then** it is rejected as expired.
+66. **Given** an active payment method whose `effectiveTo` is `NULL` and whose `effectiveFrom` is
+    on or before the invoice `emissionDate`, **when** independent business validation runs,
+    **then** it is accepted as open-ended.
+67. **Given** an inactive payment method whose date interval includes the invoice `emissionDate`,
+    **when** independent business validation runs, **then** it is rejected because activity and
+    temporal effectiveness are both required.
+68. **Given** an active payment method whose date interval excludes the invoice `emissionDate`,
+    **when** independent business validation runs, **then** it is rejected without consulting the
+    server date, request arrival time, transaction time, or `createdAt`.
 
 ### Edge Cases
 
@@ -598,17 +639,18 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   traces as a consequence of validation failure.
 - A draft with 501 invoice lines, 9 payments, or 16 additional-information entries MUST be
   rejected without partial persistence.
-- Leading and trailing whitespace MUST be removed from text before length, format, nonblank,
-  uniqueness, persistence, and idempotency-equivalence evaluation. A required or supplied optional
-  text value that is empty afterward MUST be rejected.
-- Control characters MUST be rejected in every caller-supplied text field.
+- General human-readable text MUST follow the executable NFC/U+0020 policy in FR-035 and DR-019;
+  fields with an explicit stricter ASCII rule follow that rule instead. A required or supplied
+  optional value that is empty after its specified normalization MUST be rejected.
+- Prohibited Unicode categories and separators in FR-035 MUST be rejected before domain entry.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 - **FR-001**: Every create request MUST contain exactly one `X-Company-Id` HTTP request-header value.
-  The value MUST be nonblank, syntactically valid as one UUID, and different from the nil UUID. A
+  The API MUST trim surrounding ASCII SP/HTAB exactly once. The normalized value MUST be nonblank,
+  syntactically valid as one UUID, and different from the nil UUID. A
   missing or blank value MUST produce `COMPANY_CONTEXT_REQUIRED`; a repeated, malformed, or nil
   value MUST produce `COMPANY_CONTEXT_INVALID`. Either result MUST use a safe English error response,
   include or return a correlation identifier, and leave no draft, child data, or idempotency
@@ -657,9 +699,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   trim. Their comparison is case-sensitive; internal characters, case, and Unicode representation
   MUST NOT be altered.
 - **FR-008**: Buyer address, email, and telephone MAY be captured as optional contact information.
-  When present, an address MUST contain 1 to 300 characters, an email MUST be one syntactically
-  valid address of no more than 254 characters, and a telephone MUST contain no more than 20
-  characters, exactly 7 to 15 digits, and only digits, `+`, spaces, hyphens, and parentheses.
+  General-text normalization in FR-035 applies before these checks. When present, an address MUST
+  contain 1 to 300 Unicode code points, an email MUST be one syntactically valid address of no more
+  than 254 Unicode code points, and a telephone MUST contain no more than 20 Unicode code points,
+  exactly 7 to 15 ASCII digits, and only ASCII digits, `+`, `U+0020`, hyphens, and parentheses.
 - **FR-009**: A draft MUST contain between 1 and 500 invoice lines, inclusive.
 - **FR-010**: Every invoice line MUST contain a product or service code, description, quantity
   greater than zero and no greater than `999999.999999`, unit price from `0` through
@@ -667,7 +710,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   selected IVA tax rule. Quantity and unit price MUST contain no more than six fractional digits.
   After trimming leading/trailing ASCII SP/HTAB exactly once, the code MUST match case-sensitive
   ASCII `^[A-Za-z0-9]{1,25}$`; internal characters and case MUST remain unchanged and no case
-  folding or Unicode normalization is allowed. The description MUST contain 1 to 300 characters.
+  folding or Unicode normalization is allowed. The description follows FR-035 and MUST contain
+  1 to 300 Unicode code points after NFC normalization and surrounding `U+0020` trimming.
 - **FR-011**: Each selected tax rule MUST be active, MUST have immutable family `IVA`, and its
   effective period MUST include the draft emission date. Supported rules MUST represent configured
   percentage-rate IVA, IVA 0%, not subject to IVA, or exempt from IVA. Any other tax or multiple
@@ -682,16 +726,21 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   and MUST NOT persist any draft data. Every monetary input, exact intermediate result, rounded line
   result, grouped amount, payment sum, subtotal, discount total, tax amount, and grand total MUST
   remain within `0.00` through `999999999999999.99` inclusive.
-- **FR-013**: A draft MUST contain at least one payment and every payment MUST select an active
-  payment method. When the rounded grand total is greater than `0.00`, every payment amount MUST be
+- **FR-013**: A draft MUST contain at least one payment. Every payment method MUST exist, be active,
+  and be effective on the invoice `emissionDate` according to the inclusive predicate
+  `effectiveFrom <= emissionDate AND (effectiveTo IS NULL OR emissionDate <= effectiveTo)`.
+  Repository lookup MUST receive the payment-method identifier and `emissionDate`; it MUST NOT use
+  server current date, request arrival time, transaction timestamp, or `createdAt`. When the rounded
+  grand total is greater than `0.00`, every payment amount MUST be
   greater than `0.00` and no greater than `999999999999999.99`, and the draft MUST contain no more
   than 8 payments. When the rounded grand total is `0.00`, the draft MUST contain exactly one
   payment with amount `0.00`. A selected payment method MUST appear at most once within the draft.
 - **FR-014**: The exact sum of two-decimal payment amounts MUST equal the system-calculated
   two-decimal grand total after the DR-010 rounding pipeline is applied.
 - **FR-015**: Optional additional information MUST contain no more than 15 named textual entries.
-  Each entry's name and value MUST contain 1 to 300 characters. Names MUST be unique within the
-  draft after trimming; two names with identical trimmed characters are duplicates.
+  Each entry's display name and value MUST contain 1 to 300 Unicode code points under FR-035.
+  Names MUST be unique within the draft by the persisted `canonicalName` produced exactly as
+  DR-019 defines; database locale MUST NOT recalculate it.
 - **FR-016**: The invoice currency MUST be USD.
 - **FR-017**: A successfully created record MUST have internal target status `DRAFT`. That status
   MUST NOT be represented as an official SRI status or evidence of fiscal issuance.
@@ -706,7 +755,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   required. The same immutable `java.time.Instant` value MUST be persisted and returned. Rollback
   means that value is never exposed as a created resource, and idempotent replay MUST return the
   originally persisted `createdAt`. The application clock abstraction MUST remain injectable and
-  deterministic for tests. `createdAt` MUST NOT derive the accepted emission date, and the
+  deterministic for tests. The transactional persistence operation represented by T076 is the sole
+  persistence-clock invocation owner; it calls once at the defined point and use-case orchestration
+  neither calls that clock nor supplies, replaces, or overwrites `createdAt`. `createdAt` MUST NOT
+  derive the accepted emission date, and the
   last-modification timestamp MUST NOT precede it.
 - **FR-020**: The complete draft, its invoice lines, tax selections and calculated amounts,
   payments, and additional information MUST be persisted as one all-or-nothing outcome.
@@ -738,7 +790,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   internal paths, persistence errors, stack traces, or other sensitive implementation details.
 - **FR-026**: Correlation MUST be initialized at the request boundary for every creation attempt.
   When `X-Correlation-Id` is absent, the service MUST generate a safe UUID. One supplied value MUST
-  be trimmed and preserved only when it contains 1 to 64 characters, begins with an ASCII letter or
+  be trimmed once of surrounding ASCII SP/HTAB and preserved only when its normalized value
+  contains 1 to 64 ASCII characters, begins with an ASCII letter or
   digit, and contains only ASCII letters, digits, `.`, `_`, `:`, or `-`. A blank, repeated,
   over-length, or otherwise unsafe supplied value MUST NOT be echoed; the service MUST generate a
   safe replacement UUID and return `INVALID_REQUEST` when correlation validation is the governing
@@ -801,10 +854,21 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   the original emission date against the current Ecuadorian civil date.
 - **FR-034**: The invoice-draft capability MUST own its idempotency binding and MUST NOT delegate
   that responsibility to a Company capability, gateway, BFF, or other external service.
-- **FR-035**: Buyer legal name MUST contain 1 to 300 characters. Leading and trailing whitespace
-  MUST be removed from every caller-supplied text value before validation, persistence, and
-  idempotency-equivalence evaluation. A required or supplied optional text value that is blank after
-  trimming, or any text containing a control character, MUST be rejected without persistence.
+- **FR-035**: Buyer legal name MUST contain 1 to 300 Unicode code points. Unless a field has a
+  stricter approved rule, every human-readable single-line text input MUST be interpreted as
+  Unicode and normalized to NFC exactly once at the API/application boundary. That boundary MUST
+  reject code points in Unicode categories `Cc`, `Cf`, `Cs`, `Co`, and `Cn`; reject line separator
+  `U+2028` and paragraph separator `U+2029`; and accept only ASCII SPACE `U+0020` as spacing within
+  canonical single-line text. Tabs, carriage returns, line feeds, non-breaking spaces, and every
+  other Unicode separator MUST be rejected. Leading and trailing `U+0020` MUST be trimmed; internal
+  punctuation and internal `U+0020` runs MUST otherwise remain unchanged for display values.
+  Length MUST be counted in Unicode code points after NFC normalization and trimming. Display case
+  MUST be preserved and comparison MUST be case-sensitive unless a field-specific rule explicitly
+  says otherwise. A required or supplied optional value empty after that processing MUST be
+  rejected without persistence. Emoji whose assigned code point is not in a prohibited category
+  (for example `U+1F600`, category `So`) is accepted when the field's length and format allow it.
+  Product code and buyer-identification fields in the Executable ASCII Repertoires table override
+  this general policy with their stricter rules.
 - **FR-036**: Create Invoice Draft MUST NOT call a Company Service or introduce a Company-context
   port, client, repository, entity, validation or authorization adapter, eligibility lookup, status
   cache, master-data replica, direct Company-database access, cross-service foreign key, shared
@@ -830,35 +894,63 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   Company identifier. HTTP headers MUST NOT enter the domain model, and application or domain logic
   MUST NOT depend on HTTP request objects, security contexts, thread-local request context, gateway
   implementations, or Company Service clients.
-- **FR-041**: Observable failure evaluation MUST use this precedence: (1) request payload-size
-  enforcement; (2) `X-Company-Id` presence, cardinality, trimming, UUID syntax, and nil validation;
-  (3) `X-Correlation-Id` validation; (4) `Idempotency-Key` presence, parsed cardinality, one-time
-  ASCII SP/HTAB trimming, and normalized grammar validation with the FR-027 stable codes; (5) request
-  representation and unknown or prohibited property validation; (6) normalized business-content
-  generation; (7) local Company-scoped idempotency lookup; (8) equivalent binding returns the
-  original persisted draft; (9) a binding with different content returns `IDEMPOTENCY_CONFLICT`;
-  (10) buyer, line, tax-selection, payment, text, and collection validation; (11) monetary and tax
-  calculation; and (12) atomic aggregate and idempotency-binding persistence. Correlation
-  initialization MUST still produce a safe identifier for an earlier payload-size or
-  Company-context error, but correlation invalidity MUST NOT replace that higher-precedence error.
-  No authentication, authorization, tenant resolution, Company lookup, Issuer lookup, or
-  emission-point ownership validation step may be inserted. These numbers define precedence among
-  stage outcomes that become conclusive; `REQUEST_TIMEOUT` is a cross-cutting terminal outcome and
-  is not an additional numbered validation or persistence stage. One transport-independent
-  deadline MUST be captured at the earliest HTTP boundary from a monotonic elapsed-time source and
-  MUST arbitrate before and during every stage. A stage outcome wins only if it becomes conclusively
-  determined before deadline expiry. If expiry occurs first, `REQUEST_TIMEOUT` (`504`) wins and a
-  later stage completion MUST NOT replace it; once any terminal outcome is conclusively selected
-  before expiry, a later deadline signal MUST NOT replace that outcome.
+- **FR-041**: Observable processing MUST use this exact precedence:
 
-  For payload reading, conclusive over-limit detection before expiry selects
-  `REQUEST_PAYLOAD_TOO_LARGE`, while expiry before size classification selects `REQUEST_TIMEOUT`.
-  For Company, correlation, and idempotency headers, conclusive invalidity before expiry selects the
-  approved `400`, while expiry before classification selects `REQUEST_TIMEOUT`. Replay or conflict,
-  business validation, calculation, rollback, persistence failure, or successful commit similarly
-  wins only when conclusively determined before expiry. Expiry while commit outcome is unresolved
-  selects `REQUEST_TIMEOUT` as an uncertain outcome; later database completion does not change the
-  selected HTTP result and same-scope replay determines authoritative state.
+  1. request payload-size enforcement;
+  2. `X-Company-Id` presence, cardinality, trimming, UUID syntax, and nil validation;
+  3. `X-Correlation-Id` validation;
+  4. `Idempotency-Key` presence, parsed cardinality, one-time ASCII SP/HTAB trimming, normalized
+     grammar validation, and the FR-027 stable error codes;
+  5. request representation and unknown/prohibited-property validation;
+  6. normalized business-content generation under FR-035/DR-019;
+  7. local Company-scoped idempotency lookup;
+  8. equivalent binding returns the original persisted draft;
+  9. different-content binding returns `IDEMPOTENCY_CONFLICT`;
+  10. **Stage 10 — Independent business validation**: validate only rules that do not require a
+      calculated monetary value—required buyer data; identification type and syntactic value;
+      required lines and cardinality; product code and description; quantity/unit-price scale and
+      sign; tax-rule existence, activity, date effectiveness, family, and applicability;
+      payment-method existence, activity, and effectiveness on `emissionDate`; payment collection
+      structure, uniqueness, cardinality, and basic amount format/range; text/collection rules; and
+      other catalog or structural rules independent of calculated totals;
+  11. **Stage 11A — Monetary calculation**: deterministically calculate line gross amount, line
+      discount amount, taxable base, tax amounts, line totals, subtotal aggregates, invoice taxes,
+      invoice total, and the payment-reconciliation reference total using DR-010; then
+      **Stage 11B — Calculated-value validation** MUST evaluate in this exact order:
+      1. calculated/intermediate/aggregate monetary range or overflow, ordered by lowest line
+         position first, then canonical tax group, then invoice aggregate;
+      2. discount exceeding calculated line gross amount, by lowest line position;
+      3. final-consumer limit against the calculated invoice total;
+      4. total-dependent payment shape and positivity rules, including the zero-total special case;
+      5. exact payment-sum reconciliation against the calculated invoice total; and
+      6. any future calculated-value limit or invariant added by this feature, only after an
+         approved artifact amendment places it deterministically in this list; and
+  12. atomic aggregate and idempotency-binding persistence.
+
+  Stage 10 MUST NOT reject a structurally valid discount merely because it may exceed a not-yet-
+  calculated gross amount, apply a final-consumer total threshold, or reconcile payments. Stage 11B
+  MUST NOT run before Stage 11A produces the required values. If multiple failures exist within one
+  listed Stage 11B item, deterministic line/tax/aggregate ordering applies before advancing to the
+  next item.
+
+  Correlation initialization still produces a safe identifier for an earlier payload-size or
+  Company-context error, but correlation invalidity never replaces that earlier outcome. No
+  authentication, authorization, tenant resolution, Company lookup, Issuer lookup, or
+  emission-point ownership step may be inserted.
+
+  The API adapter is the exclusive owner of the monotonic request-deadline race, terminal-result
+  arbitration, second-terminal-response prevention, HTTP-status selection, and Problem Details
+  mapping. It captures/constructs a neutral `RequestDeadline` at the earliest HTTP boundary and may
+  transport deadline context to the application only for cooperative cancellation or
+  remaining-budget checks. The application use case and repositories return only transport-neutral
+  results or typed failures; they MUST NOT choose HTTP status, create HTTP exceptions/envelopes, or
+  arbitrate terminal responses. The API races the application `Uni` against expiry and accepts
+  exactly one terminal result. Timeout wins whenever expiry becomes terminal before an application
+  outcome is accepted; any late application or database result is discarded and cannot produce a
+  second response. When an application outcome is accepted first, later expiry cannot replace it.
+  HTTP `504` mapping exists only in the API adapter, and Company `400` plus all other HTTP mappings
+  occur only after terminal arbitration. Expiry while commit state is unresolved produces the
+  neutral uncertain outcome needed for same-scope replay; it never makes a zero-state claim.
 - **FR-042**: The create operation MUST reject a request body larger than `2 MiB` (`2,097,152`
   bytes), when that fact is conclusively detected before deadline expiry, with
   `REQUEST_PAYLOAD_TOO_LARGE` (`413`) before Company-header evaluation. Correlation classification
@@ -966,13 +1058,21 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   confirmation. It is not PostgreSQL's physical commit timestamp; no post-commit timestamp query or
   reconstruction and no `track_commit_timestamp` setting is permitted or required. Rollback never
   exposes it as a created resource, and equivalent replay returns the originally persisted value.
-  The injectable application clock MUST support deterministic tests. `createdAt` MUST NOT determine
+  The transactional persistence operation is the sole persistence-clock invocation owner. It MUST
+  invoke the injected clock exactly once inside the active transaction at that defined point and
+  use the same returned `java.time.Instant` for every persistence record that requires the draft
+  creation timestamp. Use-case orchestration MUST NOT invoke the persistence clock, calculate,
+  supply, replace, or overwrite `createdAt`; no second persistence-clock invocation is permitted for
+  one creation attempt. The injectable clock abstraction MUST support deterministic tests.
+  `createdAt` MUST NOT determine
   the accepted emission date. Creation and last-modification timestamps MUST be unambiguous
   instants, and replay MUST return the original emission date without comparison to the current
   Ecuadorian date.
 - **DR-013**: Impossible dates, inconsistent totals, inactive or temporally inapplicable catalog
   combinations, unsupported identification types, and invalid local aggregate relationships MUST
-  be rejected without normalization or partial persistence.
+  be rejected without partial persistence. A payment method is temporally applicable only when
+  `effectiveFrom <= emissionDate` and `effectiveTo` is null or `emissionDate <= effectiveTo`, with
+  inclusive boundaries and no dependence on any server/current/transaction/creation time.
 - **DR-014**: RUC (`04`) MUST use `FORMAT_ONLY_NUMERIC_13` with exactly 13 ASCII digits;
   Ecuadorian identity card (`05`) MUST use `FORMAT_ONLY_NUMERIC_10` with exactly 10 ASCII digits.
   Passport (`06`) and foreign identification (`08`) MUST use
@@ -1000,12 +1100,27 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **DR-018**: Idempotency scope MUST be exactly normalized Company UUID plus idempotency key. A
   Company UUID is business context, and neither it nor an idempotency key authenticates a caller,
   authorizes access, or proves entitlement.
-- **DR-019**: The normalized text values governed by FR-008, FR-010, FR-015, and FR-035 are the
-  canonical values used for persistence and idempotency equivalence. Lengths MUST be measured after
-  the applicable field-specific trimming and before persistence. `productCode`, passport, and
-  foreign identification use their exact one-time ASCII SP/HTAB trim and otherwise preserve case
-  and internal characters. `Idempotency-Key` is a transport header governed exclusively by the API
-  normalization/cardinality rule in FR-027 and is not a domain text value.
+- **DR-019**: For general human-readable fields, the API/application boundary MUST perform exactly
+  one NFC normalization pass, reject every prohibited code point/separator in FR-035, trim only
+  surrounding `U+0020`, preserve internal punctuation, internal `U+0020` runs, and display case,
+  and count length in Unicode code points afterward. Comparison is case-sensitive unless explicitly
+  overridden. These normalized display values are used for persistence and idempotency
+  equivalence. The domain receives already normalized values and enforces business invariants.
+  OpenAPI documents format and length expectations. PostgreSQL enforces non-null, nonempty,
+  approved maximum length, and required stored canonical values but MUST NOT claim to reproduce
+  Java Unicode normalization.
+
+  `canonicalName` MUST be produced exactly once by: (1) NFC normalization; (2) leading/trailing
+  `U+0020` trim; (3) collapse of each consecutive internal `U+0020` run to one `U+0020`; (4)
+  lowercase conversion with Java `Locale.ROOT`; (5) persistence of that result; and (6) use of the
+  persisted canonical value for additional-information uniqueness and the applicable idempotency
+  comparison. PostgreSQL/database locale MUST NOT recalculate it. `productCode`, passport, and
+  foreign identification use their stricter one-time ASCII SP/HTAB trim and otherwise preserve
+  case/internal characters. `Idempotency-Key` is a transport header governed exclusively by
+  FR-027 and is not a domain text value. Cross-layer tests MUST use identical approved vectors for
+  accented Latin, decomposed/composed equivalents, surrounding/repeated `U+0020`, tab, newline,
+  non-breaking space, zero-width `Cf`, accepted emoji `So`, case differences, and code-point length
+  boundaries.
 - **DR-020**: Every draft MUST have exactly one immutable normalized Company UUID. Every line,
   payment, tax selection, tax total, and additional-information entry MUST belong to that draft;
   accidental mixing of child data between Company-scoped drafts is prohibited.
@@ -1036,6 +1151,32 @@ length boundaries. POSIX `[[:alnum:]]`, Unicode character classes, locale-depend
 broader repertoires are not equivalent. Any broader repertoire requires separately documented and
 approved fiscal justification.
 
+### Executable General Text Policy and Vectors
+
+This table applies to human-readable text unless a field has a stricter approved rule. Field
+minimum/maximum lengths come from FR-008, FR-010, FR-015, and FR-035 and are counted as Unicode code
+points after NFC and surrounding `U+0020` trim.
+
+| Vector | Canonical result | Accepted | Reason |
+|--------|------------------|----------|--------|
+| `José Álvarez` (NFC accented Latin) | unchanged | Yes | Assigned letters and `U+0020` are allowed |
+| `Jose\u0301` (decomposed) | `José` | Yes | Exactly one NFC pass makes it equivalent to composed input |
+| `  Acme  Uno  ` | display `Acme  Uno`; `canonicalName` `acme uno` | Yes | Surrounding `U+0020` is trimmed; display keeps the run; canonical name collapses it |
+| `Acme\tUno` | none | No | Tab is category `Cc` and is not `U+0020` |
+| `Acme\nUno` | none | No | Line feed is category `Cc` |
+| `Acme\u00A0Uno` | none | No | Non-breaking space is not `U+0020` |
+| `Acme\u200BUno` | none | No | Zero-width space is category `Cf` |
+| `Acme\u2028Uno` or `Acme\u2029Uno` | none | No | Line and paragraph separators are expressly prohibited |
+| `Happy 😀` | unchanged | Yes when within field format/length | `U+1F600` is assigned category `So`, which is not prohibited |
+| `Acme` versus `ACME` display values | unchanged and distinct | Yes | Display comparison is case-sensitive; both canonical names become `acme` |
+| Exactly the field maximum after normalization/trim | unchanged | Yes | Inclusive upper boundary |
+| Field maximum plus one code point | none | No | Code-point upper boundary exceeded |
+| Empty or only `U+0020` | empty | No for required/supplied text | Empty after the specified trim |
+
+OpenAPI documents these expectations; API/application code performs Unicode operations; the domain
+receives normalized values; PostgreSQL enforces stored non-null/nonempty/max-length/canonical
+barriers without reproducing Java normalization; and contract tests use these same vectors.
+
 ### Key Entities
 
 - **Invoice Draft**: Internal pre-issuance record identified by a unique draft identifier and owned
@@ -1064,16 +1205,17 @@ approved fiscal justification.
   draft creation.
 - **Tax Total**: System-calculated aggregate tax base and amount for one versioned tax-treatment-code
   and applicable-rate group.
-- **Payment Method**: Approved, versioned, effective reference identified by a stable published UUID
-  and retaining its official code, display name, validity interval, active state, catalog version,
-  and official source. No catalog-query operation is included in this feature.
+- **Payment Method**: Approved, versioned reference identified by a stable published UUID and
+  retaining its official code, display name, validity interval, active state, catalog version, and
+  official source. It is usable only when active and inclusively effective on the invoice
+  `emissionDate`; repository lookup receives that date. No catalog-query API operation is included.
 - **Payment**: Exact decimal amount assigned to one active payment method. Positive-total drafts
   contain only positive payments; zero-total drafts contain exactly one `0.00` payment. In every
   case, payment amounts reconcile exactly to the rounded grand total, and a payment method appears
   at most once.
 - **Additional Information**: Optional named textual entry captured for later review. A draft has
-  at most 15 entries; each trimmed name and value has 1 to 300 characters, and trimmed names are
-  unique within the draft.
+  at most 15 entries; each NFC-normalized/`U+0020`-trimmed display name and value has 1 to 300
+  Unicode code points, and names are unique by persisted `canonicalName` from DR-019.
 - **Idempotency Binding**: Company-scoped association among a hash of a caller-generated key,
   normalized creation-command business content, and the successfully committed invoice draft. Its
   uniqueness boundary is Company identifier plus key hash; its lifetime equals the draft's lifetime
@@ -1142,17 +1284,23 @@ approved fiscal justification.
   through commit, and every different or impossible date is rejected without persisted draft data.
   Every new accepted draft also persists and returns the one `createdAt` Instant captured inside
   the transaction after successful business validation and immediately before persistence; no
-  vector relies on a physical commit timestamp or post-commit reconstruction.
+  vector relies on a physical commit timestamp or post-commit reconstruction. Persistence evidence
+  proves that the T076 transactional operation is the only persistence-clock caller, calls it once
+  per creation attempt, writes the same Instant wherever required, and that orchestration never
+  supplies or overwrites it.
 - **SC-014**: Every request containing one or more system-calculated monetary fields is rejected
   with the same stable error category and persists no draft or child data, regardless of whether a
   supplied value matches the system's calculation.
 - **SC-015**: Drafts at the limits of 500 invoice lines, 8 positive payments, and 15
   additional-information entries are accepted when otherwise valid, and every request exceeding
   any limit is rejected without persisted draft data.
-- **SC-016**: Every business text field at its approved length and format boundary is accepted when
-  otherwise valid, and every over-limit, blank-after-trimming, control-character, invalid-contact,
-  or duplicate-additional-name vector is rejected without persisted draft data. Transport-header
-  Idempotency-Key evidence is governed separately by SC-012.
+- **SC-016**: Identical OpenAPI/API/application/domain/PostgreSQL vectors prove the exact general
+  text policy: NFC accented and decomposed/composed equivalents; surrounding and repeated internal
+  `U+0020`; tab/newline/NBSP/U+2028/U+2029/zero-width rejection; assigned emoji `So` acceptance
+  when the field format/length permits; display-case sensitivity; `Locale.ROOT` canonical-name
+  folding; and Unicode-code-point minimum/maximum boundaries. Every invalid or duplicate persisted
+  `canonicalName` vector creates no state. Stricter ASCII fields use their own table; transport
+  `Idempotency-Key` evidence remains governed separately by SC-012.
 - **SC-017**: Every accepted draft stores exactly one normalized immutable Company UUID and every
   persisted child belongs through that draft; test vectors produce zero accidental cross-Company
   child-data mixing.
@@ -1163,7 +1311,9 @@ approved fiscal justification.
   equivalence, while changing invoice-line order produces a conflict for an already bound scoped
   key; neither case creates a duplicate draft.
 - **SC-020**: Every accepted draft contains at most one payment per payment method, and every
-  duplicate-payment-method request is rejected without persisted draft data.
+  duplicate-payment-method request is rejected without persisted draft data. Payment reference
+  vectors prove existence, activity, inclusive `effectiveFrom`/`effectiveTo`, open-ended
+  `effectiveTo`, and before/after rejection against invoice `emissionDate` only.
 - **SC-021**: Every accepted line derives its tax code and rate from its selected effective catalog
   rule, and every request supplying a line tax code or rate is rejected without persisted draft
   data.
@@ -1182,10 +1332,12 @@ approved fiscal justification.
   emission-point fiscal attribute is rejected as unknown or prohibited and leaves zero draft,
   child, and idempotency-binding records.
 - **SC-026**: Every failure-precedence and controlled-deadline test produces the first outcome
-  conclusively determined under FR-041: the earliest applicable completed stage wins before expiry,
-  otherwise `REQUEST_TIMEOUT` wins. No later deadline signal or stage completion replaces the
-  selected outcome, and later validation, calculation, lookup, or persistence does not start after
-  that terminal outcome.
+  conclusively determined under FR-041: Stage 10 cannot perform calculated-value checks, Stage 11A
+  precedes the exact Stage 11B order, and the earliest accepted outcome wins before expiry;
+  otherwise timeout wins. Evidence proves only the API adapter races the application `Uni`, maps
+  HTTP `504` and other HTTP outcomes after arbitration, emits exactly one terminal response, and
+  discards late application/database outcomes. Application, domain, and repositories expose no
+  HTTP status, exception, envelope, or terminal arbiter.
 - **SC-027**: Every request body of `2,097,152` bytes or less proceeds to the next applicable
   validation step when known before expiry, while every larger body conclusively detected before
   expiry returns correlated `413` before Company-header evaluation and leaves zero state. Valid
@@ -1229,9 +1381,9 @@ including these precise Company-boundary checks:
 - Every Invoice Draft aggregate or idempotency-binding query/mutation enforces authoritative
   CompanyId, while global VAT, payment-method, identification-type, and other immutable SRI
   catalogs remain without Company ownership or Company columns.
-- `GATE-GOV-001` is released only through the real retrospective review, deviation disposition,
-  explicit owner approval, and new analysis evidence recorded in
-  `governance-nonconformity.md`; historical T001–T016 completion cannot substitute for that gate.
+- The T001–T016 retrospective and D1–D3 dispositions are approved, and `GATE-GOV-001` is released.
+  The current analysis gate and mandatory pending T017/T018 correction still apply; historical
+  completion cannot substitute, and T019 cannot start until both corrective tasks pass.
 
 ## Assumptions and Dependencies
 
@@ -1249,10 +1401,10 @@ including these precise Company-boundary checks:
   It is expected to strip every externally supplied `X-Company-Id` and inject exactly one canonical
   validated value. The Tax Document Service does not verify those actions. This is an accepted
   integration assumption, not a guarantee enforced by this feature. — **Basis**: Approved
-  Constitution v2.0.0 Company-context boundary.
+  Constitution v2.0.1 Company-context boundary.
 - **Assumption**: Any process capable of reaching this internal API can submit any syntactically
   valid non-nil Company UUID. The service accepts that UUID without entitlement or Company-state
-  verification. — **Basis**: Approved Constitution v2.0.0 trust boundary.
+  verification. — **Basis**: Approved Constitution v2.0.1 trust boundary.
 - **Dependency**: Draft creation has no Company Service, authentication, authorization, gateway,
   BFF, or Company master-data runtime dependency. Only the required Company header contract is
   visible at this service boundary.

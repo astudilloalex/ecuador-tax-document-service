@@ -113,8 +113,9 @@ Address each applicable category with a required outcome; do not answer an unkno
 - What happens at monetary precision, rounding, date, identifier, or catalog boundaries?
 - What happens for impossible dates, inconsistent totals, or invalid catalog combinations?
 - What happens when `X-Company-Id` is missing, repeated, blank, malformed, or nil?
-- Does any Company-scoped operation accept Company identifier in a path, query, body, token, or
-  session instead of the mandatory header?
+- Does any Company-scoped operation accept a Company identifier in a path, query, request body,
+  input schema, token, or session instead of the approved transport mechanism, or expose one in a
+  response without an explicit approved-contract requirement?
 - What happens for a duplicate command, retry, timeout, partial external failure, or reconciliation?
 - Does the feature accidentally introduce Company lookup, Company-client availability, local
   master data, or a draft-time fiscal snapshot?
@@ -140,10 +141,13 @@ Address each applicable category with a required outcome; do not answer an unkno
   value without performing caller authorization or Company lookup.
 - **FR-005**: The service MUST [idempotency, duplicate, timeout, recovery, or terminal-outcome rule
   when an external or asynchronous boundary is in scope].
-- **FR-006**: When Company context is in scope, the service MUST [require `X-Company-Id`, exclude the
-  identifier from path/query/body/token/session, define stable header failures, scope owned data and
-  idempotency by the normalized UUID, and exclude authentication, authorization, Company lookup or
-  dependency, Company master-data administration or replication, and draft-time fiscal snapshots].
+- **FR-006**: When Company context is in scope, the service MUST [require the approved transport
+  mechanism; exclude Company identifiers from path/query/request body/input schema/token/session;
+  permit a response Company identifier only when explicitly required by the approved contract;
+  define stable input failures; scope only Company-owned aggregate/persistence/idempotency work by
+  the normalized UUID; keep immutable global SRI reference catalogs outside automatic Company
+  scope; and exclude authentication, authorization, Company lookup or dependency, Company
+  master-data administration or replication, and draft-time fiscal snapshots].
 
 ### Domain Rules and Invariants *(include when fiscal or monetary behavior is in scope)*
 

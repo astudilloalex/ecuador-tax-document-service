@@ -12,8 +12,9 @@ Every error response uses safe English text and contains:
 - optional safe violations containing codes and field paths, never rejected values.
 
 Correlation is initialized at the request boundary for every terminal outcome. An absent
-`X-Correlation-Id` produces a generated safe UUID. Exactly one supplied value is trimmed and
-preserved only when it contains 1 to 64 characters, begins with an ASCII letter or digit, and
+`X-Correlation-Id` produces a generated safe UUID. Exactly one supplied value has surrounding
+ASCII SP/HTAB trimmed once and is preserved only when it contains 1 to 64 ASCII characters, begins
+with an ASCII letter or digit, and
 contains only ASCII letters, digits, `.`, `_`, `:`, or `-`. A blank, repeated, over-length, or
 otherwise unsafe value is never echoed; it is replaced with a safe UUID even when an earlier
 payload-size or Company-context outcome governs the response.
@@ -25,7 +26,7 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 
 | Code | HTTP | When returned | Retry/action | Persistence guarantee |
 |------|------|---------------|--------------|-----------------------|
-| `COMPANY_CONTEXT_REQUIRED` | 400 | `X-Company-Id` missing, blank after trimming, or without a usable value | Supply exactly one value | No draft, children, or binding |
+| `COMPANY_CONTEXT_REQUIRED` | 400 | `X-Company-Id` missing or blank after one surrounding ASCII SP/HTAB trim | Supply exactly one value | No draft, children, or binding |
 | `COMPANY_CONTEXT_INVALID` | 400 | Company header repeated/ambiguous, malformed UUID, or nil UUID | Supply one non-nil UUID | No draft, children, or binding |
 | `IDEMPOTENCY_KEY_REQUIRED` | 400 | `Idempotency-Key` is missing after HTTP header parsing | Supply exactly one header-field value | No lookup, draft, children, or binding |
 | `IDEMPOTENCY_KEY_INVALID` | 400 | Exactly one value is blank/whitespace-only after one ASCII SP/HTAB trim, longer than 128 normalized characters, or fails the approved non-comma ASCII grammar | Supply one valid normalized value | No lookup, draft, children, or binding |
@@ -34,7 +35,7 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
-| `BUSINESS_VALIDATION_FAILED` | 422 | Buyer, requestCreationInstant-derived emission date, lines, IVA selection, catalogs, text, collections, calculation, discount, zero-value, payment, or numeric-envelope rule fails; any quantity, unit-price, monetary, percentage-rate, exact-intermediate, rounded, grouped, payment-sum, or invoice-total overflow includes violation `MONETARY_RANGE_EXCEEDED` | Correct business content | No draft, children, or binding |
+| `BUSINESS_VALIDATION_FAILED` | 422 | Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate) or ordered Stage 11B calculated-value rules fail; range/overflow includes `MONETARY_RANGE_EXCEEDED` | Correct business content | No draft, children, or binding |
 | `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable, or its configured operation timeout/failure becomes conclusive while shared request-deadline budget remains | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit or complete rollback is confirmed |
 | `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline expires before the current FR-041 stage or persistence outcome becomes conclusive | Retry same Company/key/content | No state when expiry is confirmed before persistence; no zero-state claim when commit is unresolved; replay resolves uncertain or completed commit state |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
@@ -97,6 +98,8 @@ only after commit confirmation; rollback never exposes it and replay returns the
 not a physical PostgreSQL commit timestamp, is not queried or reconstructed after commit, and does
 not require `track_commit_timestamp`. It does not determine the accepted emission date.
 `requestCreationInstant` is operational application input, not an API request-body property.
+T076 is the sole persistence-clock invocation owner and calls it once at that point; T063 neither
+invokes that clock nor supplies, replaces, or overwrites `createdAt`.
 
 ## Failure Precedence
 
@@ -113,10 +116,14 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
 7. local Company-scoped binding lookup infrastructure outcome;
 8. equivalent binding success (`200`, not an error);
 9. `IDEMPOTENCY_CONFLICT`;
-10. `BUSINESS_VALIDATION_FAILED` for buyer, line, tax-selection, payment, text, collection, date,
-    and numeric-envelope validation, including `MONETARY_RANGE_EXCEEDED`;
-11. calculation failure as `BUSINESS_VALIDATION_FAILED` when input-driven, including any exact,
-    rounded, grouped, payment-sum, or invoice-total overflow;
+10. Stage 10 independent validation only: buyer/identification syntax; line/cardinality;
+    product/description; quantity/unit-price sign/scale; tax existence/applicability; payment-method
+    existence/activity/inclusive effectiveness on `emissionDate`; payment structure/basic amount;
+    text/catalog/structural rules;
+11. Stage 11A calculates monetary values, then Stage 11B returns
+    `BUSINESS_VALIDATION_FAILED` in exact order: (a) calculated range/overflow by line/tax-group/
+    aggregate order; (b) discount-over-gross by line; (c) final-consumer calculated-total limit;
+    (d) total-dependent payment shape/positivity; (e) exact payment reconciliation;
 12. persistence outcome (`PERSISTENCE_UNAVAILABLE` or `INTERNAL_ERROR`) or successful commit.
 
 Correlation initialization always produces a safe response identifier. When payload size is
@@ -129,12 +136,12 @@ value. Correlation does not affect idempotency equivalence.
 
 ### Cross-Cutting Deadline Arbitration
 
-`REQUEST_TIMEOUT` is a cross-cutting terminal result, not a numbered validation or persistence
-stage. One deadline begins before body consumption from a monotonic elapsed-time source, is never
-restarted, and applies before and during every FR-041 stage. A stage outcome wins only when it is
-conclusively determined before expiry. If expiry occurs first, `REQUEST_TIMEOUT` wins; a later
-stage completion cannot replace it. Once any terminal outcome is conclusively selected before
-expiry, a later deadline signal cannot replace that outcome.
+`REQUEST_TIMEOUT` is cross-cutting, not a numbered stage. The API adapter alone owns the monotonic
+deadline race, accepts exactly one terminal result, prevents a second response, and selects/maps
+HTTP status/envelope. Application and repositories return only neutral typed outcomes. The API
+races the application `Uni`; if expiry is accepted first it maps `504`, otherwise it maps the
+accepted application outcome. Late application/database completion is discarded and cannot replace
+or add a response. Company `400` and all other HTTP mappings occur only after this arbitration.
 
 Deterministic races are:
 

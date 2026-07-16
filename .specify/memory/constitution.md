@@ -1,53 +1,45 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 -> 2.0.0
+- Version change: 2.0.0 -> 2.0.1
 - Modified principles:
-  - III. Required Technology Baseline and JVM Safety (Keycloak/OIDC removed)
-  - VII. Zero-Trust Identity and Tenant Isolation -> VII. Internal Company Context Without Identity
-  - X. Target-First APIs and Observable Asynchronous Work (application authorization removed)
-  - XI. Port-Bound SRI and External Integrations (Keycloak removed)
-  - XII. Risk-Based Testing and Evidence (Company-header/scoping evidence replaces auth evidence)
-  - XIV. Mandatory Spec Kit Delivery Workflow (Company-context boundary added to critical gates)
-  - XVI. Company Master Data Ownership and Immutable Fiscal Snapshots -> XVI. Definitive Company Context and Draft Boundary
+  - XVI. Definitive Company Context and Draft Boundary (request-only Company input and
+    Company-owned repository scope clarified without changing governing intent)
 - Added sections: None
+- Removed sections: None
 - Modified sections:
-  - Definition of Done (header, scoping, no-auth, and no-Company-dependency evidence)
-- Removed sections:
-  - Mandatory Keycloak/OIDC/JWT authentication and application authorization governance
-  - Tenant-derived Company context and cross-tenant authorization governance
-  - Create-draft Company Service resolution and fiscal-snapshot requirements
+  - Definition of Done (request/input prohibition, explicitly contracted response allowance, and
+    immutable global SRI catalog exclusion made executable)
 - Consistency updates:
   - ✅ .specify/templates/spec-template.md
   - ✅ .specify/templates/plan-template.md
   - ✅ .specify/templates/tasks-template.md
   - ✅ .specify/templates/checklist-template.md
-  - ✅ .specify/workflows/speckit/workflow.yml
-  - ✅ .agents/skills/speckit-specify/SKILL.md
-  - ✅ .agents/skills/speckit-clarify/SKILL.md
-  - ✅ .agents/skills/speckit-tasks/SKILL.md
-  - ✅ .agents/skills/speckit-analyze/SKILL.md
-  - ✅ .agents/skills/speckit-implement/SKILL.md
   - ✅ docs/migration/terminology-mapping.md
   - ✅ specs/001-create-invoice-draft/spec.md
   - ✅ specs/001-create-invoice-draft/plan.md
-  - ✅ specs/001-create-invoice-draft/research.md
+  - ✅ specs/001-create-invoice-draft/tasks.md
   - ✅ specs/001-create-invoice-draft/data-model.md
-  - ✅ specs/001-create-invoice-draft/contracts/company-context-port.md (removed)
   - ✅ specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml
   - ✅ specs/001-create-invoice-draft/quickstart.md
-  - ✅ specs/001-create-invoice-draft/checklists/requirements.md
-  - ✅ specs/001-create-invoice-draft/checklists/planning.md
+  - ✅ specs/001-create-invoice-draft/traceability.md
+  - ✅ specs/001-create-invoice-draft/governance-nonconformity.md
+  - ✅ specs/001-create-invoice-draft/governance-retrospective-review.md
+  - ✅ specs/001-create-invoice-draft/governance-owner-approval.md
 - Reviewed without changes:
   - .specify/templates/constitution-template.md remains the upstream placeholder template
   - README.md contains runtime commands but no conflicting governance requirements
-  - .specify/workflows/workflow-registry.json contains workflow registration metadata only
-  - specs/001-create-invoice-draft/tasks.md does not exist; no task artifact was available to update
+  - .specify/workflows/workflow-registry.json contains registration metadata only
   - No .specify/templates/commands directory exists in this installation
-  - .agents/skills/speckit-plan/SKILL.md and .agents/skills/speckit-checklist/SKILL.md load the
-    constitution and their updated templates dynamically
-  - .agents/skills/speckit-converge/SKILL.md extracts every constitutional MUST dynamically
-  - .agents/skills/speckit-taskstoissues/SKILL.md transfers approved tasks without redefining them
-- Follow-up TODOs: None
+  - Agent skills load the constitution dynamically or restate no conflicting Company rule
+- Amendment approval:
+  - Status: APPROVED
+  - Approver: astudilloalex
+  - Capacities: Constitutional Governance Owner; Owner of 001-create-invoice-draft
+  - Approved at: 2026-07-16T03:35:25Z
+  - Reviewed baseline: 07393539db7d1e994ddf2e93c4d88949d8a35f66
+  - Basis: Explicit repository-owner declaration
+- Follow-up TODOs:
+  - None for the v2.0.1 PATCH. Feature corrective tasks T017 and T018 remain pending.
 -->
 # Ecuador Tax Document Service Constitution
 
@@ -462,10 +454,15 @@ behavior. The Company bounded context remains the sole authority for Company mas
 relationships.
 
 Every Company-scoped HTTP operation MUST receive the Company identifier in exactly one mandatory
-`X-Company-Id` request header. The identifier MUST NOT appear in a resource path, query string,
-request body, authentication token, or user-session context. Company-scoped paths MUST name only
-resources owned by this bounded context; for example, `POST /invoice-drafts` MUST be used instead
-of `POST /companies/{companyId}/invoice-drafts`. A global API or version prefix MAY precede the
+`X-Company-Id` request header. Company identifiers MUST NOT be accepted from request bodies or
+input schemas and MUST NOT appear in a resource path, query string, authentication token, or
+user-session context. The authoritative Company context MUST be obtained through the approved
+transport mechanism; for Company-scoped HTTP operations that mechanism is the required header. A
+Company identifier MAY appear in a response representation only when explicitly required by the
+approved feature contract. A response representation never permits request data to override the
+authoritative Company context. Company-scoped paths MUST name only resources owned by this bounded
+context; for example, `POST /invoice-drafts` MUST be used instead of
+`POST /companies/{companyId}/invoice-drafts`. A global API or version prefix MAY precede the
 resource path.
 
 `X-Company-Id` MUST contain exactly one nonblank, non-null, non-nil UUID. The API boundary MUST
@@ -487,10 +484,15 @@ security contexts, thread-local request state, Gateway implementations, BFF impl
 Company Service clients MUST NOT enter the application or domain model.
 
 An Invoice Draft MUST store the normalized Company UUID as its immutable external ownership
-reference. `CompanyId` MUST scope repository queries, mutations, idempotency, and safe operational
-correlation. It MUST NOT be described as caller authorization or security isolation. Every child
-record MUST belong to its Invoice Draft through local aggregate relationships and MUST NOT
-independently represent Company master data.
+reference. Every repository query or mutation involving a Company-owned aggregate, its persistence
+records, or its idempotency binding MUST enforce the authoritative Company identifier. This rule
+does not automatically apply to immutable global SRI reference catalogs unless an approved
+specification explicitly declares those records Company-owned. Global VAT, payment-method,
+identification-type, and other approved global SRI reference catalogs are not Company-owned by
+default and MUST NOT receive a Company predicate or Company column solely because a Company-scoped
+aggregate references them. Company scoping MUST NOT be described as caller authorization or
+security isolation. Every child record MUST belong to its Invoice Draft through local aggregate
+relationships and MUST NOT independently represent Company master data.
 
 Company-scoped idempotency MUST use `CompanyId + Idempotency-Key`. Persistence uniqueness MUST use
 `company_id + idempotency_key_hash`. The same key MAY be used independently by different Companies.
@@ -534,9 +536,15 @@ A feature is complete only when all of these conditions are satisfied:
 - Constitution compliance has been reviewed and recorded.
 - All required tests pass, and static analysis and formatting checks pass.
 - Database migrations are repeatable from an empty database.
-- Company context is verified: exactly one valid `X-Company-Id` scopes every Company operation,
-  invalid headers create no state, and Company identifiers do not enter paths, query strings,
-  bodies, identity artifacts, or normalized content fingerprints.
+- Company context is verified: exactly one valid `X-Company-Id` scopes every Company-owned
+  operation; invalid headers create no state; Company identifiers are absent from request bodies,
+  input schemas, paths, query strings, identity artifacts, and normalized content fingerprints; and
+  a response Company identifier exists only when an approved feature contract explicitly requires
+  it.
+- Repository ownership is verified: every query or mutation involving a Company-owned aggregate,
+  its persistence records, or idempotency binding enforces the authoritative Company identifier,
+  while immutable global VAT, payment-method, identification-type, and other approved global SRI
+  catalogs remain outside automatic Company ownership unless explicitly specified otherwise.
 - The no-authentication boundary is verified: no identity, token, security scheme, `401`, `403`,
   tenant authorization, or user-to-Company permission behavior is introduced.
 - Company master-data exclusion is verified: no Company aggregate, repository, table, client,
@@ -581,4 +589,10 @@ MUST be corrected. A perceived need to change a principle MUST be handled throug
 explicit constitution amendment and MUST NOT be resolved by diluting or silently reinterpreting
 the principle during feature work.
 
-**Version**: 2.0.0 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-12
+**Version**: 2.0.1 | **Ratified**: 2026-07-12 | **Last Amended**: 2026-07-15
+
+**Amendment Approval Status**: `APPROVED` | **Approver**: `astudilloalex` |
+**Capacities**: `Constitutional Governance Owner`, `Owner of 001-create-invoice-draft` |
+**Approved At**: `2026-07-16T03:35:25Z` | **Reviewed Baseline Commit**:
+`07393539db7d1e994ddf2e93c4d88949d8a35f66` | **Approval Basis**:
+`Explicit repository-owner declaration`

@@ -2,7 +2,7 @@
 
 **Feature**: `001-create-invoice-draft`
 **Date**: 2026-07-12
-**Constitution**: v2.0.0
+**Constitution**: v2.0.1
 **Status**: Complete — official evidence and target mappings are approved in
 `reference-data-baseline.md`, and no material research Pending Functional Validation remains
 
@@ -217,9 +217,11 @@ records, and the idempotency binding. Use `UNIQUE (company_id, idempotency_key_h
 arbiter under PostgreSQL `READ COMMITTED`.
 
 Before the transaction, perform the approved request/fingerprint checks and a Company-scoped
-binding lookup. If no binding exists, validate global local-storage catalogs and domain rules,
-calculate, then capture `createdAt` once inside the transaction after validation and immediately
-before root persistence, and write the aggregate and binding atomically. If concurrent insertion
+binding lookup. If no binding exists, Stage 10 validates independent structure/catalog rules
+(including payment methods against `emissionDate`), Stage 11A calculates, and Stage 11B applies the
+exact derived-value order. T063 delegates persistence without invoking or supplying `createdAt`;
+T076 alone captures it once inside its active transaction after validation and immediately before
+root persistence, then writes the same value to aggregate/binding atomically. If concurrent insertion
 loses the uniqueness race, its transaction rolls back completely; a fresh Company-scoped lookup
 compares the winner's fingerprint and returns replay or conflict.
 
@@ -279,6 +281,16 @@ same immutable value is persisted/returned after commit and replayed unchanged; 
 expose it. It is not a physical PostgreSQL commit timestamp, uses no post-commit reconstruction or
 `track_commit_timestamp`, and the injectable clock stays deterministic for tests. Equivalent
 replay does not revalidate the date.
+
+General human-readable text uses one NFC pass, rejects `Cc`/`Cf`/`Cs`/`Co`/`Cn` and
+`U+2028`/`U+2029`, permits only `U+0020` spacing, trims surrounding `U+0020`, preserves internal
+punctuation/case, and counts Unicode code points. Assigned emoji `So` is allowed within field
+format/length. Additional `canonicalName` uses NFC → trim → collapse U+0020 runs → Java
+`Locale.ROOT` lowercase and is persisted; PostgreSQL never recalculates Java normalization.
+
+Payment lookup receives `(paymentMethodId, emissionDate)` and requires existence, activity,
+inclusive `effectiveFrom <= emissionDate`, and null-or-inclusive `effectiveTo`. It never uses
+server current date, request arrival, transaction time, or `createdAt`.
 Versioned local reference catalogs are managed and seeded only by Flyway; codes, rates, validity,
 and identifiers are not hard-coded or startup-generated.
 
@@ -360,14 +372,13 @@ order. Only a request that passes those header stages reaches Jackson deserializ
 Validation. Strict unknown-property rejection is explicitly enabled, and Quarkus' built-in Jackson
 input mapper is disabled so the feature's stable mapper owns representation failures.
 
-The same earliest routing boundary owns one transport-independent monotonic request deadline.
-FR-041 orders conclusive stage outcomes, while deadline arbitration applies before and during every
-stage: an outcome conclusively determined before expiry wins, otherwise `REQUEST_TIMEOUT` wins, and
-neither a later stage completion nor a later deadline signal replaces the selected outcome. If
-expiry occurs while commit status is unresolved, the HTTP outcome remains `504` and same-scope
-idempotent replay determines authoritative state. After the HTTP response is committed, expiry is
-telemetry-only; it cannot change status, write a second response, mutate domain state, or compensate
-the database, and existing serialization may finish normally.
+The same earliest API routing boundary exclusively owns the monotonic deadline race and terminal
+arbitration. It races the application `Uni`, accepts exactly one terminal result, discards late
+application/database results, prevents a second response, and only then maps HTTP/Problem Details.
+Application and repositories carry neutral deadline context/results only. Expiry first maps to
+`REQUEST_TIMEOUT`/`504` only in API; Company `400` and every other HTTP mapping are also API-only.
+Unresolved commit is reconciled by same-scope replay. After response commit, expiry is telemetry-
+only and cannot emit another response, mutate state, or compensate committed data.
 
 The canonical OpenAPI file remains the only independently authored contract. Runtime publication
 sets `mp.openapi.scan.disable=true`, because Quarkus otherwise combines a static document with a

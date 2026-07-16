@@ -33,8 +33,9 @@ may capture an operational request instant but MUST NOT use it to revalidate or 
 emission date.
 
 `createdAt` is separate functional persistence evidence: one UTC `java.time.Instant` is obtained
-from the injectable deterministic clock exactly once inside the persistence transaction, after all
-business validations succeed and immediately before root persistence. The same immutable value is
+by T076 from the injectable deterministic persistence clock exactly once inside its active
+transaction, after all business validations succeed and immediately before root persistence. T063
+never invokes this clock or supplies/replaces/overwrites the value. The same immutable value is
 persisted, returned after commit confirmation, and returned on replay; rollback never exposes it.
 It is not a PostgreSQL physical commit timestamp, is never queried or reconstructed after commit,
 and does not require `track_commit_timestamp`. It is not a latency measurement source.
@@ -68,7 +69,8 @@ consumption, stores the deadline and safe correlation state only in request-loca
 non-blocking timer, and keeps that timer active through response serialization. No later stage may
 restart or extend the deadline, and the timer MUST be cancelled when the terminal response ends.
 
-The API maps the same fixed deadline into the application command. Application orchestration checks
+The API transports the same fixed neutral deadline context into the application command only for
+cooperative cancellation and remaining-budget checks. Application orchestration checks
 the remaining budget before each asynchronous stage and passes an explicit remaining `Duration`
 derived from that one deadline to every local aggregate and reference-data repository invocation.
 No port depends on HTTP or Quarkus request objects. Each reactive database adapter computes its
@@ -77,13 +79,15 @@ supplied remaining request budget, applies that bound to pool acquisition and ev
 subscription, and starts no database work when the remainder is zero or negative. A write
 transaction is additionally bounded by the lesser of that effective budget and five seconds. If
 the configured database-operation timeout is the smaller bound and fires while request budget still
-remains, the conclusive result is `PERSISTENCE_UNAVAILABLE`; only expiry of the shared request
-deadline selects `REQUEST_TIMEOUT`.
+remains, the adapter returns a neutral persistence-unavailable failure; exhausted budget returns a
+neutral deadline/uncertain outcome. No application or repository component maps HTTP.
 
-A stage outcome wins only when it becomes conclusively determined before deadline expiry. If
-expiry occurs first, the deadline owner atomically selects correlated `REQUEST_TIMEOUT` (`504`);
-later stage or database completion cannot replace it. Once a terminal outcome is conclusively
-selected before expiry, a later deadline signal cannot replace that response. In particular:
+The API adapter alone races the application `Uni` against expiry, atomically accepts exactly one
+terminal result, discards late application/database completion, prevents a second response, and
+then maps HTTP status/Problem Details. If expiry becomes terminal first, only API maps correlated
+`REQUEST_TIMEOUT` (`504`); if an application outcome is accepted first, later expiry cannot replace
+it. Company `400` and all other HTTP mappings likewise occur only after API arbitration. In
+particular:
 
 - payload size conclusively over 2 MiB first selects `413`; deadline-first slow-body processing
   selects `504`;
@@ -93,6 +97,10 @@ selected before expiry, a later deadline signal cannot replace that response. In
   result; deadline-first completion selects `504`;
 - confirmed rollback/failure or confirmed commit before expiry selects its approved result;
   deadline expiry while commit outcome is unresolved selects `504` and an uncertain outcome.
+
+Business instrumentation distinguishes Stage 10 calculation-independent validation, Stage 11A
+calculation, and Stage 11B calculated-value validation in the exact specification order. Metrics
+must not imply a Stage 11B check happened during Stage 10.
 
 Confirmed expiry before persistence begins and confirmed complete rollback leave zero state. An
 unresolved or successful commit makes no zero-state claim and MUST NOT trigger compensation or

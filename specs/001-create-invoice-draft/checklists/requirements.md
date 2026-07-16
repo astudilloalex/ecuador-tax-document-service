@@ -41,6 +41,9 @@
 
 ## Notes
 
-- After reconciliation with Constitution v2.0.0, 23 of 23 items pass.
+- After formal PATCH reconciliation with Constitution v2.0.1, 23 of 23 original quality items pass.
+- The later governance retrospective, V5 correction tasks, Stage 10/11A/11B precedence,
+  API-exclusive deadline ownership, exact Unicode/canonical-name policy, emissionDate payment
+  validity, and T076-only persistence-clock ownership are documented in the planning checklist.
 - Fiscal, date, identification, tax, zero-value, idempotency, size, calculated-field, and Company
   header/ownership-boundary ambiguities are resolved in the specification.

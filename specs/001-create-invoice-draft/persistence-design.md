@@ -37,7 +37,14 @@ The runtime exposes no reference-data administration write path. Each official c
 delivered by a new immutable migration containing versioned rows and a verification query that
 fails on duplicate or overlapping active target-effective intervals. The later seed migration MUST
 reproduce exactly the 5 buyer, 6 IVA, and 8 payment rows approved in
-`reference-data-baseline.md`; no migration is created by this remediation.
+`reference-data-baseline.md`.
+
+V3 is immutable and its two affected ASCII constraints are nonconforming. After gate release,
+T017 creates V5 to inspect/drop/replace only `ck_invoice_draft_buyer_identification` and
+`ck_invoice_line_product_code` with the exact explicit ASCII expressions in spec/OpenAPI. It must
+not use POSIX/locale/Unicode shorthand and relies on PostgreSQL transactional-DDL
+rollback-by-failure where supported. T018 proves V3→V5, empty-database migration, Flyway validation,
+and identical OpenAPI/Java/PostgreSQL vectors. Neither task is complete or currently authorized.
 
 ## Exact Local Catalog Structures
 
@@ -95,27 +102,37 @@ For a logically new command:
    presence/cardinality/one-time SP/HTAB normalization/grammar, request-body validation, and
    fingerprint generation before opening the write transaction. Only the normalized accepted key
    proceeds; repeated or comma-combined input never selects a first value.
-2. Resolve applicable local reference-catalog rows and domain values without external calls. Every
+2. Perform the one general-text NFC/U+0020/prohibited-code-point pass and persisted
+   `canonicalName` derivation, then resolve applicable local reference-catalog rows and domain
+   values without external calls. Payment lookup receives `(paymentMethodId, emissionDate)` and
+   applies inclusive start/end plus activity, never a server/request/transaction/creation clock.
+   Every
    reference-data invocation receives the explicit remaining `Duration` derived from the one
    application `RequestDeadline`; its reactive adapter clamps pool acquisition and every query
    subscription to the minimum of configured database-operation timeout and that remainder and
    starts no database operation when the remainder is zero or negative.
-3. Start one bounded reactive PostgreSQL transaction.
-4. After all business validations have succeeded and immediately before root persistence, call the
-   injectable application clock exactly once inside the transaction to obtain `createdAt` as a UTC
-   `java.time.Instant`.
-5. Persist the Invoice Draft root with that immutable value.
-6. Persist every line and exactly one line-tax selection per line.
-7. Persist grouped tax totals, payments, and additional-information rows.
-8. Persist the idempotency binding last with the same `createdAt` value.
-9. Commit once; return `201` only after commit is confirmed, exposing the same persisted value.
+3. Stage 10 completes calculation-independent validation; Stage 11A calculates monetary values;
+   Stage 11B applies the exact range/overflow → discount/gross → final-consumer-total → payment
+   shape/positivity → reconciliation order.
+4. Delegate to T076, which starts/owns one bounded reactive PostgreSQL transaction. T063 never
+   invokes the persistence clock and never supplies/replaces/overwrites `createdAt`.
+5. After every business validation succeeds and immediately before root persistence, T076 calls
+   the injected persistence clock exactly once inside the active transaction to obtain `createdAt`
+   as a UTC `java.time.Instant`; no second call is permitted for the attempt.
+6. Persist the Invoice Draft root with that immutable value.
+7. Persist every line and exactly one line-tax selection per line.
+8. Persist grouped tax totals, payments, and additional-information rows; persist the
+   application-produced canonical names without database-locale recomputation.
+9. Persist the idempotency binding last with the same `createdAt` value.
+10. Commit once; expose success only after commit is confirmed, returning the same persisted value.
 
 A failure at any write step rolls back the root, all children, and the binding. No external call,
 filesystem write, event publication, SRI operation, or Company operation occurs within or adjacent
 to this transaction.
 
 Catalog resolution MUST reject an inactive, not-yet-target-effective, target-expired, unknown, or
-ambiguous row before persistence. Initial valid references are exactly those published in
+ambiguous row before persistence. Payment effectiveness is evaluated inclusively against invoice
+`emissionDate`. Initial valid references are exactly those published in
 `SRI-OFFLINE-2.32-TARGET-1`; product/tax legal classification remains upstream responsibility.
 
 `createdAt` is not PostgreSQL's physical commit timestamp. Persistence MUST NOT query or reconstruct
@@ -197,14 +214,15 @@ root, child, or idempotency row is written.
 - Each adapter bounds PostgreSQL pool acquisition and every reactive query subscription by
   `minimum(configured database operation timeout, remaining request budget)` and starts no database
   operation when the supplied remainder is zero or negative.
-- A configured database-operation timeout that becomes conclusive while request budget remains maps
-  to `PERSISTENCE_UNAVAILABLE`; exhausted shared request budget maps to `REQUEST_TIMEOUT`.
+- A configured database-operation timeout or exhausted neutral budget returns a transport-neutral
+  typed outcome; repositories do not map HTTP or arbitrate terminal responses.
 - A write transaction uses the lesser of the remaining request budget and 5 seconds, and no new
   persistence operation starts after the request budget is exhausted.
-- Confirmed pre-commit database unavailability maps to `PERSISTENCE_UNAVAILABLE` (`503`).
-- Deadline exhaustion before a persistence result is conclusive maps to `REQUEST_TIMEOUT` (`504`);
-  confirmed rollback/failure or confirmed commit before expiry keeps its already selected result.
-- A database completion arriving after deadline expiry does not replace the selected HTTP result.
+- Confirmed pre-commit database unavailability is a neutral persistence-unavailable failure.
+- Deadline exhaustion before a result is conclusive is a neutral deadline/uncertain outcome;
+  confirmed rollback/failure or confirmed commit is reported neutrally to the caller.
+- Only the API adapter races the application `Uni`, accepts one terminal result, discards late
+  database/application completion, and maps accepted outcomes to HTTP including `503`/`504`.
 - SQL state, query text, table/column names, connection details, and stack traces are never exposed.
 
 Zero-state guarantees apply only to a confirmed pre-commit failure or a transaction confirmed fully
@@ -255,16 +273,19 @@ Liveness remains independent of PostgreSQL availability.
 - product/passport/foreign-identification database checks use the same locale-independent ASCII
   expressions as OpenAPI/Java/domain tests, never POSIX `[[:alnum:]]`;
 - `createdAt` capture occurs once at the defined in-transaction point, persists/returns unchanged,
-  is absent from rolled-back resources, replays unchanged, and uses no physical commit timestamp.
+  is absent from rolled-back resources, replays unchanged, uses no physical commit timestamp, and
+  proves T076 is the sole persistence-clock caller while T063 never supplies/overwrites it;
+- general Unicode display values and application-produced `canonicalName` use identical shared
+  vectors; PostgreSQL enforces stored barriers without claiming Java NFC/Locale.ROOT equivalence;
+- payment lookup proves inclusive `emissionDate` effectiveness and never uses current/server/
+  transaction/createdAt time.
 
 ## Governance and Planning Gate
 
 The reference-data planning gate is complete. `reference-data-baseline.md` separates official
 facts from target decisions, publishes UUIDv5 namespace
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`, and approves every initial row. Flyway remains the sole
-future schema/seed owner. Constitution v2.0.0 is approved on `main`, the reconciled plan passes its
-Constitution Check, but `GATE-GOV-001` blocks T017 and all later implementation. The completed
-T013–T016 persistence artifacts require retrospective review, including the exact ASCII constraint
-deviations recorded in `governance-nonconformity.md`. No committed migration is edited by this
-remediation; any correction requires a later immutable migration after real owner approval and a
-clean analysis gate.
+future schema/seed owner. Constitution v2.0.1 is approved. `astudilloalex` approved D1–D3 and
+released `GATE-GOV-001`; the current analysis gate remains before T017. V3 is untouched, correction
+is assigned to pending T017 V5 plus pending T018 validation, and T019 remains blocked until both
+corrective tasks complete successfully.

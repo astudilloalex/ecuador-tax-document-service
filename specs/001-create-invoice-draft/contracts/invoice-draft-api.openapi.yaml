@@ -30,11 +30,16 @@ paths:
         is payload size, Company context, correlation, idempotency-key presence/cardinality/
         normalization/grammar, representation,
         normalization, local Company-scoped binding lookup, equivalent replay, idempotency
-        conflict, business validation, calculation, and atomic persistence.
-        One monotonic 10-second request deadline arbitrates before and during every stage: a stage
-        outcome conclusively determined before expiry wins; otherwise REQUEST_TIMEOUT wins, and a
-        later signal cannot replace the selected result. An unresolved commit is reconciled by
-        retrying the same CompanyId, idempotency key, and equivalent content.
+        conflict, Stage 10 independent business validation, Stage 11A deterministic monetary
+        calculation, the exact Stage 11B order (range/overflow; discount-over-gross;
+        final-consumer calculated-total limit; total-dependent payment shape/positivity; exact
+        payment reconciliation), and atomic persistence. The API adapter alone races the
+        application Uni against one monotonic 10-second deadline, accepts exactly one terminal
+        result, discards every late application/database outcome, and then selects/maps HTTP.
+        Timeout wins when expiry becomes terminal before the application result is accepted; only
+        the API maps REQUEST_TIMEOUT to 504 or any other transport-neutral failure to HTTP. An
+        unresolved commit is reconciled by retrying the same CompanyId, idempotency key, and
+        equivalent content.
       parameters:
         - $ref: '#/components/parameters/CompanyContext'
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -92,7 +97,7 @@ components:
       in: header
       required: true
       description: >-
-        Exactly one value is accepted. Surrounding whitespace is trimmed; the result must be a
+        Exactly one value is accepted. Surrounding ASCII SP/HTAB is trimmed once; the result is a
         syntactically valid non-nil UUID. The service normalizes it to canonical lowercase
         hyphenated form. The value identifies the Invoice Draft ownership and idempotency
         partition. It is business context, not an authentication or authorization credential.
@@ -110,7 +115,7 @@ components:
         HTAB (U+0009) once, changes no internal character or case, validates the normalized value,
         and uses that identical value for lookup, hashing, and persistence in the canonical
         CompanyId scope. Missing returns IDEMPOTENCY_KEY_REQUIRED. A single blank,
-        whitespace-only, over-128, control, non-ASCII, or otherwise grammar-invalid value returns
+        SP/HTAB-only after that trim, over-128, control, non-ASCII, or otherwise grammar-invalid value returns
         IDEMPOTENCY_KEY_INVALID. Repeated fields, a parser result containing multiple values, or
         any comma-containing/comma-combined ambiguous value returns IDEMPOTENCY_KEY_MULTIPLE; the
         service never chooses the first value. The schema pattern describes the normalized value,
@@ -130,7 +135,7 @@ components:
       required: false
       description: >-
         Optional caller correlation identifier. When supplied, exactly one value is accepted and
-        surrounding whitespace is trimmed. A valid value contains 1 to 64 characters, begins with
+        surrounding ASCII SP/HTAB is trimmed once. A valid value contains 1 to 64 ASCII characters, begins with
         an ASCII letter or digit, and contains only ASCII letters, digits, period, underscore,
         colon, or hyphen. A valid supplied value is preserved and returned. When absent, the
         service generates and returns a safe UUID. A blank, repeated, over-length, or otherwise
@@ -208,14 +213,18 @@ components:
           minItems: 1
           maxItems: 8
           description: >-
-            Order is representation-only; payment-method identity must be unique within the draft.
+            Order is representation-only; payment-method identity must be unique. Each method must
+            exist, be active, and satisfy effectiveFrom <= emissionDate and (effectiveTo is null or
+            emissionDate <= effectiveTo), inclusively, using this request's emissionDate only.
           items:
             $ref: '#/components/schemas/PaymentInput'
         additionalInformation:
           type: array
           maxItems: 15
           default: []
-          description: Order is representation-only; canonical names must be unique.
+          description: >-
+            Order is representation-only; persisted canonical names must be unique. canonicalName
+            is NFC, surrounding U+0020 trim, collapse U+0020 runs, then Java Locale.ROOT lowercase.
           items:
             $ref: '#/components/schemas/AdditionalInformationInput'
 
@@ -246,19 +255,33 @@ components:
           type: string
           minLength: 1
           maxLength: 300
+          description: >-
+            General single-line Unicode text: normalize to NFC once, trim surrounding U+0020,
+            preserve internal punctuation/U+0020 and case, then count 1-300 Unicode code points.
+            Reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP, and every separator other than
+            U+0020. Assigned emoji category So is allowed within the length/format boundary.
         address:
           type: string
           minLength: 1
           maxLength: 300
+          description: >-
+            Optional general single-line Unicode text governed by the legalName normalization,
+            prohibited-code-point, U+0020, case, and Unicode-code-point length policy.
         email:
           type: string
           format: email
           maxLength: 254
+          description: >-
+            Optional email after the one general-text NFC/U+0020 boundary pass; prohibited Unicode
+            categories/separators are rejected and length is Unicode code points.
         telephone:
           type: string
           minLength: 7
           maxLength: 20
           pattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+          description: >-
+            Optional value after the general boundary pass; only ASCII digits, plus, parentheses,
+            hyphen, and U+0020 remain valid, with 7-15 digits and at most 20 code points.
 
     InvoiceLineInput:
       type: object
@@ -280,6 +303,11 @@ components:
           type: string
           minLength: 1
           maxLength: 300
+          description: >-
+            General single-line Unicode text: NFC once, trim surrounding U+0020, preserve internal
+            punctuation/U+0020 and case, count Unicode code points, and reject Cc/Cf/Cs/Co/Cn,
+            U+2028/U+2029, tab, CR, LF, NBSP, and separators other than U+0020. Assigned emoji So is
+            allowed within 1-300 code points.
         quantity:
           $ref: '#/components/schemas/PositiveSixScaleDecimal'
         unitPrice:
@@ -304,7 +332,11 @@ components:
         paymentMethodId:
           type: string
           format: uuid
-          description: Stable payment-method UUID published by SRI-OFFLINE-2.32-TARGET-1.
+          description: >-
+            Stable UUID published by SRI-OFFLINE-2.32-TARGET-1. It must exist, be active, and be
+            inclusively effective on invoice emissionDate: effectiveFrom <= emissionDate and
+            (effectiveTo is null or emissionDate <= effectiveTo). Server current date, request
+            arrival, transaction time, and createdAt are not validity inputs.
           example: 639f2b7e-10a3-5d92-a1a3-28223896f5b5
         amount:
           $ref: '#/components/schemas/MoneyDecimal'
@@ -318,10 +350,18 @@ components:
           type: string
           minLength: 1
           maxLength: 300
+          description: >-
+            General single-line Unicode display text under the exact NFC/U+0020/prohibited-category
+            policy. Persisted canonicalName is computed once as NFC, surrounding U+0020 trim,
+            collapse U+0020 runs, then Java Locale.ROOT lowercase; database locale does not
+            recalculate it.
         value:
           type: string
           minLength: 1
           maxLength: 300
+          description: >-
+            General single-line Unicode display text under the exact NFC/U+0020/prohibited-category,
+            case-sensitive, Unicode-code-point length policy; assigned emoji So is allowed.
 
     InvoiceDraftResponse:
       type: object
@@ -407,7 +447,9 @@ components:
             observable only after commit confirmation, and is returned unchanged on replay. It is
             not PostgreSQL's physical commit timestamp, is not queried or reconstructed after
             commit, requires no track_commit_timestamp, and does not determine the emission date.
-            Rollback never exposes it as a created resource.
+            Rollback never exposes it as a created resource. The transactional persistence
+            operation is the sole persistence-clock caller and the application use case neither
+            supplies nor overwrites this value.
           examples: ['2026-07-15T23:45:12.345Z']
         updatedAt:
           type: string
@@ -444,7 +486,9 @@ components:
           description: Persisted case-sensitive ASCII product code returned unchanged.
         description:
           type: string
+          minLength: 1
           maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
         quantity:
           $ref: '#/components/schemas/PositiveSixScaleDecimal'
         unitPrice:
@@ -702,7 +746,10 @@ components:
     ValidationFailure:
       description: >-
         PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. Numeric-envelope breaches use
-        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Stage 10 contains only
+        calculation-independent validation; Stage 11A calculates monetary values; Stage 11B then
+        checks range/overflow, discount-over-gross, final-consumer calculated-total limit,
+        total-dependent payment shape/positivity, and exact reconciliation in that order.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -725,9 +772,10 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     RequestTimeout:
       description: >-
-        REQUEST_TIMEOUT; the cross-cutting request deadline expired before the current stage or
-        persistence outcome became conclusive. Retry with the same Company, key, and content;
-        unresolved commit state makes no zero-state guarantee and is reconciled by that replay.
+        REQUEST_TIMEOUT; the API-owned deadline became terminal before an application outcome was
+        accepted. The API adapter alone maps this transport-neutral outcome to 504, emits one
+        terminal response, and discards late results. Retry with the same Company, key, and content;
+        unresolved commit state makes no zero-state guarantee and is reconciled by replay.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'

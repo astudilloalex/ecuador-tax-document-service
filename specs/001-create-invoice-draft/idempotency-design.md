@@ -97,14 +97,14 @@ sufficient for approved equivalence.
 |---------|----------------|
 | UUID | Lowercase hyphenated representation |
 | Date | ISO `YYYY-MM-DD` |
-| Text | Trimmed validated Unicode value; control characters rejected before fingerprinting |
+| General display text | NFC once; reject `Cc`/`Cf`/`Cs`/`Co`/`Cn`, `U+2028`/`U+2029`, tabs/CR/LF/NBSP/non-U+0020 separators; trim surrounding `U+0020`; preserve internal punctuation/U+0020/case; count code points |
 | Quantity/unit price | Numerically canonical plain decimal; equivalent trailing-zero forms compare equally |
 | Money/payment | Exact validated two-decimal representation |
 | Tax rule selection | Canonical tax-rule UUID only; derived code/rate excluded |
 | Optional contact value | Explicit absent marker distinct from a present value; JSON `null` is rejected unless the request schema explicitly permits it |
 | Lines | Preserve original line order |
 | Payments | Sort by canonical payment-method UUID, then amount |
-| Additional information | Sort by canonical name, then value |
+| Additional information | Persist/use canonical name from NFC → surrounding `U+0020` trim → collapse U+0020 runs → Java `Locale.ROOT` lowercase; sort by that persisted value then normalized display value; never use database-locale recomputation |
 | Empty optional collections | Normalize absent and empty to one approved empty representation |
 | Object properties | Emit in a fixed field order independent of JSON input order |
 
@@ -113,10 +113,10 @@ ambiguous. The exact normalization vectors become committed test fixtures before
 
 ## Failure Precedence and Replay
 
-The numbered sequence below orders only outcomes that become conclusive before the one monotonic
-request deadline expires. Deadline arbitration applies before and during every step: a conclusive
-step result before expiry wins; otherwise `REQUEST_TIMEOUT` wins, and neither a later step
-completion nor a later deadline signal replaces the selected outcome.
+The numbered sequence orders application outcomes. The API adapter alone races the application
+`Uni` against the monotonic deadline, accepts exactly one terminal result, discards late outcomes,
+and maps HTTP/Problem Details. Application/repositories return neutral values and never arbitrate or
+map `504`.
 
 1. Enforce request payload size.
 2. Validate and canonicalize Company header.
@@ -129,7 +129,8 @@ completion nor a later deadline signal replaces the selected outcome.
 7. Look up binding by CompanyId plus key hash.
 8. If fingerprint/version match, load by CompanyId plus draftId and return the original result.
 9. If they differ, return `IDEMPOTENCY_CONFLICT`.
-10. Only an unbound command proceeds to current catalog/domain validation, calculation, and write.
+10. Only an unbound command proceeds to Stage 10 calculation-independent validation, then Stage 11A
+    calculation, then exact ordered Stage 11B calculated-value validation, then write.
 
 Correlation initialization still provides a safe response identifier for a higher-precedence
 payload-size or Company-context failure. On a selected 413 path, classification solely preserves
@@ -141,8 +142,8 @@ conflict decision.
 If expiry occurs before persistence begins, no binding exists. If expiry occurs while commit status
 is unresolved, the client-facing outcome is uncertain and no zero-state claim is made. The client
 retries the same CompanyId, key, and equivalent content: a committed binding returns the original
-draft; otherwise normal creation may proceed under the same unique boundary. A later database
-completion never changes the already selected HTTP result, and no correctly committed or possibly
+  draft; otherwise normal creation may proceed under the same unique boundary. The API discards a
+late database/application result after terminal selection, and no correctly committed or possibly
 committed draft is compensated or deleted because its response was not received.
 
 Replay does not call Company Service, validate current Company/Issuer/emission-point state,
