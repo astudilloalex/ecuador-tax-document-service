@@ -7,17 +7,19 @@ normalization, persistence-boundary, timestamp, and canonical-name clarification
 
 **Implementation progression**: `GATE-GOV-001` retains its **RELEASED** governance status. The
 approved `governance-corrective-assignment-addendum.md` assigns red evidence to T017 and V5/green
-persistence evidence to T018. Because the latest analysis reported a CRITICAL inconsistency in the
-previous assignment, current implementation permission is `PENDING_SUCCESSFUL_ANALYSIS`. T017 and
-T018 remain pending; T018 depends on completed T017, and T019 remains blocked until both complete
-successfully.
+persistence evidence to T018. The subsequent analysis found no CRITICAL corrective-assignment
+issue; therefore T017 is eligible to begin. T017 and T018 remain pending, T018 depends on
+successful T017, and T019 remains blocked until both complete successfully.
 
 ## Summary
 
-Deliver one synchronous internal `POST /invoice-drafts` operation under `/api/v1`. The API reads
-exactly one `X-Company-Id`, canonicalizes it, maps it to an application `CompanyId`, validates local
-commercial/fiscal inputs, calculates deterministic USD amounts, and atomically persists and returns
-one complete `DRAFT` aggregate. CompanyId plus a hashed idempotency key defines the durable
+Deliver one synchronous internal `POST /api/v1/invoice-drafts` operation. API owns
+transport decoding, header validation, request-state initialization, deadline arbitration, and HTTP
+mapping. Application owns ordered validation, Stage-6 business-text normalization, use-case
+orchestration, candidate construction, and transport-neutral outcomes. Domain owns fiscal and
+commercial invariants plus deterministic monetary calculation. Infrastructure owns reactive
+PostgreSQL access, atomic aggregate and idempotency-binding persistence, and the single
+transactional timestamp capture. CompanyId plus a hashed idempotency key defines the durable
 concurrency scope. The design has no authentication, authorization, Company Service, Company
 master data, fiscal snapshot, cache, or SRI side effect.
 
@@ -25,10 +27,10 @@ master data, fiscal snapshot, cache, or SRI side effect.
 
 **Language/Version**: Java 25
 
-**Framework**: Quarkus 3.33.2.1 LTS; selected from the current production-recommended LTS line and
-justified in `research.md`. Implementation setup MUST align both `quarkusPluginVersion` and
-`quarkusPlatformVersion` in `gradle.properties` from the current `3.37.2` to `3.33.2.1` before any
-feature dependency or source work; the plugin and platform versions MUST remain identical.
+**Framework**: Quarkus 3.33.2.1 LTS; selected from the production-recommended LTS line and justified
+in `research.md`. Completed T001 aligned both `quarkusPluginVersion` and
+`quarkusPlatformVersion` to Quarkus `3.33.2.1`. The current `gradle.properties` already contains
+the approved identical versions.
 
 **Reactive Model**: Mutiny for HTTP/application orchestration and every I/O port; synchronous pure
 domain calculation
@@ -178,17 +180,16 @@ against approved Constitution v2.0.1, the current feature specification, and rep
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
-| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum now assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its recorded status, while implementation permission remains pending a new successful analysis |
+| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its released status, and the subsequent analysis found no CRITICAL corrective-assignment issue |
 
 No constitutional complexity exception is requested. A workflow non-conformity exists because
 T001–T016 were implemented before the mandatory analysis gate; it is recorded without
 retroactive correction in `governance-nonconformity.md`.
 
 **Current implementation gate**: governance approval and the corrective-assignment addendum are
-complete, and `GATE-GOV-001` retains its released status. The latest analysis still contains the
-CRITICAL assignment finding that prompted the addendum, so implementation permission is
-`PENDING_SUCCESSFUL_ANALYSIS`. A new analysis without that CRITICAL finding is required before
-T017; T018 depends on completed T017, and T019 depends on both completed corrective tasks.
+complete, and `GATE-GOV-001` retains its released status. The subsequent analysis found no CRITICAL
+corrective-assignment issue; therefore T017 is eligible to begin. T018 depends on successful T017,
+and T019 remains blocked until T017 and T018 both complete successfully.
 
 ## Clean Architecture Mapping
 
@@ -470,6 +471,9 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Failure evaluation follows FR-041 exactly, with `REQUEST_TIMEOUT` as a cross-cutting arbiter:
   conclusive stage outcome before expiry wins, otherwise `504` wins, and no later signal replaces
   the selected result.
+- T085 defines and accepts exactly one terminal outcome after deadline arbitration. T087 depends on
+  T085 and maps only that already accepted transport-neutral outcome to HTTP; T087 neither races
+  outcomes nor reopens terminal arbitration.
 
 **OpenAPI Source of Truth**: `specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml`
 is the only independently authored contract. `src/main/resources/META-INF/openapi.yaml` is a
@@ -494,10 +498,13 @@ ASCII expression. Valid/invalid vectors are `ABC123`/`sku9` versus
 `ABC-123`/`ÁBC1`/26 characters for product codes, and `A1234567`/`EC9Z` versus
 `A-123`/`Á123`/21 characters for buyer values.
 
-OpenAPI-documented patterns and bounds, production Java validation, domain invariants over
-normalized values, locale-independent PostgreSQL checks, and test fixtures MUST be equivalent.
-PostgreSQL POSIX `[[:alnum:]]` is not equivalent to these ASCII expressions. The approved
-corrective evidence sequence is:
+The standard OpenAPI request schema accepts a decoded string representation and does not reject a
+raw value that Application is permitted to trim. Contract metadata `x-application-stage-6`
+documents Application-owned SP/HTAB trimming, normalized bounds, and the exact normalized regex.
+Response schemas may enforce the exact persisted representation pattern. Production Java
+validation, domain invariants over accepted normalized values, and locale-independent PostgreSQL
+defenses must implement their own layer responsibilities. PostgreSQL POSIX `[[:alnum:]]` is not
+equivalent to these ASCII expressions. The approved corrective evidence sequence is:
 
 1. T017 defines `src/test/resources/invoicedraft/ascii-validation-vectors.json` as the one
    authoritative fixture.
@@ -507,8 +514,9 @@ corrective evidence sequence is:
    evidence and preserving immutable V3.
 4. T018 makes the PostgreSQL/Flyway evidence green, proves the V3-to-V5 upgrade, and runs Flyway
    validation.
-5. T030 independently validates the approved OpenAPI expressions against the shared fixture and
-   does not invoke the database or domain validators.
+5. T030 independently validates request-contract ownership and `x-application-stage-6` metadata
+   using raw and normalized expectations from the fixture; it does not invoke the database or
+   domain validators and does not make the standard request schema preempt Stage 6.
 6. T045 independently validates the production buyer-identification Java behavior against the
    fixture and does not invoke PostgreSQL, Flyway, OpenAPI parser, or HTTP infrastructure.
 7. T050 independently validates production product-code and text-rule Java behavior against the
@@ -519,6 +527,32 @@ T017 may use a standalone Java `Pattern` only to verify fixture parsing or the a
 regular expression; productive Java-validator equivalence does not exist during T017 or T018.
 Domain test suites remain free of PostgreSQL, Flyway, OpenAPI parser, and HTTP transport
 dependencies.
+
+The ASCII fixture represents request-to-storage evidence rather than one ambiguous literal value.
+Each request-pipeline entry contains `id`, `field`, `identificationType` when applicable,
+`rawValue`, `applicationNormalizedValue`, `expectedApplicationOutcome`, `expectedStoredValue`,
+`expectedErrorCode`, `failureStage`, `rationale`, and `consumers`. Allowed `failureStage` values are
+`NONE`, `TRANSPORT_REPRESENTATION`, `APPLICATION_STAGE_6`, and `PERSISTENCE_DEFENSE`.
+`rawValue` is the exact decoded string forwarded unchanged by API and may contain surrounding ASCII
+SP or HTAB. `applicationNormalizedValue` is the result of the one Application-owned surrounding
+SP/HTAB trim; these ASCII fields receive no NFC pass, case fold, internal-character change, or
+internal-whitespace collapse. It is `null` when transport decoding fails. The
+`expectedApplicationOutcome` applies the relevant normalized expression—`^[A-Za-z0-9]{1,20}$` for
+buyer types `06`/`08` or `^[A-Za-z0-9]{1,25}$` for product code. `expectedStoredValue` is the exact
+accepted normalized value and is `null` for every rejected request. Successful PostgreSQL
+request-pipeline probes use `expectedStoredValue`, never `rawValue`.
+
+Dedicated persistence-defense entries additionally contain `storedProbeValue` and
+`expectedPersistenceOutcome`, with `failureStage: PERSISTENCE_DEFENSE`. They prove that PostgreSQL
+rejects invalid stored representations without implying that Infrastructure performs Application
+normalization. Required vectors prove that raw `" ABC123 "` and HTAB-surrounded valid values trim
+to accepted `"ABC123"`; internal SP or HTAB remains invalid; persistence accepts the normalized
+value but rejects direct surrounding/internal-whitespace probes; accented Unicode letters remain
+invalid after trimming; empty and trim-to-empty inputs fail in Application; normalized over-maximum
+values fail after trimming; and every consumer selects the correct stage value. T017 owns fixture
+structure/red PostgreSQL evidence, T018 owns final PostgreSQL/Flyway behavior over stored/probe
+values, T030 owns request-contract metadata, T045 owns buyer-validator behavior over
+`applicationNormalizedValue`, and T050 owns product-validator behavior over that same stage value.
 
 General human-readable single-line text reaches Application exactly as API decoded it. At the
 beginning of Stage 6, Application alone invokes `BusinessTextNormalizer` exactly once for each
@@ -538,9 +572,41 @@ Domain entry, or persistence with `BUSINESS_VALIDATION_FAILED` /
 `CANONICAL_NAME_TOO_LONG`, identifying the original field, maximum `300`, counting unit
 `UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`. PostgreSQL is only a defensive stored-length/
 nonempty/canonical-value barrier; it neither reproduces Java normalization nor recalculates using
-database locale. OpenAPI documents the policy; Application performs it; identical cross-layer
-vectors cover accented/decomposed text, spaces, prohibited code points/separators, emoji, case,
-code-point boundaries, and `U+0130` lowercase expansion at 150/151 occurrences.
+database locale. OpenAPI documents the policy and Application performs it. Independent
+layer-specific suites consume one authoritative fixture while selecting their stage-appropriate
+value and responsibility; they do not all validate the same literal or perform the same
+transformation. Coverage includes accented/decomposed text, spaces, prohibited code
+points/separators, emoji, case, code-point boundaries, and `U+0130` lowercase expansion at 150/151
+occurrences.
+
+T020 owns the one authoritative general-text fixture at
+`src/test/resources/invoicedraft/unicode-text-validation-vectors.json`. Each entry contains `id`,
+`fieldCategory`, `rawValue`, `applicationNormalizedValue`, `canonicalValue` when applicable,
+`expectedApplicationOutcome`, `expectedDomainInput`, `expectedStoredValue`, `expectedErrorCode`,
+`failureStage`, `rationale`, and `consumers`; `failureStage` is `NONE`,
+`TRANSPORT_REPRESENTATION`, `APPLICATION_STAGE_6`, or `PERSISTENCE_DEFENSE`. Dedicated
+persistence-defense entries also contain `storedProbeValue` and `expectedPersistenceOutcome`.
+API consumers use `rawValue` only for Unicode/JSON
+decoding, malformed-representation rejection, and unchanged forwarding; they perform no business
+normalization or length validation. Application consumers perform exactly one NFC pass, surrounding
+`U+0020` trim, prohibited-code-point checks, display limits, canonical derivation, `Locale.ROOT`
+canonical-length validation, `CANONICAL_NAME_TOO_LONG`, and no truncation. Domain consumers receive
+only `expectedDomainInput` from accepted vectors and never normalize. Infrastructure/PostgreSQL
+consumers use only `expectedStoredValue` and dedicated persistence-defense probes for stored length,
+nonempty, required canonical, relational, and uniqueness defenses; PostgreSQL does not claim Java
+NFC, `Locale.ROOT`, or prohibited-code-point validation.
+
+The fixture covers NFC accented Latin text; decomposed/composed equivalence; surrounding and
+repeated internal `U+0020`; tab, CR, LF, NBSP, `U+2028`, `U+2029`, and zero-width `Cf`; accepted
+assigned `So` emoji; preserved display case; code-point boundaries; and `U+0130` canonical
+expansion at 150 accepted and 151 rejected occurrences with `CANONICAL_NAME_TOO_LONG` and no
+truncation. T026 consumes accepted `expectedDomainInput`; T029 consumes Application-stage values;
+T030 verifies OpenAPI ownership/metadata; T033 consumes `rawValue` for decoding and unchanged
+forwarding; and T036 consumes stored/probe values for defensive persistence evidence. T020 may also
+create `idempotency-v1-vectors.json`, but those vectors reference or consume this Unicode fixture
+instead of redefining normalization cases; T028 is therefore an indirect consumer through T020.
+Independent layer-specific suites establish equivalence by selecting the stage-appropriate fixture
+value and responsibility, not by validating the same literal or repeating transformations.
 
 **Payment-Method Effectiveness**: Reference lookup receives `(paymentMethodId, emissionDate)` and
 requires existence, activity, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
@@ -665,19 +731,20 @@ src/test/resources/
 ├── application.properties
 └── invoicedraft/
     ├── ascii-validation-vectors.json
-    ├── calculation-vectors.json
-    └── idempotency-v1-vectors.json
+    ├── unicode-text-validation-vectors.json
+    ├── idempotency-v1-vectors.json
+    └── calculation-vectors.json
 ```
 
 The established feature test-resource convention is
 `src/test/resources/invoicedraft/`, so the authoritative ASCII fixture is
-`src/test/resources/invoicedraft/ascii-validation-vectors.json`. Each entry conceptually records:
-the field; literal value; expected validity; applicable minimum or maximum boundary; expected
-stable error code when invalid; rationale; and the layer-specific suites that must consume the
-vector. Its consumers are T017 fixture-integrity/red persistence evidence, T018 PostgreSQL/Flyway
-green validation, T030 OpenAPI validation, T045 production buyer-identification validation, and
-T050 production product-code/text-rule validation. The fixture is planned here and is not created
-by this documentary reconciliation.
+`src/test/resources/invoicedraft/ascii-validation-vectors.json`, owned by T017 and consumed by
+T017, T018, T030, T045, and T050 with the stage-specific fields and responsibilities defined above.
+The authoritative Unicode fixture is
+`src/test/resources/invoicedraft/unicode-text-validation-vectors.json`, owned by T020 and consumed
+directly by T026, T029, T030, T033, and T036, with T028 consuming it indirectly through T020's
+idempotency vectors. Both fixtures are planned here and are not created by this documentary
+reconciliation.
 
 Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
 is planned.
@@ -689,8 +756,9 @@ is planned.
 | Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company request body/input/path/query rejected while explicit response CompanyId remains present |
 | Clean layer handoff | Architecture + application | Command has explicit CompanyId; API forwards decoded business text unchanged; Application alone normalizes at Stage 6 and constructs the timestamp-free candidate; aggregate has immutable CompanyId | no HTTP/security/thread-local/Gateway types below API; no API normalization; no Domain/Infrastructure re-normalization |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
-| Draft business rules | Domain/application | exact Stage 6 normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned NFC/canonical text and local identifiers | one normalizer invocation/value; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
-| ASCII cross-layer equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every applicable suite consumes `ascii-validation-vectors.json` and matches each stored expected outcome without domain tests importing transport/database infrastructure | fixture integrity; exact minimum/maximum/category/Unicode/space/punctuation/empty vectors; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
+| Draft business rules | Domain/application | exact Stage 6 normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned NFC/canonical text and local identifiers; Domain consumes only accepted `expectedDomainInput` from the Unicode fixture | one normalizer invocation/value; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
+| ASCII request-to-storage equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every suite consumes `ascii-validation-vectors.json` but selects its stage value: raw/normalized contract metadata, `applicationNormalizedValue`, `expectedStoredValue`, or `storedProbeValue`; no domain suite imports transport/database infrastructure | surrounding SP/HTAB trim accepted in Application; internal whitespace, Unicode, punctuation, empty, trim-to-empty, min/max and over-limit vectors; direct invalid storage probes; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
+| Unicode text ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, accepted `expectedDomainInput`, Application/canonical expectations, or stored/probe values according to their boundary | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; no truncation or repeated normalization |
 | Persistence/Flyway | Real PostgreSQL from empty | immutable V3; T017 red evidence; T018-only V5 and green exact ASCII constraints; local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, timestamp-free candidate, Application-owned final IDs, T076-only one-call equal `createdAt`/`updatedAt`, and committed `PersistedInvoiceDraft` | T017 failure specificity and unrelated-behavior stability; T018 V3→V5/Flyway validation and final absence of locale-dependent POSIX classes; no prohibited fields/catalog Company columns; rollback; no identifier replacement, placeholder timestamp, physical commit timestamp, or second clock call |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner; replay loads `PersistedInvoiceDraft` | property/collection order, line order, response loss, no normalized payload storage, no new aggregate/identifier/clock call/canonical rebuild, original identifier and both timestamps unchanged |
 | API errors/correlation/deadline | Contract/integration with controlled deadline signal | API-exclusive Uni/deadline race, exactly-one terminal response, ordered upload/header/entity gate, mandatory exactly-one normalized Idempotency-Key and three stable errors, safe Problem Details only after arbitration | Missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
@@ -760,6 +828,6 @@ The requirements-quality content checks are reconciled to approved Constitution 
 recorded pre-analysis sequence remains an approved historical non-conformity and cannot be
 corrected retroactively. `astudilloalex` approved D1–D3 with mandatory T017/T018 correction and
 released `GATE-GOV-001`. The later approved addendum assigns T017 red evidence and T018 V5/green
-persistence evidence without changing the retrospective findings or hash. Implementation permission
-is `PENDING_SUCCESSFUL_ANALYSIS`; T017 cannot start until the new analysis removes the CRITICAL
-assignment finding, and T019 remains ineligible until both corrective tasks complete successfully.
+persistence evidence without changing the retrospective findings or hash. The subsequent analysis
+found no CRITICAL corrective-assignment issue, so T017 is eligible to begin. T018 remains dependent
+on successful T017, and T019 remains ineligible until both corrective tasks complete successfully.

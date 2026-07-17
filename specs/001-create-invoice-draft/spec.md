@@ -959,11 +959,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   repository, or cross-service transaction. A Company dependency failure, timeout, retry,
   availability check, or readiness check MUST NOT exist for this feature.
 - **FR-037**: An invoice draft MUST store the normalized Company UUID as its only Company ownership
-  reference. The value MUST be immutable after creation. Every repository query or mutation
-  involving the Invoice Draft aggregate or its idempotency binding MUST include and enforce it;
-  child data MUST belong through local draft aggregate relationships rather than independently
-  representing Company master data. This rule does not Company-scope globally governed immutable
-  SRI reference catalogs.
+  reference. The value MUST be immutable after creation. Repository query and mutation scoping MUST
+  comply with FR-024. Child data MUST belong through local Invoice Draft aggregate relationships
+  and MUST NOT independently represent Company master data. Globally governed immutable SRI
+  reference catalogs remain outside Company scope as established by FR-024.
 - **FR-038**: Create Invoice Draft MUST NOT resolve or persist Company master-data snapshots,
   Company-context versions or observation timestamps, Issuer fiscal snapshots, establishment
   snapshots, or emission-point fiscal snapshots. Those concerns, together with fiscal eligibility,
@@ -1224,10 +1223,13 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   foreign identification use their stricter one-time ASCII SP/HTAB trim and otherwise preserve
   case/internal characters; that business-value trim is Application-owned. `Idempotency-Key` is a
   transport header governed exclusively by
-  FR-027 and is not a domain text value. Cross-layer tests MUST use identical approved vectors for
-  accented Latin, decomposed/composed equivalents, surrounding/repeated `U+0020`, tab, newline,
-  non-breaking space, zero-width `Cf`, accepted emoji `So`, case differences, code-point length
-  boundaries, and `U+0130` lowercase expansion.
+  FR-027 and is not a domain text value. Independent layer-specific suites MUST consume the same
+  authoritative fixture while selecting the stage-appropriate value and responsibility for that
+  layer; this does not require every layer to validate the same literal or perform the same
+  transformation. Coverage MUST include accented Latin, decomposed/composed equivalents,
+  surrounding/repeated `U+0020`, tab, carriage return, newline, non-breaking space, `U+2028`,
+  `U+2029`, zero-width `Cf`, accepted emoji `So`, case differences, code-point length boundaries,
+  and `U+0130` lowercase expansion.
 - **DR-020**: Every draft MUST have exactly one immutable normalized Company UUID. Every line,
   payment, tax selection, tax total, and additional-information entry MUST belong to that draft;
   accidental mixing of child data between Company-scoped drafts is prohibited.
@@ -1250,13 +1252,52 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 | Passport identification (`06`) | ASCII `A-Z`, `a-z`, `0-9`; `^[A-Za-z0-9]{1,20}$` | 1–20 | Case-sensitive | Trim leading/trailing ASCII SP/HTAB once; preserve everything else | `A1234567`, `EC9Z` | `A-123`, `A 123`, `Á123`, empty, 21 characters |
 | Foreign identification (`08`) | ASCII `A-Z`, `a-z`, `0-9`; `^[A-Za-z0-9]{1,20}$` | 1–20 | Case-sensitive | Trim leading/trailing ASCII SP/HTAB once; preserve everything else | `A1234567`, `EC9Z` | `A-123`, `A 123`, `Á123`, empty, 21 characters |
 
-For each row, OpenAPI MUST expose the exact pattern and bounds; Application validation MUST reject a
-nonmatching value after its one permitted business-value trim; domain value objects MUST enforce the
-same invariant over the already normalized value; PostgreSQL MUST use locale-independent ASCII checks as a final integrity barrier
-where the value is stored; and test vectors MUST exercise every valid/invalid example and both
-length boundaries. POSIX `[[:alnum:]]`, Unicode character classes, locale-dependent matching, and
-broader repertoires are not equivalent. Any broader repertoire requires separately documented and
-approved fiscal justification.
+For each row, OpenAPI MUST document the exact post-trim pattern and bounds through the approved
+`x-application-stage-6` metadata while the standard request schema accepts a decoded string and
+does not preempt Application-owned trimming or validation. Application validation MUST reject a
+nonmatching value after its one permitted business-value trim; domain value objects MUST enforce
+the same invariant over the already normalized value; response schemas MAY enforce the exact
+persisted representation pattern; and PostgreSQL MUST use locale-independent ASCII checks as a
+final integrity barrier over stored values. POSIX `[[:alnum:]]`, Unicode character classes,
+locale-dependent matching, and broader repertoires are not equivalent. Any broader repertoire
+requires separately documented and approved fiscal justification.
+
+The authoritative request-to-storage fixture is
+`src/test/resources/invoicedraft/ascii-validation-vectors.json`, owned by T017. Every request-
+pipeline entry MUST contain at least `id`, `field`, `identificationType` when applicable,
+`rawValue`, `applicationNormalizedValue`, `expectedApplicationOutcome`, `expectedStoredValue`,
+`expectedErrorCode`, `failureStage`, `rationale`, and `consumers`. `failureStage` MUST be exactly one
+of `NONE`, `TRANSPORT_REPRESENTATION`, `APPLICATION_STAGE_6`, or `PERSISTENCE_DEFENSE`.
+
+- `rawValue` is the exact decoded request string forwarded unchanged by API to Application. It MAY
+  contain surrounding ASCII SP or HTAB.
+- `applicationNormalizedValue` is the result of the single Application-owned surrounding ASCII
+  SP/HTAB trim. These fields receive no NFC normalization, case folding, internal-character
+  change, or internal-whitespace collapse. It is `null` only when transport decoding fails and
+  Application receives no value.
+- `expectedApplicationOutcome` records whether the normalized value matches
+  `^[A-Za-z0-9]{1,20}$` for identification types `06`/`08` or
+  `^[A-Za-z0-9]{1,25}$` for `productCode`.
+- `expectedStoredValue` is the exact normalized value eligible for persistence after successful
+  Application validation and MUST be `null` for a rejected request. PostgreSQL request-pipeline
+  tests MUST use this field, never `rawValue`, for successful cases.
+- A direct persistence-defense entry additionally contains `storedProbeValue` and
+  `expectedPersistenceOutcome`, with `failureStage=PERSISTENCE_DEFENSE`. It tests only the stored
+  representation and MUST NOT imply that Infrastructure performs Application normalization.
+
+The fixture MUST distinguish surrounding from internal whitespace. It includes raw `" ABC123 "`
+and HTAB-surrounded valid values that trim to accepted normalized values; internal SP or HTAB that
+remains invalid; acceptance of the normalized stored value; direct-persistence rejection of stored
+values containing surrounding or internal whitespace; accented Unicode rejection after the
+permitted trim; empty and trim-to-empty rejection; and normalized over-maximum rejection. No
+consumer may validate a value belonging to another stage.
+
+T017 validates fixture structure and produces intentional red PostgreSQL/Flyway evidence against
+V3. T018 consumes `expectedStoredValue` and persistence-defense probes for final PostgreSQL/Flyway
+evidence. T030 checks raw request ownership and the `x-application-stage-6` normalized metadata; it
+MUST NOT claim that the standard request schema rejects a raw value that Application may trim.
+T045 validates buyer-identification values using `applicationNormalizedValue`, and T050 does the
+same for product codes. Each suite applies only its recorded stage and consumers.
 
 ### Executable General Text Policy and Vectors
 
@@ -1283,13 +1324,35 @@ points after NFC and surrounding `U+0020` trim.
 | Field maximum plus one code point | none | No | Code-point upper boundary exceeded |
 | Empty or only `U+0020` | empty | No for required/supplied text | Empty after the specified trim |
 
-OpenAPI documents these expectations and API forwards decoded business values unchanged;
-Application invokes the Stage-6 `BusinessTextNormalizer` exactly once for each supplied applicable
-value (and zero times for an absent optional value) to perform that value's Unicode operations,
-display checks, canonical derivation when applicable, and canonical-length check; Domain and
-Infrastructure receive normalized values and do not normalize again. PostgreSQL enforces stored
-non-null/nonempty/max-length/canonical barriers without reproducing Java normalization, and contract
-tests use these same vectors.
+The authoritative general-text fixture is
+`src/test/resources/invoicedraft/unicode-text-validation-vectors.json`, owned by T020. Every entry
+MUST contain at least `id`, `fieldCategory`, `rawValue`, `applicationNormalizedValue`,
+`canonicalValue` when applicable, `expectedApplicationOutcome`, `expectedDomainInput`,
+`expectedStoredValue`, `expectedErrorCode`, `failureStage`, `rationale`, and `consumers`.
+`failureStage` MUST be exactly one of `NONE`, `TRANSPORT_REPRESENTATION`,
+`APPLICATION_STAGE_6`, or `PERSISTENCE_DEFENSE`.
+Dedicated persistence-defense entries additionally contain `storedProbeValue` and
+`expectedPersistenceOutcome` and use `failureStage=PERSISTENCE_DEFENSE`.
+
+Independent layer-specific suites consume this same fixture while selecting only the stage-
+appropriate value and responsibility. API uses `rawValue` to prove JSON/Unicode decoding,
+malformed-representation rejection, and unchanged forwarding; it performs no business
+normalization or length validation. Application consumes `rawValue`, performs exactly one NFC pass,
+surrounding `U+0020` trim, prohibited-category/separator checks, display-length validation,
+canonical derivation, post-`Locale.ROOT` canonical-length validation, and no truncation. Domain
+receives only `expectedDomainInput` from accepted vectors and performs no normalization.
+Infrastructure/PostgreSQL receives only `expectedStoredValue` and dedicated persistence-defense
+probes; it enforces stored length, nonempty values, required canonical persistence, relationships,
+and uniqueness, but MUST NOT claim to reproduce Java NFC, Java `Locale.ROOT`, or Application's
+prohibited-code-point validation.
+
+T020 creates this fixture and makes `idempotency-v1-vectors.json` reference or consume it rather
+than redefine general-text cases. T026 consumes accepted `expectedDomainInput`; T029 consumes raw
+and expected Application/canonical outcomes; T030 checks OpenAPI ownership and metadata; T033
+checks API decoding and unchanged forwarding; and T036 checks only stored values and persistence
+defenses. T028 remains the idempotency consumer through T020. The fixture covers every vector in
+the table above, including CR in addition to tab/LF, all code-point boundaries, and the 150/151
+`U+0130` canonical-expansion boundary.
 
 ### Key Entities
 
@@ -1422,8 +1485,10 @@ tests use these same vectors.
 - **SC-015**: Drafts at the limits of 500 invoice lines, 8 positive payments, and 15
   additional-information entries are accepted when otherwise valid, and every request exceeding
   any limit is rejected without persisted draft data.
-- **SC-016**: Identical OpenAPI/API/application/domain/PostgreSQL vectors prove the exact general
-  text policy and layer ownership: API forwards decoded business values without normalization;
+- **SC-016**: Independent layer-specific suites consume the same authoritative general-text fixture
+  while selecting the stage-appropriate value and responsibility for that layer; they do not all
+  validate the same literal value or perform the same transformation. Together they prove the exact
+  general-text policy and layer ownership: API forwards decoded business values without normalization;
   Application invokes `BusinessTextNormalizer` exactly once for each supplied applicable value and
   zero times for absent optional values; Domain and Infrastructure perform none. Vectors
   cover NFC accented and decomposed/composed equivalents; surrounding and repeated internal
@@ -1515,8 +1580,9 @@ including these precise Company-boundary checks:
   CompanyId, while global VAT, payment-method, identification-type, and other immutable SRI
   catalogs remain without Company ownership or Company columns.
 - The T001–T016 retrospective and D1–D3 dispositions are approved, and `GATE-GOV-001` is released.
-  The current analysis gate and mandatory pending T017/T018 correction still apply; historical
-  completion cannot substitute, and T019 cannot start until both corrective tasks pass.
+  The subsequent analysis found no CRITICAL corrective-assignment issue, so pending T017 is
+  eligible to begin. Pending T018 remains dependent on successful T017, and T019 cannot start until
+  both corrective tasks pass; historical completion cannot substitute for either task.
 
 ## Assumptions and Dependencies
 
