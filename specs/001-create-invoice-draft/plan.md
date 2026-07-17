@@ -199,8 +199,9 @@ HTTP request
     decoded business text unchanged
   → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
     inputs, idempotency/correlation, fixed RequestDeadline); invoke BusinessTextNormalizer at
-    Stage 6; validate/calculate; construct InvoiceDraftCandidate with final local identifiers
-  → domain: InvoiceDraft aggregate and deterministic calculation
+    Stage 6; orchestrate ordered validation and invoke Domain operations; construct
+    InvoiceDraftCandidate with final local identifiers
+  → domain: enforce fiscal/commercial invariants and perform deterministic monetary calculation
   → application outbound persistence port: persist(InvoiceDraftCandidate)
   → infrastructure: reactive Panache/PostgreSQL transaction; capture one Instant for both
     timestamps; return PersistedInvoiceDraft
@@ -211,8 +212,8 @@ HTTP request
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
 | `api` | Exclusively own the monotonic 10-second race, terminal-result arbitration, one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; initialize correlation/request instant; decode JSON and validate transport representation; forward decoded business text unchanged | `application` | NFC normalization, business trimming, space collapse, lowercase conversion, `canonicalName` construction, persistence entities, Company/security clients, or deadline/HTTP/header responsibilities delegated below API |
-| `application` | Receive mapped CompanyId/request instant, decoded business text, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 invoke `BusinessTextNormalizer` exactly once for every supplied applicable value; derive/validate canonical values; enforce ordered validation and calculation; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | HTTP headers/requests/status/exceptions/envelopes, terminal arbitration, persistence clock invocation, timestamp construction, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
-| `domain` | Receive normalized values; own immutable CompanyId on Invoice Draft; enforce buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | Unicode normalization mechanics, HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
+| `application` | Receive mapped CompanyId/request instant, decoded business text, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 invoke `BusinessTextNormalizer` exactly once for every supplied applicable value; derive/validate canonical values; orchestrate the approved validation sequence and invoke Domain invariants/calculation without reimplementing them; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | Independent implementation or recalculation of Domain fiscal/commercial invariants or monetary rules; HTTP headers/requests/status/exceptions/envelopes; terminal arbitration; persistence clock invocation; timestamp construction; `SecurityIdentity`; `JsonWebToken`; thread-local/Gateway objects |
+| `domain` | Receive normalized values; own immutable CompanyId on Invoice Draft; exclusively enforce buyer/line/tax/payment fiscal and commercial invariants and perform exact deterministic monetary calculation when invoked by Application | Java/approved domain libraries | Unicode normalization mechanics, use-case orchestration, HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
 | `infrastructure` | Persist exactly the supplied normalized/canonical values and final local identifiers; implement transport-neutral local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache; clamp work to remaining budget; let the T076 transaction own the sole persistence-clock invocation and return committed state as `PersistedInvoiceDraft` | application ports/domain types | Independent NFC/trim/collapse/lowercase/canonical derivation, identifier replacement, HTTP status/exception/envelope/arbiter, Company/SRI/security adapter, shared database, cache |
 
 Actual outbound boundaries are limited to the Invoice Draft repository, local identification/tax/
@@ -254,10 +255,12 @@ canonical values, allocate identifiers, invoke an additional clock, or map HTTP 
 For a logically new request, the architectural sequence is exactly:
 
 1. API decodes the request.
-2. Application performs ordered validation.
+2. Application begins and owns ordered validation orchestration.
 3. Application normalizes business text in Stage 6 by invoking `BusinessTextNormalizer` exactly
    once for each supplied applicable value.
-4. Application calculates monetary values.
+4. Application invokes Domain, which enforces fiscal/commercial invariants and calculates the
+   deterministic monetary values; Application does not independently implement or recalculate
+   those rules.
 5. Application obtains final local draft and child identifiers through `DraftIdentifierGenerator`
    and constructs `InvoiceDraftCandidate`.
 6. Application passes the candidate to the persistence port.
