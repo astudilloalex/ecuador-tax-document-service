@@ -278,8 +278,9 @@ values, locale-independent PostgreSQL checks, and test vectors use those exact
 expressions; POSIX `[[:alnum:]]`, Unicode classes, case folding, and locale-dependent matching are
 rejected because no approved fiscal evidence justifies a broader repertoire.
 
-Capture one `requestCreationInstant` at the request boundary and derive the expected emission date
-once using `America/Guayaquil`. Commit crossing midnight does not change the accepted date;
+Capture one `requestCreationInstant` at the earliest request boundary before body consumption and
+derive the expected emission date once using `America/Guayaquil`. Body consumption or commit
+crossing midnight does not change the accepted date;
 `createdAt` and `updatedAt` are separately assigned by the persistence adapter from one exact UTC
 `java.time.Instant` captured inside the active transaction after all business validations succeed
 and immediately before root persistence. Both immutable values are persisted/returned after commit
@@ -417,12 +418,14 @@ static contract.
 
 **Decision**: Application is the sole business-text normalization owner. API decodes HTTP/JSON,
 rejects malformed representation, validates transport structure and headers, and forwards decoded
-business values unchanged. At the beginning of FR-041 Stage 6, Application invokes one
-`BusinessTextNormalizer` exactly once for each supplied applicable value, performs the complete
-Unicode/display/canonical validation, and returns transport-neutral failures. Domain receives
-normalized values and enforces business invariants; Infrastructure persists supplied values. No
-other layer repeats NFC, business trim, internal-space collapse, lowercase conversion, or
-`canonicalName` derivation.
+business values unchanged. At the beginning of FR-041 Stage 6, Application first performs the one
+approved surrounding SP/HTAB trim and UUID validation/canonicalization for `emissionPointId`, with
+transport-neutral `EMISSION_POINT_INVALID` for blank-after-trim, malformed, or nil decoded input.
+Only after that passes does Application invoke one `BusinessTextNormalizer` exactly once for each
+supplied applicable value, perform the complete Unicode/display/canonical validation, and return
+transport-neutral failures. Domain receives normalized values and enforces business invariants;
+Infrastructure persists supplied values. No other layer repeats NFC, business trim, internal-space
+collapse, lowercase conversion, or `canonicalName` derivation.
 
 **Decision**: The Application-to-persistence creation contract is conceptually
 `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. Application owns all final local

@@ -31,11 +31,11 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `IDEMPOTENCY_KEY_REQUIRED` | 400 | `Idempotency-Key` is missing after HTTP header parsing | Supply exactly one header-field value | No lookup, draft, children, or binding |
 | `IDEMPOTENCY_KEY_INVALID` | 400 | Exactly one value is blank/whitespace-only after one ASCII SP/HTAB trim, longer than 128 normalized characters, or fails the approved non-comma ASCII grammar | Supply one valid normalized value | No lookup, draft, children, or binding |
 | `IDEMPOTENCY_KEY_MULTIPLE` | 400 | Repeated fields, a parser result with multiple values, or any comma-containing/comma-combined ambiguous value is present | Supply exactly one unambiguous field value; no first value is selected | No lookup, draft, children, or binding |
-| `INVALID_REQUEST` | 400 | Blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; or unknown/prohibited non-calculated property such as request `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
+| `INVALID_REQUEST` | 400 | Blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; missing required `emissionPointId`; a non-string `emissionPointId` representation; or unknown/prohibited non-calculated property such as request `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
 | `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
-| `BUSINESS_VALIDATION_FAILED` | 422 | Application-owned Stage 6 text/canonical validation, Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate), or ordered Stage 11B calculated-value rules fail; nested stable violations include `CANONICAL_NAME_TOO_LONG` and `MONETARY_RANGE_EXCEEDED` | Correct business content | No fingerprint lookup, draft, children, or binding when rejected in Stage 6; otherwise no draft, children, or binding |
+| `BUSINESS_VALIDATION_FAILED` | 422 | Application-owned Stage 6 emission-point or text/canonical validation, Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate), or ordered Stage 11B calculated-value rules fail; nested stable violations include `EMISSION_POINT_INVALID`, `CANONICAL_NAME_TOO_LONG`, and `MONETARY_RANGE_EXCEEDED` | Correct business content | No fingerprint lookup, draft, children, or binding when rejected in Stage 6; otherwise no draft, children, or binding |
 | `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable, or its configured operation timeout/failure becomes conclusive while shared request-deadline budget remains | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit or complete rollback is confirmed |
 | `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline expires before the current FR-041 stage or persistence outcome becomes conclusive | Retry same Company/key/content | No state when expiry is confirmed before persistence; no zero-state claim when commit is unresolved; replay resolves uncertain or completed commit state |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
@@ -71,6 +71,25 @@ whitespace-only, over-length, control, non-ASCII, or other non-comma grammar fai
 `IDEMPOTENCY_KEY_INVALID`; repeated/parser-multiple or any comma-containing/comma-combined value is
 `IDEMPOTENCY_KEY_MULTIPLE`. The comma classification prevents an HTTP implementation from silently
 choosing the first combined value. The raw rejected value never appears in the response.
+
+## Emission-Point Violation
+
+Stage 5 returns `INVALID_REQUEST` when the required `emissionPointId` property is absent or its JSON
+representation is not a string. A decoded string reaches Application unchanged. As the first
+Stage-6 check, Application trims surrounding ASCII SP/HTAB exactly once, changes no internal
+character, and validates a nonblank, non-nil UUID. A valid value is converted to canonical
+lowercase hyphenated form.
+
+A value that becomes blank, is malformed, or is the nil UUID returns top-level
+`BUSINESS_VALIDATION_FAILED` (`422`) with one safe nested violation:
+
+- `code`: `EMISSION_POINT_INVALID`;
+- `field`: `emissionPointId`;
+- `validationStage`: `NORMALIZATION`.
+
+The violation never contains the raw, trimmed, or canonical candidate value. It becomes conclusive
+before general business-text normalization, fingerprinting, idempotency lookup, Domain entry, or
+persistence and creates no state.
 
 ## Numeric Envelope Violation
 
@@ -112,9 +131,10 @@ and creates no state.
 
 ## Emission-Date Evaluation
 
-The request boundary captures `requestCreationInstant` exactly once and derives the expected
-date-only value using `America/Guayaquil`. That date remains fixed through validation and commit,
-including a midnight crossing. Application passes a timestamp-free `InvoiceDraftCandidate` to the
+The initial request boundary captures `requestCreationInstant` exactly once before body consumption
+and derives the expected date-only value using `America/Guayaquil`. That date remains fixed through
+body consumption, validation, and commit, including a midnight crossing. Application passes a
+timestamp-free `InvoiceDraftCandidate` to the
 persistence port. Separately, the persistence adapter captures one UTC `java.time.Instant` exactly
 once inside the active transaction after all business validations succeed and immediately before
 the new draft is persisted. The adapter assigns that same immutable value to `createdAt` and
@@ -138,10 +158,13 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
    `IDEMPOTENCY_KEY_MULTIPLE` for idempotency-header presence, parsed cardinality, one-time ASCII
    SP/HTAB trim, or normalized grammar;
 5. API-owned `INVALID_REQUEST` or `PROHIBITED_CALCULATED_FIELD` for malformed
-   representation/unknown or prohibited properties; API forwards decoded business text unchanged;
-6. Application-owned business-text normalization/canonicalization, with exactly one normalizer
-   invocation for each supplied applicable value and zero for an absent optional value. Business
-   validation failures use `BUSINESS_VALIDATION_FAILED`; post-lowercase canonical overflow uses
+   representation/unknown or prohibited properties; a missing or non-string `emissionPointId` is
+   `INVALID_REQUEST`; API forwards every decoded string unchanged;
+6. Application first performs the one approved `emissionPointId` trim/UUID validation and returns
+   `BUSINESS_VALIDATION_FAILED` with nested `EMISSION_POINT_INVALID` for a blank-after-trim,
+   malformed, or nil value. Only after it passes does Application perform business-text
+   normalization/canonicalization, with exactly one normalizer invocation for each supplied
+   applicable value and zero for an absent optional value. Post-lowercase canonical overflow uses
    nested `CANONICAL_NAME_TOO_LONG` with its required safe metadata;
 7. local Company-scoped binding lookup infrastructure outcome;
 8. equivalent binding success (`200`, not an error);

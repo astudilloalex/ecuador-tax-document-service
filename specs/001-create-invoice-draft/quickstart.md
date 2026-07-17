@@ -97,9 +97,9 @@ the request:
 ECUADOR_DATE="$(TZ=America/Guayaquil date +%F)"
 ```
 
-The shell value is only test input. The service captures `requestCreationInstant` exactly once and
-derives the authoritative expected date in `America/Guayaquil`; it does not use the test shell's
-clock or recalculate the date at commit.
+The shell value is only test input. The service captures `requestCreationInstant` exactly once at
+the earliest request boundary before body consumption and derives the authoritative expected date
+in `America/Guayaquil`; it does not use the test shell's clock or recalculate the date later.
 
 Before a successful create test, verify the selected exact baseline UUIDs exist in the
 Flyway-seeded database. Stop rather than substituting a sample value when either row is unavailable.
@@ -109,7 +109,8 @@ The valid request must contain:
 - one valid mixed-case `X-Company-Id` to prove canonical lowercase storage/response;
 - `Idempotency-Key: invoice-draft-e2e-001`;
 - one valid `X-Correlation-Id`, such as `billing-e2e-001`, for the preservation vector;
-- one opaque non-nil UUID `emissionPointId`;
+- one opaque non-nil UUID `emissionPointId`; use surrounding ASCII SP/HTAB and mixed-case hex in
+  one accepted vector to prove Stage-6 trim and canonicalization;
 - `emissionDate` equal to `$ECUADOR_DATE`;
 - final-consumer buyer data only when the approved identification baseline and threshold support it;
 - `taxRuleId: 5b34b038-931c-50e3-a84c-10af272fdcd4` for the 15% mathematical vector, or another
@@ -153,6 +154,17 @@ Execute each case and inspect API results and database row counts:
 
 No test expects Company existence, active state, fiscal eligibility, caller entitlement, tenant
 ownership, or emission-point ownership validation.
+
+Emission-point validation has its own deterministic boundary:
+
+| `emissionPointId` case | Expected outcome | Expected state |
+|------------------------|------------------|----------------|
+| Property missing or JSON value is not a string | `400 INVALID_REQUEST` at Stage 5 | No state |
+| Decoded string is blank/trim-to-empty, malformed UUID, or nil UUID | `422 BUSINESS_VALIDATION_FAILED` with value-free `EMISSION_POINT_INVALID`, field `emissionPointId`, stage `NORMALIZATION` | No lookup/state |
+| Valid UUID surrounded by ASCII SP/HTAB | Continue after one trim; persist/return canonical lowercase hyphenated UUID | Normal create/replay rules |
+
+The Stage-6 emission-point check precedes general business-text normalization. API forwards every
+decoded string unchanged and never echoes an invalid value in a failure.
 
 ## 6. Verify Correlation Initialization and Precedence
 
@@ -326,8 +338,9 @@ Using the exact approved baseline identifiers, validate at least:
   server current date, request arrival, transaction time, or `createdAt`;
 - exactly 8 distinct approved positive payment methods accepted when amounts reconcile, and 9
   payments rejected before persistence;
-- current date derived from the single `requestCreationInstant`, past/future/impossible rejection,
-  a commit crossing Guayaquil midnight, and later-date replay;
+- current date derived from the single earliest-boundary `requestCreationInstant`,
+  past/future/impossible rejection, body consumption or commit crossing Guayaquil midnight, and
+  later-date replay;
 - general human-readable text vectors shared across layers: prove API forwards decoded business
   text unchanged, Application invokes `BusinessTextNormalizer` exactly once per supplied applicable
   value at Stage 6, and Domain/Infrastructure invoke it zero times; cover NFC accented Latin;

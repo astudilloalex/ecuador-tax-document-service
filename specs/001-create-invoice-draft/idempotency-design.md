@@ -75,11 +75,13 @@ Included content:
 - payments and amounts;
 - additional-information names and values.
 
-API only decodes the business fields. At the beginning of FR-041 Stage 6, Application invokes
-`BusinessTextNormalizer` exactly once per supplied applicable value; only its accepted normalized
-display values and derived canonical names enter the fingerprint encoder. Domain, the encoder, and
-Infrastructure do not repeat NFC normalization, trimming, space collapse, lowercase conversion, or
-canonical-name construction.
+API only decodes the business fields. At the beginning of FR-041 Stage 6, Application first
+trims/validates/canonicalizes `emissionPointId`; blank-after-trim, malformed, or nil text returns
+`EMISSION_POINT_INVALID` before fingerprint lookup. Only after that succeeds does Application
+invoke `BusinessTextNormalizer` exactly once per supplied applicable value; the accepted canonical
+emission-point UUID, normalized display values, and derived canonical names enter the fingerprint
+encoder. Domain, the encoder, and Infrastructure do not repeat UUID/text normalization, trimming,
+space collapse, lowercase conversion, or canonical-name construction.
 
 Excluded content:
 

@@ -26,12 +26,12 @@ MUST NOT use wall-clock timestamps, `requestCreationInstant`, `createdAt`, `upda
 timestamps. Client network, gateway, and upstream queueing time are outside this server-side
 measurement.
 
-`requestCreationInstant` is separate functional evidence. The request boundary captures it exactly
-once from the approved wall clock and derives the expected emission date once using
-`America/Guayaquil`. It MUST be passed through validation and persistence without recapture, MUST
-remain fixed if commit crosses midnight, and MUST NOT be replaced by `createdAt` or `updatedAt`. Equivalent replay
-may capture an operational request instant but MUST NOT use it to revalidate or mutate the original
-emission date.
+`requestCreationInstant` is separate functional evidence. The earliest request boundary captures it
+exactly once from the approved wall clock before body consumption and derives the expected emission
+date once using `America/Guayaquil`. It MUST be passed through validation and persistence without
+recapture, MUST remain fixed if body consumption or commit crosses midnight, and MUST NOT be
+replaced by `createdAt` or `updatedAt`. Equivalent replay may capture an operational request instant
+but MUST NOT use it to revalidate or mutate the original emission date.
 
 `createdAt` and `updatedAt` are separate functional persistence evidence: one UTC
 `java.time.Instant` is obtained by T076 from the injectable deterministic persistence clock exactly

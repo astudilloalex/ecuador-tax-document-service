@@ -7,16 +7,19 @@ normalization, persistence-boundary, timestamp, and canonical-name clarification
 
 **Implementation progression**: `GATE-GOV-001` retains its **RELEASED** governance status. The
 approved `governance-corrective-assignment-addendum.md` assigns red evidence to T017 and V5/green
-persistence evidence to T018. The subsequent analysis found no CRITICAL corrective-assignment
-issue; therefore T017 is eligible to begin. T017 and T018 remain pending, T018 depends on
-successful T017, and T019 remains blocked until both complete successfully.
+persistence evidence to T018. A later analysis identified non-governance documentary
+inconsistencies in request-time and request-contract semantics. Those inconsistencies are remediated
+in the current artifacts, but implementation permission remains `PENDING_SUCCESSFUL_ANALYSIS` until
+a new analysis confirms that no CRITICAL finding remains. T017 and T018 remain pending, T018
+depends on successful T017, and T019 remains blocked until both complete successfully.
 
 ## Summary
 
 Deliver one synchronous internal `POST /api/v1/invoice-drafts` operation. API owns
 transport decoding, header validation, request-state initialization, deadline arbitration, and HTTP
-mapping. Application owns ordered validation, Stage-6 business-text normalization, use-case
-orchestration, candidate construction, and transport-neutral outcomes. Domain owns fiscal and
+mapping. Application owns ordered validation, first-in-Stage-6 emission-point validation followed
+by business-text normalization, use-case orchestration, candidate construction, and
+transport-neutral outcomes. Domain owns fiscal and
 commercial invariants plus deterministic monetary calculation. Infrastructure owns reactive
 PostgreSQL access, atomic aggregate and idempotency-binding persistence, and the single
 transactional timestamp capture. CompanyId plus a hashed idempotency key defines the durable
@@ -92,9 +95,11 @@ price `numeric(12,6)` with maximum `999999.999999`; all money `numeric(17,2)` wi
 `BUSINESS_VALIDATION_FAILED`/`MONETARY_RANGE_EXCEEDED` before persistence; no synchronous wait or
 unbounded retry
 
-**Time Boundary**: The API boundary captures one `requestCreationInstant` per new request and derives
-the expected emission date once in `America/Guayaquil`. The derived date remains fixed when commit
-crosses midnight. Separately, the T076 persistence adapter is the sole owner of the creation
+**Time Boundary**: The earliest API boundary captures one `requestCreationInstant` per request
+before body consumption and derives the expected emission date once in `America/Guayaquil`. The
+derived date remains fixed when body consumption, validation, or commit crosses midnight. The
+resource consumes the captured value and never reads request time again. Separately, the T076
+persistence adapter is the sole owner of the creation
 timestamp invocation. It invokes the injected transactional clock exactly once inside the active
 reactive transaction, after all business validations have succeeded and immediately before root
 persistence, and assigns the exact same UTC `java.time.Instant` to `createdAt` and `updatedAt`.
@@ -118,7 +123,7 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 |-----------|------------------------------------|-------------------------------------|
 | Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
 | Constitution | `.specify/memory/constitution.md` v2.0.1 | Company request/input prohibition and contracted response allowance; Company-owned aggregate scope/global-catalog exclusion; no identity/Company dependency; architecture, persistence, testing, operations |
-| Specification | `specs/001-create-invoice-draft/spec.md`, clarification sessions through 2026-07-16 | Actor, inputs, calculations, normalization ownership, persistence boundary, timestamp semantics, failure precedence, acceptance |
+| Specification | `specs/001-create-invoice-draft/spec.md`, clarification sessions through 2026-07-16 | Stakeholder goal, external contract, calculations, observable normalization results, all-or-nothing save behavior, timestamp results, failure precedence, and acceptance outcomes |
 | Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Approved buyer-type, IVA-rule, and payment-method rows; official evidence; target decisions; deterministic UUIDv5 mappings |
 | Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
 | Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
@@ -180,23 +185,27 @@ against approved Constitution v2.0.1, the current feature specification, and rep
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
-| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its released status, and the subsequent analysis found no CRITICAL corrective-assignment issue |
+| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its released status; current documentary remediation awaits a successful new analysis before T017 may begin |
 
 No constitutional complexity exception is requested. A workflow non-conformity exists because
 T001–T016 were implemented before the mandatory analysis gate; it is recorded without
 retroactive correction in `governance-nonconformity.md`.
 
 **Current implementation gate**: governance approval and the corrective-assignment addendum are
-complete, and `GATE-GOV-001` retains its released status. The subsequent analysis found no CRITICAL
-corrective-assignment issue; therefore T017 is eligible to begin. T018 depends on successful T017,
-and T019 remains blocked until T017 and T018 both complete successfully.
+complete, and `GATE-GOV-001` retains its released status. The request-time and request-contract
+findings from the latest analysis are remediated documentarily, and all requirements-quality
+checklists are evaluated with evidence. Implementation permission remains
+`PENDING_SUCCESSFUL_ANALYSIS` until a new analysis confirms that no CRITICAL finding remains. T017
+is pending and blocked by that condition; T018 depends on successful T017, and T019 remains blocked
+until T017 and T018 both complete successfully.
 
 ## Clean Architecture Mapping
 
 ```text
 HTTP request
-  → api: start one monotonic request deadline; parse/validate headers and transport DTOs; forward
-    decoded business text unchanged
+  → api: at the earliest boundary capture one requestCreationInstant and start one monotonic
+    request deadline before body consumption; parse/validate headers and transport DTOs; forward
+    decoded business and identifier values unchanged
   → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
     inputs, idempotency/correlation, fixed RequestDeadline); invoke BusinessTextNormalizer at
     Stage 6; orchestrate ordered validation and invoke Domain operations; construct
@@ -211,8 +220,8 @@ HTTP request
 
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
-| `api` | Exclusively own the monotonic 10-second race, terminal-result arbitration, one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; initialize correlation/request instant; decode JSON and validate transport representation; forward decoded business text unchanged | `application` | NFC normalization, business trimming, space collapse, lowercase conversion, `canonicalName` construction, persistence entities, Company/security clients, or deadline/HTTP/header responsibilities delegated below API |
-| `application` | Receive mapped CompanyId/request instant, decoded business text, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 invoke `BusinessTextNormalizer` exactly once for every supplied applicable value; derive/validate canonical values; orchestrate the approved validation sequence and invoke Domain invariants/calculation without reimplementing them; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | Independent implementation or recalculation of Domain fiscal/commercial invariants or monetary rules; HTTP headers/requests/status/exceptions/envelopes; terminal arbitration; persistence clock invocation; timestamp construction; `SecurityIdentity`; `JsonWebToken`; thread-local/Gateway objects |
+| `api` | At the earliest boundary, before body consumption, capture one request instant, start the monotonic 10-second race, and initialize request state; exclusively own terminal-result arbitration, the one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; decode JSON and validate transport representation; forward decoded business and identifier values unchanged | `application` | NFC normalization, business or identifier trimming, UUID canonicalization, space collapse, lowercase text conversion, `canonicalName` construction, persistence entities, Company/security clients, or deadline/HTTP/header responsibilities delegated below API |
+| `application` | Receive mapped CompanyId, the fixed request instant, raw decoded business/identifier values, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 trim/validate/canonicalize `emissionPointId` once and invoke `BusinessTextNormalizer` exactly once for every supplied applicable business-text value; derive/validate canonical values; orchestrate the approved validation sequence and invoke Domain invariants/calculation without reimplementing them; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | Independent implementation or recalculation of Domain fiscal/commercial invariants or monetary rules; HTTP headers/requests/status/exceptions/envelopes; terminal arbitration; request- or persistence-clock invocation; timestamp construction; `SecurityIdentity`; `JsonWebToken`; thread-local/Gateway objects |
 | `domain` | Receive normalized values; own immutable CompanyId on Invoice Draft; exclusively enforce buyer/line/tax/payment fiscal and commercial invariants and perform exact deterministic monetary calculation when invoked by Application | Java/approved domain libraries | Unicode normalization mechanics, use-case orchestration, HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
 | `infrastructure` | Persist exactly the supplied normalized/canonical values and final local identifiers; implement transport-neutral local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache; clamp work to remaining budget; let the T076 transaction own the sole persistence-clock invocation and return committed state as `PersistedInvoiceDraft` | application ports/domain types | Independent NFC/trim/collapse/lowercase/canonical derivation, identifier replacement, HTTP status/exception/envelope/arbiter, Company/SRI/security adapter, shared database, cache |
 
@@ -254,13 +263,20 @@ canonical values, allocate identifiers, invoke an additional clock, or map HTTP 
 
 For a logically new request, the architectural sequence is exactly:
 
-1. API decodes the request.
-2. Application begins and owns ordered validation orchestration.
-3. Application normalizes business text in Stage 6 by invoking `BusinessTextNormalizer` exactly
-   once for each supplied applicable value.
-4. Application invokes Domain, which enforces fiscal/commercial invariants and calculates the
-   deterministic monetary values; Application does not independently implement or recalculate
-   those rules.
+1. Before body consumption, API captures the fixed request instant, derives the Ecuadorian request
+   date, initializes request-local state, and starts the one request deadline.
+2. API performs FR-041 stages 1–5: body-size enforcement; Company, correlation, and idempotency
+   header validation; then JSON decoding and representation validation. It forwards decoded
+   `emissionPointId` and business text unchanged.
+3. Application begins Stage 6 by trimming and validating `emissionPointId`, emitting the stable
+   neutral `EMISSION_POINT_INVALID` violation when the decoded string is blank after trim,
+   malformed, or nil, and otherwise producing its canonical UUID. Only after that check passes,
+   Application invokes `BusinessTextNormalizer` exactly once for each supplied applicable business
+   text value.
+4. Application performs Company-scoped idempotency stages 7–9, then invokes Domain for Stage 10
+   fiscal/commercial invariants and Stage 11A/11B deterministic calculation and validation. Domain
+   calculates the deterministic monetary values; Application does not independently implement or
+   recalculate those rules.
 5. Application obtains final local draft and child identifiers through `DraftIdentifierGenerator`
    and constructs `InvoiceDraftCandidate`.
 6. Application passes the candidate to the persistence port.
@@ -308,6 +324,14 @@ semantics. FR-041 stages 1–5 use one explicit pre-application pipeline:
    `quarkus.rest.exception-mapping.disable-mapper-for=io.quarkus.resteasy.reactive.jackson.runtime.mappers.BuiltinMismatchedInputExceptionMapper`
    so the feature mapper returns the approved stable response.
 
+After API stages 1–5 succeed, Application owns Stage 6 in a fixed internal order. It first trims
+surrounding ASCII SP/HTAB from the decoded `emissionPointId` once, rejects blank, malformed, or nil
+UUID text with transport-neutral `BUSINESS_VALIDATION_FAILED` / `EMISSION_POINT_INVALID`, and
+canonicalizes a valid UUID. It then performs general business-text normalization and canonical
+length validation. Missing `emissionPointId` or a non-string JSON representation never reaches
+Application and is the Stage-5 `INVALID_REQUEST` outcome. Neither failure exposes the rejected
+value, and the API maps only the terminal outcome accepted by its deadline arbiter.
+
 The route handlers and request gate use one shared API correlation classifier that always returns a
 safe response value plus an absent/valid/invalid classification. Absent input generates a UUID,
 valid input is preserved, and invalid input is replaced. Classification may occur for stage-1
@@ -351,11 +375,14 @@ serialization may complete normally, and the safe
 `request_deadline_exceeded_after_response_commit` event/counter is recorded. Equivalent replay
 resolves any response loss.
 
-The resource method is invoked only after stage 5. It calls the application `RequestClock` exactly
-once to derive the immutable request instant carried by `CreateInvoiceDraftCommand`. That instant
-is not reused as either persistence timestamp. Application orchestration begins at Stage 6 by
-invoking `BusinessTextNormalizer` exactly once for each supplied applicable business-text value;
-API has not normalized those values. It continues through replay/conflict, Stage 10 independent
+The earliest API deadline/request-state boundary calls the application `RequestClock` exactly once
+before body consumption, derives the immutable request instant, and stores it in request-local API
+state. The resource and mapper consume that captured value after stage 5 without another clock
+read; it is carried by `CreateInvoiceDraftCommand` and is not reused as either persistence
+timestamp. Application orchestration begins at Stage 6 by trimming, validating, and canonicalizing
+the raw `emissionPointId` exactly once and invoking `BusinessTextNormalizer` exactly once for each
+supplied applicable business-text value; API has not normalized either category. It continues
+through replay/conflict, Stage 10 independent
 validation, Stage 11A calculation, exact Stage 11B calculated-value validation, Application-owned
 local identifier allocation, timestamp-free candidate construction, and persistence delegation.
 For a logically new command only, T076 calls the injected persistence clock exactly once inside its
@@ -465,6 +492,10 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Strict request/input schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown
   properties, and calculated fields. The response's explicitly contracted canonical `companyId`
   does not weaken the input prohibition.
+- Request `emissionPointId` is a decoded string without a wire-level UUID pattern that could
+  preempt Stage 6. API forwards it unchanged; Application trims surrounding ASCII SP/HTAB once,
+  rejects blank/malformed/nil UUIDs, and supplies the canonical lowercase hyphenated value. The
+  response schema enforces the canonical UUID representation.
 - Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
   commercial/calculated draft, `createdAt`, and `updatedAt`.
 - New commit returns `201`; equivalent replay returns `200`; both identify replay state.
@@ -638,9 +669,9 @@ The creation handoff is the conceptual application-port operation
 Company-scoped repository retrieves the committed `PersistedInvoiceDraft`; Application returns its
 original root identifier, `createdAt`, and `updatedAt`. Replay does not allocate another identifier,
 invoke the transactional clock, rebuild canonical values, construct a replacement aggregate, or
-mutate persisted state. The incoming retry still undergoes its one required Stage-6 normalization
-pass to produce a comparable fingerprint; after equivalence is established, no persisted
-canonical value is reconstructed.
+mutate persisted state. The incoming retry still undergoes its required Stage-6 emission-point
+validation followed by the one business-text normalization pass to produce a comparable
+fingerprint; after equivalence is established, no persisted canonical value is reconstructed.
 
 Key invariants:
 
@@ -757,14 +788,14 @@ is planned.
 | Requirement/risk | Level/environment | Observable invariant | Required negative/boundary evidence |
 |------------------|-------------------|----------------------|-------------------------------------|
 | Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company request body/input/path/query rejected while explicit response CompanyId remains present |
-| Clean layer handoff | Architecture + application | Command has explicit CompanyId; API forwards decoded business text unchanged; Application alone normalizes at Stage 6 and constructs the timestamp-free candidate; aggregate has immutable CompanyId | no HTTP/security/thread-local/Gateway types below API; no API normalization; no Domain/Infrastructure re-normalization |
+| Clean layer handoff | Architecture + application | Command has explicit CompanyId and earliest-boundary request instant; API forwards decoded business text and `emissionPointId` unchanged; Application alone normalizes at Stage 6 and constructs the timestamp-free candidate; aggregate has immutable CompanyId | no HTTP/security/thread-local/Gateway types below API; no API normalization or UUID parsing; no Domain/Infrastructure re-normalization |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
-| Draft business rules | Domain/application | exact Stage 6 normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned NFC/canonical text and local identifiers; Domain consumes only accepted `expectedDomainInput` from the Unicode fixture | one normalizer invocation/value; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
+| Draft business rules | Domain/application | exact Stage 6 emission-point SP/HTAB trim/UUID canonicalization plus general-text normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned normalization and local identifiers; Domain consumes only accepted normalized inputs | one normalization pass/value; emission-point surrounded/malformed/nil vectors; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
 | ASCII request-to-storage equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every suite consumes `ascii-validation-vectors.json` but selects its stage value: raw/normalized contract metadata, `applicationNormalizedValue`, `expectedStoredValue`, or `storedProbeValue`; no domain suite imports transport/database infrastructure | surrounding SP/HTAB trim accepted in Application; internal whitespace, Unicode, punctuation, empty, trim-to-empty, min/max and over-limit vectors; direct invalid storage probes; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
 | Unicode text ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, accepted `expectedDomainInput`, Application/canonical expectations, or stored/probe values according to their boundary | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; no truncation or repeated normalization |
 | Persistence/Flyway | Real PostgreSQL from empty | immutable V3; T017 red evidence; T018-only V5 and green exact ASCII constraints; local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, timestamp-free candidate, Application-owned final IDs, T076-only one-call equal `createdAt`/`updatedAt`, and committed `PersistedInvoiceDraft` | T017 failure specificity and unrelated-behavior stability; T018 V3→V5/Flyway validation and final absence of locale-dependent POSIX classes; no prohibited fields/catalog Company columns; rollback; no identifier replacement, placeholder timestamp, physical commit timestamp, or second clock call |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner; replay loads `PersistedInvoiceDraft` | property/collection order, line order, response loss, no normalized payload storage, no new aggregate/identifier/clock call/canonical rebuild, original identifier and both timestamps unchanged |
-| API errors/correlation/deadline | Contract/integration with controlled deadline signal | API-exclusive Uni/deadline race, exactly-one terminal response, ordered upload/header/entity gate, mandatory exactly-one normalized Idempotency-Key and three stable errors, safe Problem Details only after arbitration | Missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
+| API errors/correlation/deadline | Contract/integration with controlled deadline and wall-clock signals | API captures request time once at the earliest boundary before body consumption, owns the Uni/deadline race, emits exactly one terminal response, enforces the ordered upload/header/entity gate, and accepts exactly one normalized Idempotency-Key | body crossing Guayaquil midnight retains the entry date; resource/mapper make no later request-time read; raw emission point is forwarded; missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
 | Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
 | Health/observability | Packaged runtime | liveness/readiness separation; bounded metrics/logs/traces | PostgreSQL down; no Company readiness; no sensitive/high-cardinality labels |
@@ -831,6 +862,7 @@ The requirements-quality content checks are reconciled to approved Constitution 
 recorded pre-analysis sequence remains an approved historical non-conformity and cannot be
 corrected retroactively. `astudilloalex` approved D1–D3 with mandatory T017/T018 correction and
 released `GATE-GOV-001`. The later approved addendum assigns T017 red evidence and T018 V5/green
-persistence evidence without changing the retrospective findings or hash. The subsequent analysis
-found no CRITICAL corrective-assignment issue, so T017 is eligible to begin. T018 remains dependent
-on successful T017, and T019 remains ineligible until both corrective tasks complete successfully.
+persistence evidence without changing the retrospective findings or hash. The latest documentary
+findings are remediated, but T017 remains pending and blocked until a new analysis confirms no
+CRITICAL finding. T018 remains dependent on successful T017, and T019 remains ineligible until both
+corrective tasks complete successfully.

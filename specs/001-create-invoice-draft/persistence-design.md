@@ -116,9 +116,10 @@ catalog versions MUST NOT reinterpret historical drafts.
 
 ## Aggregate Write Transaction
 
-Payload/header/representation gates, Stage-6 normalization/fingerprinting, Company-scoped binding
-lookup, Stage 10, Stage 11A, and Stage 11B all complete before the new-write transaction is opened.
-Application's Stage-6 `BusinessTextNormalizer` is the only business-text normalization owner.
+Payload/header/representation gates, Stage-6 emission-point validation followed by business-text
+normalization/fingerprinting, Company-scoped binding lookup, Stage 10, Stage 11A, and Stage 11B all
+complete before the new-write transaction is opened. Application's Stage-6
+`BusinessTextNormalizer` is the only business-text normalization owner.
 Infrastructure receives normalized/canonical values and never performs NFC, trim, space collapse,
 lowercase conversion, or canonical derivation. Payment lookup receives
 `(paymentMethodId, emissionDate)` and applies inclusive start/end plus activity, never a server,
@@ -127,10 +128,14 @@ remaining `Duration` and is clamped as described below.
 
 For a logically new command, the authoritative creation sequence is:
 
-1. API decodes the request and forwards decoded business values unchanged.
+1. Before body consumption, API captures the fixed request instant and starts the request deadline;
+   after payload/header gates it decodes the request and forwards decoded values unchanged.
 2. Application performs ordered validation.
-3. Application normalizes business text in Stage 6 exactly once per supplied applicable value.
-4. Application calculates monetary values.
+3. Application first trims/validates/canonicalizes `emissionPointId` at Stage 6, returning the
+   transport-neutral `EMISSION_POINT_INVALID` violation for blank-after-trim, malformed, or nil
+   decoded strings; only after that passes does it normalize business text exactly once per
+   supplied applicable value.
+4. Application completes idempotency/reference validation and calculates monetary values.
 5. Application allocates all final local root/child UUIDs through `DraftIdentifierGenerator` and
    constructs `InvoiceDraftCandidate`.
 6. Application calls `persist(InvoiceDraftCandidate)` on the persistence port.
@@ -161,8 +166,8 @@ query or reconstruct either value after commit and MUST NOT require `track_commi
 Rollback means neither value is exposed as a created resource. Equivalent replay loads the
 original `PersistedInvoiceDraft`, returns the original identifier and both timestamps, and performs
 no clock invocation, persisted-canonical-value rebuild, identifier allocation, or aggregate
-creation. The incoming retry's Stage-6 normalization is completed before lookup solely to produce
-the comparison fingerprint.
+creation. The incoming retry's Stage-6 emission-point validation followed by business-text
+normalization is completed before lookup solely to produce the comparison fingerprint.
 
 ## Concurrency Arbitration
 

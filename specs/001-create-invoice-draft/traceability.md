@@ -7,9 +7,11 @@ design evidence and an observable verification target. It does not create implem
 rows, and 8 payment rows under `SRI-OFFLINE-2.32-TARGET-1`, using deterministic UUIDv5 namespace
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`. Constitution v2.0.1 is the current PATCH-amended text.
 The T001–T016 retrospective and D1–D3 dispositions are approved by `astudilloalex`, and
-`GATE-GOV-001` is released. The subsequent analysis found no CRITICAL corrective-assignment issue,
-so pending T017 is eligible to begin. Pending T018 depends on successful T017, and T019 remains
-blocked until both complete successfully.
+`GATE-GOV-001` is released. A later analysis identified non-governance request-time and
+request-contract inconsistencies. Their documentary remediation is complete, but implementation
+permission remains `PENDING_SUCCESSFUL_ANALYSIS` until a new analysis confirms no CRITICAL finding.
+T017 remains pending and blocked by that condition, T018 depends on successful T017, and T019
+remains blocked until both complete successfully.
 
 ## Scenario Timing Model
 
@@ -33,8 +35,8 @@ overrides FR-041.
 
 | Record/task | Exact responsibility | Governing evidence | Current status |
 |-------------|----------------------|--------------------|----------------|
-| `GOV-001` / `GATE-GOV-001` | Completed retrospective, approved D1–D3 dispositions, and mandatory corrective controls | `governance-retrospective-review.md`; `governance-owner-approval.md`; `governance-nonconformity.md`; commits `1289871`, `8bdd548`, `5e5452a` | `RELEASED`; approved by `astudilloalex`; subsequent no-CRITICAL corrective-assignment condition satisfied |
-| `T017` | Own `ascii-validation-vectors.json`, validate its staged request/storage structure, and create intentional red PostgreSQL/Flyway evidence against immutable V3; create no migration | `FR-007`, `FR-010`, `FR-020`; `DR-014`; `SC-002`, `SC-010`, `SC-016`, `SC-022`; C2/D2/D3 | Pending and eligible to begin; V3 remains immutable |
+| `GOV-001` / `GATE-GOV-001` | Completed retrospective, approved D1–D3 dispositions, and mandatory corrective controls | `governance-retrospective-review.md`; `governance-owner-approval.md`; `governance-nonconformity.md`; commits `1289871`, `8bdd548`, `5e5452a` | `RELEASED`; approved by `astudilloalex`; corrective-assignment condition satisfied; current non-governance remediation awaits successful analysis |
+| `T017` | Own `ascii-validation-vectors.json`, validate its staged request/storage structure, and create intentional red PostgreSQL/Flyway evidence against immutable V3; create no migration | `FR-007`, `FR-010`, `FR-020`; `DR-014`; `SC-002`, `SC-010`, `SC-016`, `SC-022`; C2/D2/D3 | Pending and blocked until successful analysis; V3 remains immutable |
 | `T018` | Depend on T017; create V5 and make T017 PostgreSQL/Flyway evidence green using stored/probe fixture values; no production-Java equivalence | `FR-007`, `FR-010`, `FR-020`; `DR-014`; `SC-002`, `SC-010`, `SC-016`, `SC-022`; C2/D2/D3 | Pending; depends on successful T017 |
 | `T013` | Versioned reference-catalog structures, evidence/validity fields, stable-identifier columns, and constraints | `FR-045`, `FR-046`, `FR-047`; `SC-031`, `SC-032`; `reference-data-baseline.md`; V1 retrospective evidence | Historically complete; retrospective result `CONFORMING`; owner disposition approved |
 | `T014` | Exact approved baseline rows, fixed UUIDs, exclusion of unsupported rows, and verification queries | `FR-045`, `FR-046`, `FR-047`; `SC-031`, `SC-032`; `reference-data-baseline.md`; V2 retrospective evidence | Historically complete; retrospective result `CONFORMING`; owner disposition approved |
@@ -51,9 +53,9 @@ stable UUID and no-runtime-generation evidence.
 | `FR-001` | OpenAPI `X-Company-Id`; `error-catalog.md` Company errors | Scenarios 1, 6, 47, 48; `SC-006`; non-deadline outcomes require conclusive classification before expiry | T031/T034 presence, blank, repeated, malformed, nil, safe-correlation, and zero-state tests prove stage-first `400`; T034 separately proves deadline-first `504` and that a selected `400` is not replaced |
 | `FR-002` | OpenAPI operation/header/request-input/response; `plan.md` API boundary | Scenarios 1, 10, 34, 47, 48; `SC-024`, `SC-025` | Contract tests prove Company identifiers absent from request bodies/input/path/query, authoritative header-only input, and explicitly required canonical response CompanyId |
 | `FR-003` | `plan.md` Company boundary; no Company port contract | Scenarios 35, 41, 43; `SC-023` | Valid externally unknown UUID succeeds; architecture test proves zero lookup |
-| `FR-004` | OpenAPI `emissionPointId`; `data-model.md` root | Scenarios 1, 34; `SC-007`, `SC-022` | UUID syntax/canonicalization, persistence, response, and no ownership lookup |
+| `FR-004` | OpenAPI raw `emissionPointId` plus Stage-5 representation and `x-application-stage-6` stable-failure metadata; `error-catalog.md`; `data-model.md` root | Scenarios 1, 34; `SC-007`, `SC-022` | T030 proves the missing/non-string `INVALID_REQUEST` boundary and that wire validation does not preempt decoded-string trimming; T033 proves unchanged API forwarding; T029 proves first-in-Stage-6 one-time SP/HTAB trim, canonicalization, and safe `BUSINESS_VALIDATION_FAILED` / `EMISSION_POINT_INVALID` rejection for blank/malformed/nil values before general text, lookup, or state |
 | `FR-005` | Strict OpenAPI request schema; `error-catalog.md` | Scenarios 10, 44; `SC-022`, `SC-025` | Reject Issuer/establishment/emission fiscal and snapshot properties |
-| `FR-006` | `plan.md` request-clock mapping; `data-model.md` temporal model | Scenarios 26, 27, 51, 52; `SC-013`, `SC-030` | One captured `requestCreationInstant`, Guayaquil conversion, midnight and replay tests, separate from transactional `createdAt`/`updatedAt` |
+| `FR-006` | `plan.md` earliest-boundary request-clock mapping; `data-model.md` temporal model | Scenarios 26, 27, 51, 52; `SC-013`, `SC-030` | T085 captures one `requestCreationInstant` before body consumption; T034 proves body-crossing-midnight behavior and no later read; Guayaquil conversion/replay remain separate from transactional `createdAt`/`updatedAt` |
 | `FR-007` | Approved identification baseline, exact normalized ASCII rule, and staged fixture design | Scenarios 7, 9, 13–16, 53; `SC-010`, `SC-031` | T017 owns raw/normalized/stored/probe vectors and red V3 evidence; T018 creates V5/green PostgreSQL evidence; T030 validates OpenAPI metadata; T045 validates production Java with `applicationNormalizedValue`; code 06/08 uses `^[A-Za-z0-9]{1,20}$` |
 | `FR-008` | OpenAPI general Unicode ownership policy; `data-model.md` buyer fields; authoritative T020 fixture | Scenarios 31–33, 69; `SC-016` | T033 uses `rawValue`; T029 performs the one Stage-6 normalization; T026 receives accepted `expectedDomainInput`; T036 tests only `expectedStoredValue`/defensive probes; T030 verifies metadata; all select stage-appropriate Unicode fixture values |
 | `FR-009` | OpenAPI line cardinality; `data-model.md` aggregate | Scenarios 4, 29, 30; `SC-015` | 1/500 accepted; 0/501 rejected without state |
@@ -88,7 +90,7 @@ stable UUID and no-runtime-generation evidence.
 | `FR-038` | Draft-vs-issuance model exclusions | Scenarios 8, 41, 42, 44; `SC-005`, `SC-022`, `SC-023`, `SC-025` | Schema/response/dependency inspection proves no snapshot or issuance data |
 | `FR-039` | OpenAPI and build/config negative boundary | Scenario 43; `SC-023`, `SC-024` | Zero security scheme/requirement/Auth/401/403/dependency/config tests |
 | `FR-040` | Clean Architecture mapping and candidate/result port in `plan.md` | Scenarios 34, 43, 69, 71; `SC-001`, `SC-016`, `SC-017`, `SC-023` | API maps Company/decoded text only; Application normalizes and allocates IDs; Domain receives normalized values; persistence accepts timestamp-free candidate/returns committed result; dependency tests reject HTTP/security context below API |
-| `FR-041` | Executable Application-owned Stage 6, Stage 10/11A/ordered 11B; API-exclusive deadline race/HTTP mapping; neutral application/repositories | Scenarios 3, 5, 15, 45–46, 57–61, 69–71; `SC-001`, `SC-012`, `SC-016`, `SC-026`, `SC-033` | Stage separation/order and one normalizer invocation/value; candidate/persistence delegation; T085 accepts one terminal outcome, then dependent T087 maps only that accepted neutral outcome to HTTP; late results cannot reopen arbitration |
+| `FR-041` | Executable Stage-5 representation boundary; Application-owned Stage 6 ordered as emission-point validation then business-text normalization; Stage 10/11A/ordered 11B; API-exclusive deadline race/HTTP mapping; neutral application/repositories | Scenarios 3, 5, 15, 34, 45–46, 57–61, 69–71; `SC-001`, `SC-012`, `SC-016`, `SC-022`, `SC-026`, `SC-033` | T030/T033 prove missing/non-string emission-point representation at Stage 5; T029/T034 prove Stage-6 `EMISSION_POINT_INVALID` precedes general text and lookup; remaining stage separation/order and one normalizer invocation/value; T085 accepts one terminal outcome, then dependent T087 maps only that accepted neutral outcome to HTTP; late results cannot reopen arbitration |
 | `FR-042` | Quarkus HTTP upload limit and exclusive feature 413 failure handler; OpenAPI 413 | Scenario 45; `SC-002`, `SC-027`, `SC-033` | Exact 2 MiB proceeds; over-limit-first Content-Length/chunked bodies preserve valid correlation or replace absent/invalid input, never emit correlation `400`, perform no database operation, and return 413; deadline-first bodies return 504 |
 | `FR-043` | Earliest-route monotonic deadline owner; aggregate/reference remaining-budget propagation; persistence/error/timeout and post-response-commit design | Scenarios 24, 45–46; `SC-002`, `SC-012`, `SC-026`, `SC-028` | Controlled deadline races, both DB-timeout minimum branches, exhausted reference budget with no query, confirmed rollback zero state, unresolved-commit replay, and post-response-commit telemetry-only/no-second-write evidence |
 | `FR-044` | OpenAPI decimal constraints; domain/data numeric envelopes | Scenarios 49, 50; `SC-029` | API/domain/intermediate/group/payment/persistence/response boundary and overflow vectors |
@@ -111,7 +113,7 @@ stable UUID and no-runtime-generation evidence.
 | `DR-009` | Aggregate totals model | Scenarios 2, 17, 49, 50; `SC-003`, `SC-004`, `SC-011`, `SC-029` | Subtotal plus grouped taxes, zero and overflow vectors |
 | `DR-010` | BigDecimal and PostgreSQL numeric design | Scenarios 2, 49, 50; `SC-003`, `SC-004`, `SC-029` | Precision/scale/HALF_UP/envelope vectors in domain, API, persistence and JVM/native |
 | `DR-011` | Calculation ownership and strict input contract | Scenarios 2, 5, 28, 40; `SC-003`, `SC-014`, `SC-021` | Caller supplies commercial/payment inputs only; every calculated/code/rate input rejected, never reconciled |
-| `DR-012` | Separate request-date and T076-only transaction timestamp semantics | Scenarios 26, 27, 51, 52, 61, 71; `SC-001`, `SC-012`, `SC-013`, `SC-030` | One request Instant/Guayaquil date; T076 sole once-only clock at pre-persist point; same Instant assigned to `createdAt`/`updatedAt`; T063 no call/value ownership; both persisted/returned/replayed; rollback/no physical timestamp |
+| `DR-012` | Separate earliest-boundary request-date and T076-only transaction timestamp semantics | Scenarios 26, 27, 51, 52, 61, 71; `SC-001`, `SC-012`, `SC-013`, `SC-030` | T085 owns one request Instant before body consumption and the fixed Guayaquil date; T076 owns the sole once-only persistence clock at the pre-persist point; same persistence Instant is assigned to `createdAt`/`updatedAt`; T063/resource/mapper make no clock call; values persist/return/replay; rollback exposes none; no physical timestamp |
 | `DR-013` | Validation/error/transaction and emissionDate-effective catalog boundaries | Scenarios 3–7, 9, 12–16, 27, 39, 40, 50, 62–68; `SC-002`, `SC-009`, `SC-010`, `SC-020`, `SC-029` | Invalid combinations reject; payment existence/activity/inclusive dates use emissionDate only; no server/request/transaction/createdAt clock |
 | `DR-014` | Approved executable buyer FORMAT_ONLY strategies | Scenarios 7, 13, 14, 16; `SC-010` | RUC 13 ASCII digits, Cédula 10 ASCII digits, passport/foreign case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` valid/invalid/normalization vectors; no checksum or invented rules |
 | `DR-015` | Final-consumer rule | Scenario 15; `SC-010` | Exact code/value/name and effective USD threshold boundaries |
@@ -122,7 +124,7 @@ stable UUID and no-runtime-generation evidence.
 | `DR-020` | Root Company ownership and local foreign keys | Scenarios 1, 22, 25, 34; `SC-001`, `SC-017`, `SC-022` | Exactly one immutable CompanyId and zero cross-draft/cross-Company child mixing |
 | `DR-021` | Canonical collection ordering | Scenarios 37, 38; `SC-019` | Lines order-sensitive; payments/additional information order-insensitive |
 | `DR-022` | Payment uniqueness constraint | Scenario 39; `SC-020` | One payment-method identity per draft at domain and PostgreSQL levels |
-| `DR-023` | Opaque emission-point data model | Scenarios 1, 34, 35, 41, 44; `SC-001`, `SC-007`, `SC-022`, `SC-025` | Store/return canonical opaque ID only; no ownership/state lookup or fiscal representation |
+| `DR-023` | Opaque emission-point data model and stable Stage-6 violation contract | Scenarios 1, 34, 35, 41, 44; `SC-001`, `SC-007`, `SC-022`, `SC-025` | Store/return canonical opaque ID only; blank/malformed/nil decoded strings return value-free `EMISSION_POINT_INVALID` and no state; no ownership/state lookup or fiscal representation |
 | `DR-024` | API correlation mapping and observability design | Scenarios 55–58; `SC-033` | Generate/preserve/replace safely, never echo invalid input, exclude from fingerprint |
 
 ## Success Criteria
@@ -150,7 +152,7 @@ stable UUID and no-runtime-generation evidence.
 | `SC-019` | `FR-029`; `DR-019`, `DR-021` | Payment/additional reorder replays; line reorder conflicts; no duplicate draft |
 | `SC-020` | `FR-013`; `DR-013`, `DR-022` | Unique payment methods plus emissionDate existence/activity/inclusive/open-ended effectivity vectors; duplicate/invalid reference rejects |
 | `SC-021` | `FR-011`; `DR-001`, `DR-011` | Tax code/rate comes only from selected approved rule; caller-supplied code/rate rejects |
-| `SC-022` | `FR-004`, `FR-005`, `FR-037`, `FR-038`; `DR-020`, `DR-023` | Exactly CompanyId+opaque emissionPointId and zero Company/fiscal snapshot fields |
+| `SC-022` | `FR-004`, `FR-005`, `FR-037`, `FR-038`; `DR-020`, `DR-023` | Exactly CompanyId+canonical opaque emissionPointId and zero Company/fiscal snapshot fields; approved vectors prove Stage-5 `INVALID_REQUEST` versus Stage-6 `EMISSION_POINT_INVALID` and zero invalid state |
 | `SC-023` | `FR-003`, `FR-023`, `FR-033`, `FR-036`, `FR-039`, `FR-040` | Create/replay traces and architecture show zero Company/auth/cache/replication behavior |
 | `SC-024` | `FR-001`–`FR-003`, `FR-022`, `FR-039` | Static-copy tests plus packaged `/q/openapi` equality prove Company identifiers absent from request/input/path/query, authoritative header-only input, explicitly required response CompanyId, and zero security/Auth/401/403 constructs |
 | `SC-025` | `FR-002`, `FR-005`, `FR-012` | Strict body tests reject Company/Issuer/fiscal snapshot and calculated fields with zero state |
@@ -199,7 +201,7 @@ do not define a deadline oracle.
 | `AS-023` | `FR-032` | Validation/rollback failure creates no binding |
 | `AS-024` | `FR-032`, `FR-033`, `FR-043` | Response loss after commit preserves state and reconciles by same-scope replay without compensation or duplicate creation |
 | `AS-025` | `FR-027`, `FR-031` | Same key is independent across Companies |
-| `AS-026` | `FR-006`; `DR-012` | Current Ecuador date accepts from one request instant |
+| `AS-026` | `FR-006`; `DR-012` | Current Ecuador date accepts from the one instant captured before body consumption |
 | `AS-027` | `FR-006`; `DR-012`, `DR-013` | Past/future/impossible date rejects without normalization |
 | `AS-028` | `FR-012`; `DR-011` | Every supplied calculated field rejects |
 | `AS-029` | `FR-009`, `FR-013`, `FR-015` | 500 lines, 8 distinct positive payments, and 15 additional entries accept |
@@ -207,7 +209,7 @@ do not define a deadline oracle.
 | `AS-031` | `FR-008`, `FR-010`, `FR-015`, `FR-035` | Exact text limits accept |
 | `AS-032` | `FR-008`, `FR-010`, `FR-015`, `FR-027`, `FR-035` | Over-limit/malformed text rejects; over-length Idempotency-Key returns `IDEMPOTENCY_KEY_INVALID` |
 | `AS-033` | `FR-035` | Blank/control/duplicate canonical text rejects |
-| `AS-034` | `FR-002`, `FR-004`, `FR-037`, `FR-040` | Header maps to stored/returned CompanyId; emission point remains opaque |
+| `AS-034` | `FR-002`, `FR-004`, `FR-037`, `FR-040`, `FR-041` | Header maps to stored/returned CompanyId; valid surrounding emission-point SP/HTAB is trimmed and canonicalized while remaining opaque; blank/malformed/nil decoded strings return safe Stage-6 `EMISSION_POINT_INVALID` and no state |
 | `AS-035` | `FR-003`, `FR-036` | Externally unknown valid Company UUID proceeds without lookup |
 | `AS-036` | `FR-030`; `DR-017` | Binding has draft-lifetime retention |
 | `AS-037` | `FR-029`; `DR-021` | Payment/additional reorder remains equivalent |
@@ -255,11 +257,12 @@ do not define a deadline oracle.
 | `IDEMPOTENCY_KEY_REQUIRED` | `FR-027`, `FR-041` | `AS-059`; safe 400, no lookup/state |
 | `IDEMPOTENCY_KEY_INVALID` | `FR-027`, `FR-041` | `AS-032`, `AS-059`; safe 400 for one invalid normalized value, no lookup/state |
 | `IDEMPOTENCY_KEY_MULTIPLE` | `FR-027`, `FR-041` | `AS-060`; safe 400 for repeated/parser-multiple/comma input, no first selection or lookup/state |
-| `INVALID_REQUEST` | `FR-002`, `FR-005`, `FR-026`, `FR-041` | `AS-010`, `AS-044`, `AS-057`; safe 400/correlation |
+| `INVALID_REQUEST` | `FR-002`, `FR-004`, `FR-005`, `FR-026`, `FR-041` | `AS-010`, `AS-034`, `AS-044`, `AS-057`; safe 400/correlation, including missing/non-string `emissionPointId` representation |
 | `PROHIBITED_CALCULATED_FIELD` | `FR-012`, `FR-025`; `DR-011` | `AS-028`; safe 422 and zero state |
 | `IDEMPOTENCY_CONFLICT` | `FR-030`, `FR-031` | `AS-021`, `AS-038`; safe 409, original unchanged |
 | `REQUEST_PAYLOAD_TOO_LARGE` | `FR-026`, `FR-041`, `FR-042` | `AS-045`; over-limit-first safe 413 before Company validation, valid correlation preserved, absent/invalid replaced, no correlation 400 or DB work |
-| `BUSINESS_VALIDATION_FAILED` | `FR-007`–`FR-015`, `FR-028`, `FR-044` | Business rejection scenarios and `AS-050`; safe 422 and zero state |
+| `BUSINESS_VALIDATION_FAILED` | `FR-004`, `FR-007`–`FR-015`, `FR-028`, `FR-044` | `AS-034`, business rejection scenarios, and `AS-050`; safe 422 and zero state |
+| `EMISSION_POINT_INVALID` | `FR-004`, `FR-041`; `DR-023` | `AS-034`; nested value-free violation under `BUSINESS_VALIDATION_FAILED` for blank-after-trim, malformed, or nil decoded strings before general text or lookup |
 | `MONETARY_RANGE_EXCEEDED` | `FR-044`; `DR-010` | `AS-050`; nested violation under `BUSINESS_VALIDATION_FAILED` |
 | `PERSISTENCE_UNAVAILABLE` | `FR-020`, `FR-021`, `FR-043` | `AS-011`, `AS-046`; safe 503 for unavailable/configured-operation-timeout-first outcomes while request budget remains, then retry same scope |
 | `REQUEST_TIMEOUT` | `FR-041`, `FR-043` | `AS-024`, `AS-045`, `AS-046`; cross-cutting deadline-first 504, aggregate/reference remaining-budget propagation, timer cancellation, unresolved-commit replay, and post-response-commit telemetry-only behavior |

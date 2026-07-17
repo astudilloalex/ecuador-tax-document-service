@@ -86,8 +86,8 @@ Logical persistence name: `invoice_draft`.
 |-------|-------------|-----------------|----------|------|
 | `id` | `UUID` | `uuid` | Yes | Final local primary key allocated by Application through `DraftIdentifierGenerator` and preserved by persistence; not a fiscal identifier |
 | `companyId` | `CompanyId` | `uuid` | Yes | Canonical non-nil UUID; immutable ownership partition |
-| `emissionPointId` | `UUID` | `uuid` | Yes | Canonical non-nil opaque external reference; no ownership/status inference |
-| `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from `requestCreationInstant` in `America/Guayaquil` |
+| `emissionPointId` | `UUID` | `uuid` | Yes | Application first trims surrounding ASCII SP/HTAB once, validates nonblank/non-nil UUID syntax, and supplies the canonical lowercase hyphenated opaque reference; blank/malformed/nil decoded strings return value-free `EMISSION_POINT_INVALID`; no ownership/status inference |
+| `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from the earliest-boundary `requestCreationInstant` captured before body consumption in `America/Guayaquil` |
 | `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
 | `buyerIdentificationCatalogVersion` | approved version | `varchar(64)` | Yes | Version of the identification rule used for validation |
 | `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation; codes `06`/`08` use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` |
@@ -385,9 +385,12 @@ API decodes HTTP/JSON, rejects malformed representation, validates transport str
 business text to Application unchanged. It does not perform NFC normalization, trim business text,
 collapse spaces, lowercase values, or calculate `canonicalName`.
 
-At the beginning of FR-041 Stage 6, Application invokes one `BusinessTextNormalizer` exactly once
-for each supplied applicable value and zero times for an absent optional value. In exact order, that
-invocation normalizes to NFC; trims surrounding `U+0020`; rejects categories `Cc`, `Cf`, `Cs`,
+At the beginning of FR-041 Stage 6, Application first performs the emission-point trim, nonblank/
+non-nil UUID validation, and canonicalization; failure returns transport-neutral
+`EMISSION_POINT_INVALID` before any text transformation or lookup. After that succeeds,
+Application invokes one `BusinessTextNormalizer` exactly once for each supplied applicable value
+and zero times for an absent optional value. In exact order, that invocation normalizes to NFC;
+trims surrounding `U+0020`; rejects categories `Cc`, `Cf`, `Cs`,
 `Co`, `Cn`, `U+2028`, and `U+2029`; accepts only `U+0020` as spacing and rejects tabs, CR, LF,
 NBSP, and every other Unicode separator; preserves internal punctuation, internal `U+0020`, and
 display case; then counts and validates display length in Unicode code points. Comparison is
@@ -438,12 +441,14 @@ behavior is not introduced by this plan.
 
 ### Logically New Creation Flow
 
-1. API decodes the request after the earlier payload/header gates and forwards decoded business
-   text without normalization.
+1. The earliest API boundary captures the fixed request instant before body consumption; API then
+   decodes the request after the payload/header gates and forwards decoded `emissionPointId` and
+   business text without normalization.
 2. Application performs the FR-041 ordered validation stages using mapped Company, request-time,
    idempotency, correlation, and neutral deadline context.
-3. At Stage 6, Application invokes `BusinessTextNormalizer` exactly once for every supplied
-   applicable business-text value and derives/validates canonical values.
+3. At Stage 6, Application trims, validates, and canonicalizes `emissionPointId` exactly once, then
+   invokes `BusinessTextNormalizer` exactly once for every supplied applicable business-text value
+   and derives/validates canonical text values.
 4. Application performs Stage 11A deterministic monetary calculation after Stage 10 and before
    the ordered Stage 11B calculated-value checks.
 5. Application obtains all final local root and child identifiers from `DraftIdentifierGenerator`

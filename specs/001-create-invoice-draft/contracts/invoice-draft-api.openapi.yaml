@@ -22,14 +22,16 @@ paths:
         inputs; canonical companyId appears in the response because this feature contract
         explicitly requires it. The request contains client-controlled commercial inputs only;
         Company, Issuer, fiscal-snapshot, and system-calculated properties are prohibited. The
-        service captures one requestCreationInstant at the request boundary and derives the
-        expected emission date from that instant in America/Guayaquil; that expected date remains
-        fixed even when validation or commit crosses midnight. The upstream billing workflow
+        service captures one requestCreationInstant at the initial request boundary before body
+        consumption and derives the expected emission date from that instant in America/Guayaquil;
+        that expected date remains fixed even when body consumption, validation, or commit crosses
+        midnight. The upstream billing workflow
         selects the published IVA rule appropriate to the product or transaction; this service
         does not classify products or determine legal eligibility. Observable processing precedence
         is payload size, Company context, correlation, idempotency-key presence/cardinality/
-        normalization/grammar, representation, Application-owned Stage 6 business-text
-        normalization, local Company-scoped binding lookup, equivalent replay, idempotency
+        normalization/grammar, representation, Application-owned Stage 6 emission-point
+        normalization/validation followed by business-text normalization, local Company-scoped
+        binding lookup, equivalent replay, idempotency
         conflict, Stage 10 independent business validation, Stage 11A deterministic monetary
         calculation, the exact Stage 11B order (range/overflow; discount-over-gross;
         final-consumer calculated-total limit; total-dependent payment shape/positivity; exact
@@ -189,8 +191,9 @@ components:
         Client-controlled inputs only. Company identifiers, including companyId, are forbidden in
         this request schema and are accepted only through X-Company-Id. The API decodes HTTP/JSON,
         rejects malformed representations, validates transport structure, and forwards decoded
-        business-text values unchanged. It does not normalize NFC, trim or collapse business
-        spaces, lowercase text, or derive canonicalName. At Stage 6, Application invokes
+        business and identifier values unchanged. It does not normalize NFC, trim business or
+        identifier values, collapse business spaces, lowercase text, or derive canonicalName. At
+        Stage 6, Application first validates and canonicalizes emissionPointId, then invokes
         BusinessTextNormalizer exactly once for each supplied applicable value and zero times for
         an absent optional value. canonicalName, createdAt, and updatedAt are server-derived and
         are not request properties.
@@ -216,18 +219,43 @@ components:
       properties:
         emissionPointId:
           type: string
-          format: uuid
           description: >-
-            Required non-nil UUID stored as an opaque external reference. This service does not
-            validate Company ownership, active state, Issuer, or establishment relationships.
-          pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+            Required opaque identifier. The wire schema accepts the decoded string unchanged so
+            transport validation does not preempt the permitted Application transformation. At
+            Stage 6, Application trims surrounding ASCII SP/HTAB exactly once, requires the result
+            to be a non-nil UUID, and canonicalizes it to lowercase hyphenated form. A missing
+            property or non-string JSON representation is Stage-5 INVALID_REQUEST. A decoded string
+            that becomes blank, is malformed, or is nil is Stage-6 BUSINESS_VALIDATION_FAILED with
+            safe violation EMISSION_POINT_INVALID. This service does not validate Company
+            ownership, active state, Issuer, or establishment relationships.
+          x-application-stage-6:
+            owner: Application
+            operationOrder:
+              - LEADING_TRAILING_ASCII_SP_HTAB_TRIM_ONCE
+              - NONBLANK_VALIDATION
+              - NON_NIL_UUID_VALIDATION
+              - LOWERCASE_HYPHENATED_UUID_CANONICALIZATION
+            normalizedPattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+            normalizedFormat: uuid
+            rawExamples:
+              - ' 123e4567-e89b-12d3-a456-426614174000 '
+              - "\t123E4567-E89B-12D3-A456-426614174000\t"
+            canonicalExample: '123e4567-e89b-12d3-a456-426614174000'
+            failureOutcome:
+              topLevelCode: BUSINESS_VALIDATION_FAILED
+              httpStatus: 422
+              violationCode: EMISSION_POINT_INVALID
+              field: emissionPointId
+              validationStage: NORMALIZATION
+              rejectedValueExposed: false
         emissionDate:
           type: string
           format: date
           description: >-
             Must equal the Ecuadorian civil date derived in America/Guayaquil from the single
-            requestCreationInstant captured at the request boundary. That expected date is fixed
-            across midnight and commit; requestCreationInstant is not a request property.
+            requestCreationInstant captured at the initial request boundary before body
+            consumption. That expected date is fixed across body consumption, midnight, and
+            commit; requestCreationInstant is not a request property.
         buyer:
           $ref: '#/components/schemas/BuyerInput'
         lines:
@@ -843,10 +871,10 @@ components:
         violations:
           type: array
           description: >-
-            Safe validation details. BUSINESS_VALIDATION_FAILED uses MONETARY_RANGE_EXCEEDED for
-            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow,
-            and CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code
-            points.
+            Safe validation details. BUSINESS_VALIDATION_FAILED uses EMISSION_POINT_INVALID for a
+            decoded emission-point string rejected at Stage 6, MONETARY_RANGE_EXCEEDED for quantity,
+            unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow, and
+            CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code points.
           items:
             $ref: '#/components/schemas/Violation'
       allOf:
@@ -878,6 +906,22 @@ components:
                 const: BUSINESS_VALIDATION_FAILED
               status:
                 const: 422
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      const: EMISSION_POINT_INVALID
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
 
     Violation:
       type: object
@@ -893,7 +937,7 @@ components:
           description: >-
             Safe original request field path; never contains the rejected value. For
             CANONICAL_NAME_TOO_LONG this identifies the additional-information name that produced
-            the canonical value.
+            the canonical value; for EMISSION_POINT_INVALID it is exactly emissionPointId.
         maximum:
           type: integer
           minimum: 1
@@ -904,7 +948,7 @@ components:
           description: Unit used for a Unicode length violation.
         validationStage:
           type: string
-          enum: [CANONICALIZATION]
+          enum: [NORMALIZATION, CANONICALIZATION]
           description: Deterministic validation stage that produced the violation.
       allOf:
         - if:
@@ -923,6 +967,18 @@ components:
                 const: UNICODE_CODE_POINTS
               validationStage:
                 const: CANONICALIZATION
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: EMISSION_POINT_INVALID
+          then:
+            required: [validationStage]
+            properties:
+              field:
+                const: emissionPointId
+              validationStage:
+                const: NORMALIZATION
 
   responses:
     BadRequest:
@@ -931,8 +987,10 @@ components:
         IDEMPOTENCY_KEY_INVALID, IDEMPOTENCY_KEY_MULTIPLE, or INVALID_REQUEST. Repeated or
         comma-combined Idempotency-Key input is never accepted by selecting the first value.
         Invalid supplied correlation input is never echoed; a safe replacement UUID is returned.
-        Payload-size, Company-context, and correlation outcomes follow the defined precedence. No
-        draft, child, or idempotency binding is created.
+        Missing or non-string emissionPointId representation also uses INVALID_REQUEST; decoded
+        emission-point strings are handled by Stage 6 instead. Payload-size, Company-context, and
+        correlation outcomes follow the defined precedence. No draft, child, or idempotency binding
+        is created.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -964,13 +1022,16 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     ValidationFailure:
       description: >-
-        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. Numeric-envelope breaches use
-        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Application Stage 6
-        post-canonicalization overflow uses nested CANONICAL_NAME_TOO_LONG and reports the original
-        request field, maximum 300, Unicode-code-point counting, and canonicalization stage. Stage
-        10 contains only calculation-independent validation; Stage 11A calculates monetary values;
-        Stage 11B then checks range/overflow, discount-over-gross, final-consumer calculated-total
-        limit, total-dependent payment shape/positivity, and exact reconciliation in that order.
+        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. A decoded emissionPointId string
+        that becomes blank after the approved trim, is malformed, or is nil uses
+        BUSINESS_VALIDATION_FAILED with safe violation EMISSION_POINT_INVALID. Numeric-envelope
+        breaches use BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Application
+        Stage 6 post-canonicalization overflow uses nested CANONICAL_NAME_TOO_LONG and reports the
+        original request field, maximum 300, Unicode-code-point counting, and canonicalization
+        stage. Stage 10 contains only calculation-independent validation; Stage 11A calculates
+        monetary values; Stage 11B then checks range/overflow, discount-over-gross, final-consumer
+        calculated-total limit, total-dependent payment shape/positivity, and exact reconciliation
+        in that order.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -979,6 +1040,20 @@ components:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
           examples:
+            emissionPointInvalid:
+              summary: Decoded emission-point string fails Stage-6 normalization
+              value:
+                type: https://ecuador-tax-document-service.invalid/problems/business-validation-failed
+                title: Business validation failed
+                status: 422
+                code: BUSINESS_VALIDATION_FAILED
+                detail: One or more business fields are invalid.
+                instance: https://ecuador-tax-document-service.invalid/api/v1/invoice-drafts
+                correlationId: 6c45d352-1ac4-4cb8-84d3-2634611e7cb7
+                violations:
+                  - code: EMISSION_POINT_INVALID
+                    field: emissionPointId
+                    validationStage: NORMALIZATION
             canonicalNameTooLong:
               summary: Locale.ROOT lowercase expansion exceeds the canonical-name limit
               value:
