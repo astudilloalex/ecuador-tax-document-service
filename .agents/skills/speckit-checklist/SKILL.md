@@ -79,9 +79,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - All file paths must be absolute.
    - For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. **Workflow gate**: Require `FEATURE_DIR/plan.md` from `$speckit-plan`. Stop and instruct the user
-   to run `$speckit-plan` when it is missing. Load `.specify/memory/constitution.md`; it is required
-   and MUST NOT contain unresolved template placeholders.
+2. **IF EXISTS**: Load `.specify/memory/constitution.md` for project principles and governance constraints.
 
 3. **Clarify intent (dynamic)**: Derive up to THREE initial contextual clarifying questions (no pre-baked catalog). They MUST:
    - Be generated from the user's phrasing + extracted signals from spec/plan/tasks
@@ -123,7 +121,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 5. **Load feature context**: Read from FEATURE_DIR:
    - spec.md: Feature requirements and scope
-   - plan.md (required): Technical details, dependencies, constitution checks, and risk evidence
+   - plan.md (if exists): Technical details, dependencies
    - tasks.md (if exists): Implementation tasks
 
    **Context Loading Strategy**:
@@ -257,8 +255,6 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Depth level
    - Actor/timing
    - Any explicit user-specified must-have items incorporated
-   - Requirement gaps that MUST be resolved before `$speckit-tasks`
-   - `$speckit-tasks` as the next command after honest checklist evaluation
 
 **Important**: Each `/speckit-checklist` command invocation uses a short, descriptive checklist filename and either creates a new file or appends to an existing one. This allows:
 
@@ -287,7 +283,7 @@ Sample items:
 
 - "Are error response formats specified for all failure scenarios? [Completeness]"
 - "Are rate limiting requirements quantified with specific thresholds? [Clarity]"
-- "Are `X-Company-Id` requirements consistent across all Company-scoped endpoints? [Consistency]"
+- "Are authentication requirements consistent across all endpoints? [Consistency]"
 - "Are retry/timeout requirements defined for external dependencies? [Coverage, Gap]"
 - "Is versioning strategy documented in requirements? [Gap]"
 
@@ -305,7 +301,7 @@ Sample items:
 
 Sample items:
 
-- "Are missing, repeated, malformed, blank, and nil Company headers covered? [Coverage]"
+- "Are authentication requirements specified for all protected resources? [Coverage]"
 - "Are data protection requirements defined for sensitive information? [Completeness]"
 - "Is the threat model documented and requirements aligned to it? [Traceability]"
 - "Are security requirements consistent with compliance obligations? [Consistency]"

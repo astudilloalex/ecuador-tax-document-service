@@ -111,10 +111,7 @@ Given that feature description, do this:
 
 4. Load the resolved active `spec-template` file to understand required sections.
 
-5. **REQUIRED FOR THIS PROJECT**: Load `.specify/memory/constitution.md` and apply its authority,
-   greenfield scope, language, terminology, evidence, feature-bounding, definitive Company-header
-   boundary, and prohibition of draft-time fiscal snapshots. Stop if the constitution is absent or still
-   contains unresolved template placeholders.
+5. **IF EXISTS**: Load `.specify/memory/constitution.md` for project principles and governance constraints.
 
 6. Follow this execution flow:
     1. Parse user description from arguments
@@ -122,13 +119,7 @@ Given that feature description, do this:
     2. Extract key concepts from description
        Identify: actors, actions, data, constraints
     3. For unclear aspects:
-       - Make an informed assumption only when an approved source or harmless, reversible default
-         supports it
-       - Do NOT infer unknown or contradictory legacy behavior, fiscal behavior, naming,
-         Company-context placement, Company master-data ownership, fiscal-snapshot scope,
-         certificate lifecycle, retention, idempotency, or external failure behavior
-       - Register those unresolved matters as Pending Functional Validation and record the evidence
-         needed; absence of legacy evidence is not evidence that behavior is unnecessary
+       - Make informed guesses based on context and industry standards
        - Only mark with [NEEDS CLARIFICATION: specific question] if:
          - The choice significantly impacts feature scope or user experience
          - Multiple reasonable interpretations exist with different implications
@@ -139,15 +130,13 @@ Given that feature description, do this:
        If no clear user flow: ERROR "Cannot determine user scenarios"
     5. Generate Functional Requirements
        Each requirement must be testable
-       Use only constitution-compatible defaults for unspecified low-risk details and document
-       their approved basis in Assumptions; do not use an assumption in place of Pending Functional
-       Validation
+       Use reasonable defaults for unspecified details (document assumptions in Assumptions section)
     6. Define Success Criteria
        Create measurable, technology-agnostic outcomes
        Include both quantitative metrics (time, performance, volume) and qualitative measures (user satisfaction, task completion)
        Each criterion must be verifiable without implementation details
     7. Identify Key Entities (if data involved)
-    8. Return: SUCCESS (spec ready for `$speckit-clarify`)
+    8. Return: SUCCESS (spec ready for planning)
 
 6. Write the specification to SPEC_FILE using the template structure, replacing placeholders with concrete details derived from the feature description (arguments) while preserving section order and headings.
 
@@ -172,13 +161,6 @@ Given that feature description, do this:
       ## Requirement Completeness
 
       - [ ] No [NEEDS CLARIFICATION] markers remain
-      - [ ] One bounded, independently valuable stakeholder outcome is defined
-      - [ ] Exclusions and non-goals prevent implicit legacy compatibility and unrelated scope
-      - [ ] Applicable legislation and official SRI sources are cited with versions
-      - [ ] Legacy evidence is referenced only as historical evidence
-      - [ ] Source conflicts and Pending Functional Validation items are explicitly recorded
-      - [ ] Company header, no-Company-dependency, master-data, and draft-time snapshot boundaries are explicit when applicable
-      - [ ] Target terminology is English and consistent with the terminology mapping
       - [ ] Requirements are testable and unambiguous
       - [ ] Success criteria are measurable
       - [ ] Success criteria are technology-agnostic (no implementation details)
@@ -196,7 +178,7 @@ Given that feature description, do this:
 
       ## Notes
 
-      - Items marked incomplete require spec updates before `$speckit-clarify`
+      - Items marked incomplete require spec updates before `/speckit-clarify` or `/speckit-plan`
       ```
 
    b. **Run Validation Check**: Review the spec against each checklist item:
@@ -215,10 +197,7 @@ Given that feature description, do this:
 
       - **If [NEEDS CLARIFICATION] markers remain**:
         1. Extract all [NEEDS CLARIFICATION: ...] markers from the spec
-        2. **LIMIT CHECK**: If more than 3 markers exist, keep only the 3 most critical
-           clarification markers. Convert unresolved legacy, fiscal, naming, security, tenant,
-           certificate, idempotency, or external-contract matters to explicit Pending Functional
-           Validation entries; do not guess answers for them.
+        2. **LIMIT CHECK**: If more than 3 markers exist, keep only the 3 most critical (by scope/security/UX impact) and make informed guesses for the rest
         3. For each clarification needed (max 3), present options to user in this format:
 
            ```markdown
@@ -294,7 +273,7 @@ Report completion to the user with:
 - `SPECIFY_FEATURE_DIRECTORY` — the feature directory path
 - `SPEC_FILE` — the spec file path
 - Checklist results summary
-- Readiness for the mandatory next phase (`$speckit-clarify`)
+- Readiness for the next phase (`/speckit-clarify` or `/speckit-plan`)
 
 **NOTE:** Branch creation is handled by the `before_specify` hook (git extension). Spec directory and file creation are always handled by this core command.
 
@@ -315,10 +294,8 @@ Report completion to the user with:
 
 When creating this spec from a user prompt:
 
-1. **Make bounded assumptions**: Use only approved evidence or harmless, reversible defaults;
-   never infer unknown legacy or fiscal behavior
-2. **Document assumptions**: Record the basis for each reasonable default in the Assumptions
-   section and use Pending Functional Validation for unresolved authoritative behavior
+1. **Make informed guesses**: Use context, industry standards, and common patterns to fill gaps
+2. **Document assumptions**: Record reasonable defaults in the Assumptions section
 3. **Limit clarifications**: Maximum 3 [NEEDS CLARIFICATION] markers - use only for critical decisions that:
    - Significantly impact feature scope or user experience
    - Have multiple reasonable interpretations with different implications
@@ -330,15 +307,13 @@ When creating this spec from a user prompt:
    - User types and permissions (if multiple conflicting interpretations possible)
    - Security/compliance requirements (when legally/financially significant)
 
-**Examples of decisions that are NOT reasonable defaults in this project**:
+**Examples of reasonable defaults** (don't ask about these):
 
-- Data retention or deletion for tax documents, certificates, tokens, or fiscal payloads
-- Any authentication, authorization, identity, token, role, permission, or service-security behavior
-- Company-context placement, Company, issuer, certificate, or tax-document ownership derivation
-- Company lookup dependencies, master-data authority, fiscal-snapshot timing or contents, or permission to cache or replicate Company data
-- Official SRI algorithm, catalog, XML, signature, status, or rounding behavior
-- Retry, idempotency, timeout, or reconciliation semantics for external fiscal operations
-- Preservation of a legacy route, payload, response, table, status, or operational behavior
+- Data retention: Industry-standard practices for the domain
+- Performance targets: Standard web/mobile app expectations unless specified
+- Error handling: User-friendly messages with appropriate fallbacks
+- Authentication method: Standard session-based or OAuth2 for web apps
+- Integration patterns: Use project-appropriate patterns (REST/GraphQL for web services, function calls for libraries, CLI args for tools, etc.)
 
 ### Success Criteria Guidelines
 

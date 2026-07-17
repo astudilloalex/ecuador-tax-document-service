@@ -56,17 +56,9 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 1. **Setup**: Run `.specify/scripts/bash/setup-plan.sh --json` from repo root and parse JSON for FEATURE_SPEC, IMPL_PLAN, SPECS_DIR, BRANCH. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. **Workflow gate**: Confirm `$speckit-clarify` has processed the current specification after
-   its latest material change. If material ambiguity or `[NEEDS CLARIFICATION]` markers remain,
-   stop and instruct the user to run `$speckit-clarify`. Pending Functional Validation MAY remain
-   only when it is explicitly registered with its evidence need and blocking impact; planning MUST
-   NOT infer its answer.
+2. **Load context**: Read FEATURE_SPEC and `.specify/memory/constitution.md`. Load IMPL_PLAN template (already copied).
 
-3. **Load context**: Read FEATURE_SPEC and `.specify/memory/constitution.md`. The constitution is
-   required and MUST NOT contain unresolved template placeholders. Load IMPL_PLAN template
-   (already copied).
-
-4. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
+3. **Execute plan workflow**: Follow the structure in IMPL_PLAN template to:
    - Fill Technical Context (mark unknowns as "NEEDS CLARIFICATION")
    - Fill Constitution Check section from constitution
    - Evaluate gates (ERROR if violations unjustified)
@@ -170,8 +162,5 @@ Command ends after Phase 1 design. Report branch, IMPL_PLAN path, and generated 
 ## Done When
 
 - [ ] Plan workflow executed and design artifacts generated
-- [ ] Clarification workflow verified and no material ambiguity was silently inferred
-- [ ] Pre-research and post-design constitution checks recorded
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
-- [ ] Completion reported to user with branch, plan path, generated artifacts, and
-      `$speckit-checklist` as the next command
+- [ ] Completion reported to user with branch, plan path, and generated artifacts

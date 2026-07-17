@@ -56,14 +56,7 @@ You **MUST** consider the user input before proceeding (if not empty).
 
 1. Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --include-tasks` from repo root and parse FEATURE_DIR and AVAILABLE_DOCS list. All paths must be absolute. For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-2. **Analysis gate**: Establish that `$speckit-analyze` ran against the current versions of
-   `spec.md`, `plan.md`, and `tasks.md`. If it did not run, or any critical fiscal correctness,
-   Company-context, no-authentication, Company-master-data ownership, draft-snapshot boundary, data-loss,
-   idempotency, external-contract, certificate-management, or database-evolution finding remains
-   unresolved, STOP and instruct the user to resolve the findings and rerun `$speckit-analyze`. A
-   user override MUST NOT bypass this constitutional gate.
-
-3. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
+2. **Check checklists status** (if FEATURE_DIR/checklists/ exists):
    - Scan all checklist files in the checklists/ directory
    - For each checklist, count:
      - Total items: All lines matching `- [ ]` or `- [X]` or `- [x]`
@@ -85,25 +78,25 @@ You **MUST** consider the user input before proceeding (if not empty).
 
    - **If any checklist is incomplete**:
      - Display the table with incomplete item counts
-     - STOP when an unchecked item represents a material requirement-quality or constitution gap
-     - Proceed only after the affected requirement is corrected and the checklist is honestly
-       re-evaluated, or after a constitution-compliant deviation with recorded approval exists
+     - **STOP** and ask: "Some checklists are incomplete. Do you want to proceed with implementation anyway? (yes/no)"
+     - Wait for user response before continuing
+     - If user says "no" or "wait" or "stop", halt execution
+     - If user says "yes" or "proceed" or "continue", proceed to step 3
 
    - **If all checklists are complete**:
      - Display the table showing all checklists passed
-     - Automatically proceed to step 4
+     - Automatically proceed to step 3
 
-4. Load and analyze the implementation context:
+3. Load and analyze the implementation context:
    - **REQUIRED**: Read tasks.md for the complete task list and execution plan
    - **REQUIRED**: Read plan.md for tech stack, architecture, and file structure
    - **IF EXISTS**: Read data-model.md for entities and relationships
    - **IF EXISTS**: Read contracts/ for API specifications and test requirements
    - **IF EXISTS**: Read research.md for technical decisions and constraints
-   - **REQUIRED**: Read .specify/memory/constitution.md for governance constraints; stop if it is
-     missing or contains unresolved placeholders
+   - **IF EXISTS**: Read .specify/memory/constitution.md for governance constraints
    - **IF EXISTS**: Read quickstart.md for integration scenarios
 
-5. **Project Setup Verification**:
+4. **Project Setup Verification**:
    - **REQUIRED**: Create/verify ignore files based on actual project setup:
 
    **Detection & Creation Logic**:
@@ -147,29 +140,27 @@ You **MUST** consider the user input before proceeding (if not empty).
    - **Terraform**: `.terraform/`, `*.tfstate*`, `*.tfvars`, `.terraform.lock.hcl`
    - **Kubernetes/k8s**: `*.secret.yaml`, `secrets/`, `.kube/`, `kubeconfig*`, `*.key`, `*.crt`
 
-6. Parse tasks.md structure and extract:
-   - **Task phases**: Setup, Foundational Controls, User Stories, and Definition of Done validation
+5. Parse tasks.md structure and extract:
+   - **Task phases**: Setup, Tests, Core, Integration, Polish
    - **Task dependencies**: Sequential vs parallel execution rules
    - **Task details**: ID, description, file paths, parallel markers [P]
    - **Execution flow**: Order and dependency requirements
 
-7. Execute implementation following the task plan:
+6. Execute implementation following the task plan:
    - **Phase-by-phase execution**: Complete each phase before moving to the next
    - **Respect dependencies**: Run sequential tasks in order, parallel tasks [P] can run together
    - **Follow TDD approach**: Execute test tasks before their corresponding implementation tasks
    - **File-based coordination**: Tasks affecting the same files must run sequentially
    - **Validation checkpoints**: Verify each phase completion before proceeding
 
-8. Implementation execution rules:
+7. Implementation execution rules:
    - **Setup first**: Initialize project structure, dependencies, configuration
-   - **Tests before code**: Execute every applicable contract, domain, application, persistence,
-     Company-header/scoping, adapter, failure, sensitive-data, JVM, and claimed-native test task before the
-     production work it covers
+   - **Tests before code**: If you need to write tests for contracts, entities, and integration scenarios
    - **Core development**: Implement models, services, CLI commands, endpoints
    - **Integration work**: Database connections, middleware, logging, external services
    - **Polish and validation**: Unit tests, performance optimization, documentation
 
-9. Progress tracking and error handling:
+8. Progress tracking and error handling:
    - Report progress after each completed task
    - Halt execution if any non-parallel task fails
    - For parallel tasks [P], continue with successful tasks, report failed ones
@@ -177,16 +168,11 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Suggest next steps if implementation cannot proceed
    - **IMPORTANT** For completed tasks, make sure to mark the task off as [X] in the tasks file.
 
-10. Completion validation:
+9. Completion validation:
    - Verify all required tasks are completed
    - Check that implemented features match the original specification
-   - Validate that all applicable tests of observable behavior and invariants pass
+   - Validate that tests pass and coverage meets requirements
    - Confirm the implementation follows the technical plan
-   - Re-run the plan's final constitution and Definition of Done review
-   - Verify empty-database Flyway migration, JVM execution, Company ownership scoping,
-     failure/retry behavior, absence of authentication and Company dependencies, Company
-     master-data boundary and absence of draft-time fiscal snapshots,
-     terminology/documentation updates, native evidence status, and sensitive-data safety
 
 Note: This command assumes a complete task breakdown exists in tasks.md. If tasks are incomplete or missing, suggest running `/speckit-tasks` first to regenerate the task list.
 
@@ -232,8 +218,6 @@ Report final status with summary of completed work.
 ## Done When
 
 - [ ] All tasks in tasks.md completed and marked `[X]`
-- [ ] Implementation validated against the specification, plan, constitution, and required tests
-- [ ] No unresolved critical `$speckit-analyze` finding remains
-- [ ] Definition of Done review completed with JVM and native-status evidence
+- [ ] Implementation validated against specification, plan, and test coverage
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
 - [ ] Completion reported to user with summary of completed work
