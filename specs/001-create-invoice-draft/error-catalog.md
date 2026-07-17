@@ -35,7 +35,7 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
-| `BUSINESS_VALIDATION_FAILED` | 422 | Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate) or ordered Stage 11B calculated-value rules fail; range/overflow includes `MONETARY_RANGE_EXCEEDED` | Correct business content | No draft, children, or binding |
+| `BUSINESS_VALIDATION_FAILED` | 422 | Application-owned Stage 6 text/canonical validation, Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate), or ordered Stage 11B calculated-value rules fail; nested stable violations include `CANONICAL_NAME_TOO_LONG` and `MONETARY_RANGE_EXCEEDED` | Correct business content | No fingerprint lookup, draft, children, or binding when rejected in Stage 6; otherwise no draft, children, or binding |
 | `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable, or its configured operation timeout/failure becomes conclusive while shared request-deadline budget remains | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit or complete rollback is confirmed |
 | `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline expires before the current FR-041 stage or persistence outcome becomes conclusive | Retry same Company/key/content | No state when expiry is confirmed before persistence; no zero-state claim when commit is unresolved; replay resolves uncertain or completed commit state |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
@@ -87,19 +87,45 @@ syntactically numeric value or calculation falls outside any of these inclusive 
 The service checks these limits before persistence and never reports an envelope breach as a
 persistence error. It does not round, clamp, truncate, or wrap an out-of-range value into range.
 
+## Canonical-Name Length Violation
+
+`CANONICAL_NAME_TOO_LONG` is a stable nested violation under top-level
+`BUSINESS_VALIDATION_FAILED` (`422`). It is selected by Application during FR-041 Stage 6 after one
+per-value normalizer invocation performs one NFC pass and one surrounding `U+0020` trim, validates
+the display value, then reuses that intermediate value for consecutive internal `U+0020` collapse
+and Java `Locale.ROOT` lowercase without repeating NFC or trim. Application then counts the derived
+value in Unicode code points and rejects more than 300. It never truncates the result.
+
+The safe violation contains:
+
+- `code`: `CANONICAL_NAME_TOO_LONG`;
+- `field`: the original request field, such as `additionalInformation[0].name`;
+- `maximum`: `300`;
+- `countingUnit`: `UNICODE_CODE_POINTS`;
+- `validationStage`: `CANONICALIZATION`.
+
+It never includes the rejected display or canonical value. A display name may pass its own
+1–300-code-point boundary and still fail this derived boundary: 150 occurrences of `U+0130`
+lowercase to 300 code points (`i` plus `U+0307`) and are accepted; 151 lowercase to 302 and are
+rejected. Rejection occurs before fingerprinting, idempotency lookup, Domain entry, or persistence,
+and creates no state.
+
 ## Emission-Date Evaluation
 
 The request boundary captures `requestCreationInstant` exactly once and derives the expected
 date-only value using `America/Guayaquil`. That date remains fixed through validation and commit,
-including a midnight crossing. Separately, `createdAt` is the UTC `java.time.Instant` captured
-exactly once inside the persistence transaction after all business validations succeed and
-immediately before the new draft is persisted. The same immutable value is persisted and returned
-only after commit confirmation; rollback never exposes it and replay returns the original. It is
-not a physical PostgreSQL commit timestamp, is not queried or reconstructed after commit, and does
-not require `track_commit_timestamp`. It does not determine the accepted emission date.
+including a midnight crossing. Application passes a timestamp-free `InvoiceDraftCandidate` to the
+persistence port. Separately, the persistence adapter captures one UTC `java.time.Instant` exactly
+once inside the active transaction after all business validations succeed and immediately before
+the new draft is persisted. The adapter assigns that same immutable value to `createdAt` and
+`updatedAt`, persists both atomically, and returns them through `PersistedInvoiceDraft` only after
+commit confirmation. Rollback exposes neither; replay returns both original values without another
+clock invocation or mutation. Neither is a physical PostgreSQL commit timestamp, neither is queried
+or reconstructed after commit, and neither requires `track_commit_timestamp` or determines the
+accepted emission date.
 `requestCreationInstant` is operational application input, not an API request-body property.
 T076 is the sole persistence-clock invocation owner and calls it once at that point; T063 neither
-invokes that clock nor supplies, replaces, or overwrites `createdAt`.
+invokes that clock nor supplies, replaces, or overwrites either timestamp.
 
 ## Failure Precedence
 
@@ -111,8 +137,12 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
 4. `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_INVALID`, or
    `IDEMPOTENCY_KEY_MULTIPLE` for idempotency-header presence, parsed cardinality, one-time ASCII
    SP/HTAB trim, or normalized grammar;
-5. `INVALID_REQUEST` or `PROHIBITED_CALCULATED_FIELD` for representation/properties;
-6. normalization failure as `INVALID_REQUEST` when representation caused it;
+5. API-owned `INVALID_REQUEST` or `PROHIBITED_CALCULATED_FIELD` for malformed
+   representation/unknown or prohibited properties; API forwards decoded business text unchanged;
+6. Application-owned business-text normalization/canonicalization, with exactly one normalizer
+   invocation for each supplied applicable value and zero for an absent optional value. Business
+   validation failures use `BUSINESS_VALIDATION_FAILED`; post-lowercase canonical overflow uses
+   nested `CANONICAL_NAME_TOO_LONG` with its required safe metadata;
 7. local Company-scoped binding lookup infrastructure outcome;
 8. equivalent binding success (`200`, not an error);
 9. `IDEMPOTENCY_CONFLICT`;

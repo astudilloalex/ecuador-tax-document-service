@@ -75,6 +75,12 @@ Included content:
 - payments and amounts;
 - additional-information names and values.
 
+API only decodes the business fields. At the beginning of FR-041 Stage 6, Application invokes
+`BusinessTextNormalizer` exactly once per supplied applicable value; only its accepted normalized
+display values and derived canonical names enter the fingerprint encoder. Domain, the encoder, and
+Infrastructure do not repeat NFC normalization, trimming, space collapse, lowercase conversion, or
+canonical-name construction.
+
 Excluded content:
 
 - CompanyId, because it is the explicit binding scope;
@@ -97,14 +103,14 @@ sufficient for approved equivalence.
 |---------|----------------|
 | UUID | Lowercase hyphenated representation |
 | Date | ISO `YYYY-MM-DD` |
-| General display text | NFC once; reject `Cc`/`Cf`/`Cs`/`Co`/`Cn`, `U+2028`/`U+2029`, tabs/CR/LF/NBSP/non-U+0020 separators; trim surrounding `U+0020`; preserve internal punctuation/U+0020/case; count code points |
+| General display text | Use the accepted output of the single Application Stage-6 pass: NFC once; reject `Cc`/`Cf`/`Cs`/`Co`/`Cn`, `U+2028`/`U+2029`, tabs/CR/LF/NBSP/non-U+0020 separators; trim surrounding `U+0020`; preserve internal punctuation/U+0020/case; count code points |
 | Quantity/unit price | Numerically canonical plain decimal; equivalent trailing-zero forms compare equally |
 | Money/payment | Exact validated two-decimal representation |
 | Tax rule selection | Canonical tax-rule UUID only; derived code/rate excluded |
 | Optional contact value | Explicit absent marker distinct from a present value; JSON `null` is rejected unless the request schema explicitly permits it |
 | Lines | Preserve original line order |
 | Payments | Sort by canonical payment-method UUID, then amount |
-| Additional information | Persist/use canonical name from NFC → surrounding `U+0020` trim → collapse U+0020 runs → Java `Locale.ROOT` lowercase; sort by that persisted value then normalized display value; never use database-locale recomputation |
+| Additional information | Use the Stage-6 canonical name derived from the already NFC/trimmed display value → collapse U+0020 runs → Java `Locale.ROOT` lowercase → count 1–300 Unicode code points; reject overflow as `CANONICAL_NAME_TOO_LONG`, never truncate; sort by that accepted persisted value then normalized display value; never rebuild or use database-locale recomputation |
 | Empty optional collections | Normalize absent and empty to one approved empty representation |
 | Object properties | Emit in a fixed field order independent of JSON input order |
 
@@ -125,12 +131,17 @@ map `504`.
 4. In the API adapter, enforce idempotency-key presence/cardinality, normalize once, validate with
    the three stable error classifications, and hash only the accepted normalized key.
 5. Validate request representation and prohibited properties.
-6. Normalize business content and compute fingerprint.
+6. In Application, invoke `BusinessTextNormalizer` once per supplied applicable value, reject any
+   post-lowercase canonical name over 300 Unicode code points as `CANONICAL_NAME_TOO_LONG`, and
+   compute the fingerprint only from accepted normalized/canonical values.
 7. Look up binding by CompanyId plus key hash.
 8. If fingerprint/version match, load by CompanyId plus draftId and return the original result.
 9. If they differ, return `IDEMPOTENCY_CONFLICT`.
 10. Only an unbound command proceeds to Stage 10 calculation-independent validation, then Stage 11A
-    calculation, then exact ordered Stage 11B calculated-value validation, then write.
+    calculation, then exact ordered Stage 11B calculated-value validation. Application then
+    allocates final local root/child identifiers through `DraftIdentifierGenerator`, constructs the
+    timestamp-free `InvoiceDraftCandidate`, and invokes
+    `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`.
 
 Correlation initialization still provides a safe response identifier for a higher-precedence
 payload-size or Company-context failure. On a selected 413 path, classification solely preserves
@@ -146,15 +157,22 @@ retries the same CompanyId, key, and equivalent content: a committed binding ret
 late database/application result after terminal selection, and no correctly committed or possibly
 committed draft is compensated or deleted because its response was not received.
 
-Replay does not call Company Service, validate current Company/Issuer/emission-point state,
-authenticate, authorize, recalculate, or mutate the original draft. It returns the originally
-persisted immutable `createdAt`, never a replay-time or reconstructed timestamp.
+Replay loads the existing Company-scoped `PersistedInvoiceDraft`; it does not call Company Service,
+validate current Company/Issuer/emission-point state, authenticate, authorize, recalculate,
+re-normalize business text, rebuild canonical values, allocate identifiers, create another
+aggregate, invoke the transactional clock, or mutate the original draft. It returns the original
+identifier, immutable `createdAt`, and immutable `updatedAt`; the two timestamps remain the exact
+values persisted on creation and are never replay-time or reconstructed values. The incoming
+retry's mandatory single Stage-6 pass is used only to compute the comparison fingerprint; after the
+binding matches, the persisted aggregate's canonical values are loaded, not rebuilt.
 
 ## Concurrent Creation
 
 The unique database boundary arbitrates concurrent requests. One transaction commits the draft
-and binding. Every loser rolls back its tentative aggregate, re-reads the committed binding in the
-same Company scope, and returns replay or conflict based on fingerprint/version.
+and binding and returns its `PersistedInvoiceDraft`. Every loser rolls back its tentative aggregate,
+re-reads the committed binding and persisted representation in the same Company scope, and returns
+replay or conflict based on fingerprint/version. A losing candidate's identifiers are discarded;
+replay always exposes the winner's original identifier and timestamps.
 
 No application cache, distributed lock, message broker, Company service, or time-based key expiry
 participates.
@@ -176,7 +194,8 @@ participates.
 - CompanyId excluded from fingerprint but included in lookup/uniqueness;
 - correlation and transport metadata excluded;
 - no raw key or normalized request in database/logs/errors;
-- equivalent replay returns identical persisted result;
+- equivalent replay returns the identical `PersistedInvoiceDraft`, including original identifier,
+  `createdAt`, and `updatedAt`, without a clock call or canonical rebuild;
 - different content conflicts;
 - same key/content across Companies creates independent bindings;
 - 50 simultaneous equivalent requests create one draft;
@@ -188,3 +207,8 @@ participates.
   grammar-invalid headers produce their exact stable errors before any lookup;
 - one accepted SP/HTAB-trimmed key uses identical normalized bytes for lookup, hashing, and
   persistence, without any domain HTTP dependency.
+- `U+0130` vectors prove 150 occurrences reach the canonical 300-code-point maximum and 151 are
+  rejected before fingerprinting/persistence with `CANONICAL_NAME_TOO_LONG`, never truncated;
+- new-write port evidence proves a timestamp-free `InvoiceDraftCandidate`, Application-owned final
+  identifiers, a single adapter clock invocation, and a committed `PersistedInvoiceDraft` with
+  equal `createdAt`/`updatedAt`.

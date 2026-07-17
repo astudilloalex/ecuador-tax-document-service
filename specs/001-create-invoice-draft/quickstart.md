@@ -126,10 +126,13 @@ Expected new result:
 - response `companyId` is canonical lowercase hyphenated UUID text;
 - status is `DRAFT` and currency is exactly `USD`;
 - the response includes every captured and calculated field required by `FR-022`;
-- response `createdAt` equals the immutable UTC Instant captured once inside the persistence
-  transaction after business validation and immediately before persistence; it is not a physical
-  commit timestamp; T076 is the only persistence-clock caller, uses one call for draft and binding,
-  and T063 neither supplies nor overwrites it;
+- response `createdAt` and `updatedAt` are equal to the exact immutable UTC Instant captured by
+  T076's single clock invocation inside the active persistence transaction after business
+  validation and immediately before root persistence; neither is a physical commit timestamp;
+  T063, API, Domain, and mappers neither supply nor overwrite them;
+- the successful path crossed
+  `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>` with final Application-allocated
+  local identifiers, no timestamp in the candidate, and no identifier replacement in persistence;
 - no Issuer/establishment/emission fiscal snapshot exists;
 - no sequence, access key, XML, signature, certificate, SRI, PDF, queue, or notification effect
   occurs.
@@ -241,9 +244,10 @@ while canonical response `companyId` remains required by the feature contract.
 7. Submit at least 50 concurrent equivalent commands in one Company/key scope. Expect exactly one
    committed draft and binding; all successful outcomes identify that draft.
 8. Simulate response loss after commit and retry equivalent content. Expect the original draft.
-9. Advance the test clock to a later Ecuadorian date and replay. Expect the original draft and
-   emission date without current-date revalidation, plus the identical originally persisted
-   `createdAt`.
+9. Advance the test clocks to a later Ecuadorian date/Instant and replay. Expect the original draft
+   identifier, emission date, `createdAt`, and `updatedAt` without current-date revalidation,
+   identifier allocation, clock invocation, persisted-canonical-value rebuild, or another
+   aggregate. The retry's single Stage-6 pass is used only for fingerprint comparison.
 
 Database inspection must show only key/fingerprint hashes and normalization version in the binding;
 no raw key, correlation value, CompanyId duplication in the fingerprint, or normalized buyer
@@ -324,12 +328,17 @@ Using the exact approved baseline identifiers, validate at least:
   payments rejected before persistence;
 - current date derived from the single `requestCreationInstant`, past/future/impossible rejection,
   a commit crossing Guayaquil midnight, and later-date replay;
-- general human-readable text vectors shared across layers: NFC accented Latin;
+- general human-readable text vectors shared across layers: prove API forwards decoded business
+  text unchanged, Application invokes `BusinessTextNormalizer` exactly once per supplied applicable
+  value at Stage 6, and Domain/Infrastructure invoke it zero times; cover NFC accented Latin;
   decomposed/composed equivalence; surrounding and repeated internal `U+0020`; tab, newline, NBSP,
   `U+2028`, `U+2029`, and zero-width `Cf` rejection; assigned emoji `So` acceptance when field
   format/length permits; case preservation; Unicode-code-point maximum/max+1. Verify
   `canonicalName` is NFC → surrounding U+0020 trim → collapse U+0020 runs → Java `Locale.ROOT`
-  lowercase, is persisted, and is not recalculated by PostgreSQL locale;
+  lowercase → code-point count, is never truncated, is rejected over 300 with
+  `CANONICAL_NAME_TOO_LONG` before fingerprint/persistence, is persisted when accepted, and is not
+  recalculated by PostgreSQL locale. Include 150 occurrences of `U+0130` as exactly 300 canonical
+  code points and 151 occurrences as 302/rejected;
 - text and collection maxima plus maximum-plus-one rejection;
 - a body exactly `2,097,152` bytes proceeding to the next validation stage;
 - a larger body conclusively detected before deadline expiry returning
@@ -359,6 +368,14 @@ Static and runtime evidence must show:
 - no authentication/security dependency, scheme, requirement, Authorization header, `401`, or
   `403`;
 - no HTTP request/header/security/thread-local/Gateway object in application or domain;
+- no NFC normalization, business trim, space collapse, lowercase conversion, or `canonicalName`
+  derivation in API, Domain, Infrastructure, or persistence mappers; Application Stage 6 is the
+  sole owner;
+- the persistence port accepts only timestamp-free `InvoiceDraftCandidate` and returns
+  `Uni<PersistedInvoiceDraft>`; no HTTP type, Panache entity, placeholder timestamp, or HTTP error
+  crosses it;
+- Application alone allocates final local draft/child identifiers, while T076 alone invokes the
+  transactional clock and assigns one Instant to both `createdAt` and `updatedAt`;
 - no Company/SRI/security outbound span or invocation;
 - no Company, tenant, subject, role, authorization, or fiscal-snapshot persistence;
 - authoritative CompanyId on every aggregate/binding query or mutation, with no `company_id`

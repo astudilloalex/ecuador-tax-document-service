@@ -1,12 +1,16 @@
 # Implementation Plan: Create Invoice Draft
 
-**Branch**: `6-ft-1` | **Date**: 2026-07-12 | **Spec**: `specs/001-create-invoice-draft/spec.md`
+**Branch**: `001-create-invoice-draft` | **Date**: 2026-07-16 | **Spec**: `specs/001-create-invoice-draft/spec.md`
 
-**Input**: Reconciled feature specification with Constitution v2.0.1 Company-context decisions
+**Input**: Reconciled feature specification with Constitution v2.0.1 and the approved 2026-07-16
+normalization, persistence-boundary, timestamp, and canonical-name clarifications
 
-**Implementation progression**: `GATE-GOV-001` is **RELEASED** by `astudilloalex`; the mandatory
-current `$speckit-analyze` gate remains before T017. T017/T018 remain pending, and T019 remains
-blocked until both complete successfully.
+**Implementation progression**: `GATE-GOV-001` retains its **RELEASED** governance status. The
+approved `governance-corrective-assignment-addendum.md` assigns red evidence to T017 and V5/green
+persistence evidence to T018. Because the latest analysis reported a CRITICAL inconsistency in the
+previous assignment, current implementation permission is `PENDING_SUCCESSFUL_ANALYSIS`. T017 and
+T018 remain pending; T018 depends on completed T017, and T019 remains blocked until both complete
+successfully.
 
 ## Summary
 
@@ -88,15 +92,16 @@ unbounded retry
 
 **Time Boundary**: The API boundary captures one `requestCreationInstant` per new request and derives
 the expected emission date once in `America/Guayaquil`. The derived date remains fixed when commit
-crosses midnight. Separately, `createdAt` is the UTC `java.time.Instant` captured exactly once
-inside the persistence transaction, after all business validations succeed and immediately before
-the new Invoice Draft is persisted. The same immutable value is persisted and returned only after
-commit confirmation; rollback never exposes it and replay returns the original. It is not a
-PostgreSQL physical commit timestamp, requires no `track_commit_timestamp`, and is never queried or
-reconstructed after commit. The clock remains injectable and deterministic for tests.
-The transactional persistence operation T076 is the sole persistence-clock caller: it invokes
-once at that point and writes the same returned value wherever required. T063 orchestration never
-invokes that clock or supplies, replaces, or overwrites `createdAt`.
+crosses midnight. Separately, the T076 persistence adapter is the sole owner of the creation
+timestamp invocation. It invokes the injected transactional clock exactly once inside the active
+reactive transaction, after all business validations have succeeded and immediately before root
+persistence, and assigns the exact same UTC `java.time.Instant` to `createdAt` and `updatedAt`.
+The timestamp-free `InvoiceDraftCandidate` cannot carry either value; T063, Domain, API, and all
+mappers neither generate nor replace them. T076 persists both values atomically and returns them
+through `PersistedInvoiceDraft` only after commit. Rollback exposes neither value, while replay
+returns both originally persisted values without another clock call. Neither value is a PostgreSQL
+physical commit timestamp; no `track_commit_timestamp`, post-commit query, or reconstruction is
+used. The clock remains injectable and deterministic for tests.
 
 **Scale/Scope**: One Company partition and one Invoice Draft per logical command; no draft update,
 delete, fiscal issuance, other tax-document type, or Company administration
@@ -111,7 +116,7 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 |-----------|------------------------------------|-------------------------------------|
 | Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
 | Constitution | `.specify/memory/constitution.md` v2.0.1 | Company request/input prohibition and contracted response allowance; Company-owned aggregate scope/global-catalog exclusion; no identity/Company dependency; architecture, persistence, testing, operations |
-| Specification | `specs/001-create-invoice-draft/spec.md`, clarification session 2026-07-12 | Actor, inputs, calculations, validation, failure precedence, acceptance |
+| Specification | `specs/001-create-invoice-draft/spec.md`, clarification sessions through 2026-07-16 | Actor, inputs, calculations, normalization ownership, persistence boundary, timestamp semantics, failure precedence, acceptance |
 | Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Approved buyer-type, IVA-rule, and payment-method rows; official evidence; target decisions; deterministic UUIDv5 mappings |
 | Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
 | Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
@@ -146,12 +151,13 @@ artifacts.
 
 ## Constitution Check
 
-*GATE: Recorded before Phase 0 and re-evaluated after Phase 1. Reconciled on 2026-07-13 against
-authoritative `main` and `origin/main` commit `137d1c8c59cc98402f0a1fed211a6caccad4c883`.*
+*GATE: Recorded before Phase 0 and re-evaluated after Phase 1. Reconciled again on 2026-07-16
+against approved Constitution v2.0.1, the current feature specification, and repository HEAD
+`2b72fbdd72aa701101ee232bf2d60caadc9cdca7`.*
 
 | Gate | Pre-Research evidence | Post-Design evidence |
 |------|-----------------------|----------------------|
-| Constitution version | PASS — v2.0.0 was the approved historical baseline at commit `137d1c8c59cc98402f0a1fed211a6caccad4c883` | PASS — formal PATCH v2.0.1 clarifies Company request/response and owned/global repository scope; feature owner approval remains governed by `GATE-GOV-001` |
+| Constitution version | PASS — v2.0.0 was the approved historical baseline at commit `137d1c8c59cc98402f0a1fed211a6caccad4c883` | PASS — formal PATCH v2.0.1 clarifies Company request/response and owned/global repository scope; `astudilloalex` approved both required capacities and released `GATE-GOV-001` without waiving T017/T018 |
 | Greenfield bounded outcome | PASS — one target create/review outcome | PASS — no legacy compatibility or unrelated lifecycle |
 | Authority/versioned evidence | PASS — Constitution v2.0.1 and SRI v2.32 identified | PASS — source register separates official facts from target decisions with exact locators |
 | English terminology | PASS — target terms are English | PASS — all generated artifacts use canonical English with exact SRI exceptions |
@@ -168,43 +174,104 @@ authoritative `main` and `origin/main` commit `137d1c8c59cc98402f0a1fed211a6cacc
 | Boundary consistency | PASS — idempotency/failure precedence approved | PASS — fingerprint, race arbitration, timeout/recovery outcomes complete |
 | API/async quality | PASS — synchronous observable result, stable errors | PASS — strict OpenAPI, Problem Details, correlation, no opaque job |
 | External adapters | PASS — none applicable | PASS — no Company/SRI/security port/client/health destination |
-| Testing | PASS — 68 scenarios and 33 success criteria | PASS — traceability maps every FR-001–FR-047, DR-001–DR-024, SC-001–SC-033, and AS-001–AS-068 |
+| Testing | PASS — 71 scenarios and 33 success criteria | PASS — traceability maps every FR-001–FR-047, DR-001–DR-024, SC-001–SC-033, and AS-001–AS-071 |
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
-| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 are approved without erasing the violation, `GATE-GOV-001` is released, and current analysis plus T017/T018 remain mandatory |
+| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum now assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its recorded status, while implementation permission remains pending a new successful analysis |
 
 No constitutional complexity exception is requested. A workflow non-conformity exists because
 T001–T016 were implemented before the mandatory analysis gate; it is recorded without
 retroactive correction in `governance-nonconformity.md`.
 
-**Current implementation gate**: governance approval is complete and `GATE-GOV-001` is released.
-The current analysis condition remains required before T017; T018 depends on T017, and T019
-depends on both completed corrective tasks.
+**Current implementation gate**: governance approval and the corrective-assignment addendum are
+complete, and `GATE-GOV-001` retains its released status. The latest analysis still contains the
+CRITICAL assignment finding that prompted the addendum, so implementation permission is
+`PENDING_SUCCESSFUL_ANALYSIS`. A new analysis without that CRITICAL finding is required before
+T017; T018 depends on completed T017, and T019 depends on both completed corrective tasks.
 
 ## Clean Architecture Mapping
 
 ```text
 HTTP request
-  → api: start one monotonic request deadline; parse/validate X-Company-Id and transport DTOs
+  → api: start one monotonic request deadline; parse/validate headers and transport DTOs; forward
+    decoded business text unchanged
   → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
-    inputs, idempotency/correlation, fixed RequestDeadline)
+    inputs, idempotency/correlation, fixed RequestDeadline); invoke BusinessTextNormalizer at
+    Stage 6; validate/calculate; construct InvoiceDraftCandidate with final local identifiers
   → domain: InvoiceDraft aggregate and deterministic calculation
-  → application outbound ports
-  → infrastructure: reactive Panache/PostgreSQL, local catalogs, clock/identifier adapters
+  → application outbound persistence port: persist(InvoiceDraftCandidate)
+  → infrastructure: reactive Panache/PostgreSQL transaction; capture one Instant for both
+    timestamps; return PersistedInvoiceDraft
+  → application: transport-neutral result
+  → api: terminal arbitration and HTTP mapping
 ```
 
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
-| `api` | Exclusively own the monotonic 10-second race, terminal-result arbitration, one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; initialize correlation/request instant; normalize Unicode once; map transport inputs | `application` | Persistence entities returned directly; Company/security clients; deadline or HTTP/header responsibilities delegated below API |
-| `application` | Receive mapped CompanyId/request instant, normalized text, and a neutral RequestDeadline only for cooperative budget checks; return transport-neutral outcomes; enforce stages 6–10, orchestrate Stage 11A/11B and transactional persistence without invoking the persistence clock | `domain`, Mutiny, application ports | HTTP headers/requests/status/exceptions/envelopes, terminal arbitration, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
-| `domain` | Own immutable CompanyId on Invoice Draft; buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
-| `infrastructure` | Implement transport-neutral local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache, clamp work to remaining budget, and let the T076 transaction own the sole persistence-clock invocation | application ports/domain types | HTTP status/exception/envelope/arbiter, Company/SRI/security adapter, shared database, cache |
+| `api` | Exclusively own the monotonic 10-second race, terminal-result arbitration, one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; initialize correlation/request instant; decode JSON and validate transport representation; forward decoded business text unchanged | `application` | NFC normalization, business trimming, space collapse, lowercase conversion, `canonicalName` construction, persistence entities, Company/security clients, or deadline/HTTP/header responsibilities delegated below API |
+| `application` | Receive mapped CompanyId/request instant, decoded business text, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 invoke `BusinessTextNormalizer` exactly once for every supplied applicable value; derive/validate canonical values; enforce ordered validation and calculation; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | HTTP headers/requests/status/exceptions/envelopes, terminal arbitration, persistence clock invocation, timestamp construction, `SecurityIdentity`, `JsonWebToken`, thread-local/Gateway objects |
+| `domain` | Receive normalized values; own immutable CompanyId on Invoice Draft; enforce buyer/line/tax/payment invariants and exact calculation | Java/approved domain libraries | Unicode normalization mechanics, HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
+| `infrastructure` | Persist exactly the supplied normalized/canonical values and final local identifiers; implement transport-neutral local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache; clamp work to remaining budget; let the T076 transaction own the sole persistence-clock invocation and return committed state as `PersistedInvoiceDraft` | application ports/domain types | Independent NFC/trim/collapse/lowercase/canonical derivation, identifier replacement, HTTP status/exception/envelope/arbiter, Company/SRI/security adapter, shared database, cache |
 
 Actual outbound boundaries are limited to the Invoice Draft repository, local identification/tax/
 payment catalog access, clock, and identifier generation. No interface named or equivalent to
 `CompanyContextPort`, `ResolveCompanyFiscalContextPort`, or Company authorization/eligibility is
 introduced.
+
+### Application Persistence Boundary
+
+The conceptual creation operation on the application-owned persistence port is:
+
+```text
+persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>
+```
+
+`InvoiceDraftCandidate` is the complete Application-to-persistence input for a logically new
+draft. Application constructs it only after Stage 6 normalization, all business validation, and
+monetary calculation. It carries the final root and child UUIDs allocated by Application through
+`DraftIdentifierGenerator`, all normalized/validated/calculated business values, authoritative
+CompanyId, and the already derived key hash, request fingerprint, and normalization version needed
+for the atomic binding. It carries no raw idempotency key or header representation. It contains no
+`createdAt`, `updatedAt`, null/zero/placeholder/provisional timestamp, HTTP type, commit metadata,
+or database/Panache entity.
+
+`PersistedInvoiceDraft` is the persistence-to-Application result after successful commit. It
+contains the same final root identifier, the persisted business values needed by the application
+result, and both timestamps. The persistence adapter must not generate or replace identifiers;
+Application is their only allocation owner. Conversely, Application must not generate either
+timestamp; T076 is their only invocation and assignment owner.
+
+The persistence port and its results are transport-neutral. They expose no HTTP request, status,
+exception, response envelope, or persistence entity. A persistence mapper may copy candidate
+values into Panache entities, copy the one adapter-owned Instant into the timestamp columns, and
+reconstruct `PersistedInvoiceDraft` from committed state; it must not normalize text, derive
+canonical values, allocate identifiers, invoke an additional clock, or map HTTP failures.
+
+### Authoritative Creation Sequence
+
+For a logically new request, the architectural sequence is exactly:
+
+1. API decodes the request.
+2. Application performs ordered validation.
+3. Application normalizes business text in Stage 6 by invoking `BusinessTextNormalizer` exactly
+   once for each supplied applicable value.
+4. Application calculates monetary values.
+5. Application obtains final local draft and child identifiers through `DraftIdentifierGenerator`
+   and constructs `InvoiceDraftCandidate`.
+6. Application passes the candidate to the persistence port.
+7. The persistence adapter opens or joins the bounded reactive transaction.
+8. The persistence adapter invokes the injected transactional clock exactly once.
+9. The persistence adapter assigns that same `Instant` to `createdAt` and `updatedAt`.
+10. The persistence adapter persists the complete aggregate and idempotency binding atomically.
+11. The persistence adapter returns `PersistedInvoiceDraft` after successful commit.
+12. Application maps the persisted result to a transport-neutral result.
+13. API arbitrates the terminal result and maps the accepted result to HTTP.
+
+The adapter invokes the clock only after all business validations have succeeded and immediately
+before the new root is persisted. The reactive transaction boundary encloses clock invocation,
+root, children, calculated values, and binding writes. A rollback exposes no created resource and
+neither timestamp. No mapper or layer outside T076 may add a missing identifier or timestamp.
 
 **Failure-Precedence Ownership**: The API adapter alone owns the deadline race and all HTTP
 semantics. FR-041 stages 1–5 use one explicit pre-application pipeline:
@@ -282,16 +349,18 @@ resolves any response loss.
 
 The resource method is invoked only after stage 5. It calls the application `RequestClock` exactly
 once to derive the immutable request instant carried by `CreateInvoiceDraftCommand`. That instant
-is not reused as `createdAt`. For a logically new command only, the T076 transactional persistence
-operation calls the injected persistence clock exactly once inside its active transaction after all
-business validations succeed and immediately before root persistence, then stores that returned
-UTC Instant wherever the draft creation timestamp is required. T063 never calls that clock or
-supplies, replaces, or overwrites `createdAt`; a second persistence-clock invocation in one attempt
-is prohibited. There is no post-commit clock/database timestamp read. Application orchestration
-begins at normalized-content generation (stage 6), continues through replay/conflict, Stage 10
-independent validation, Stage 11A calculation, exact Stage 11B calculated-value validation, and ends
-by delegating atomic persistence (stage 12). HTTP headers, Vert.x/REST request state,
-and payload representations never enter application or domain logic.
+is not reused as either persistence timestamp. Application orchestration begins at Stage 6 by
+invoking `BusinessTextNormalizer` exactly once for each supplied applicable business-text value;
+API has not normalized those values. It continues through replay/conflict, Stage 10 independent
+validation, Stage 11A calculation, exact Stage 11B calculated-value validation, Application-owned
+local identifier allocation, timestamp-free candidate construction, and persistence delegation.
+For a logically new command only, T076 calls the injected persistence clock exactly once inside its
+active transaction after all validations succeed and immediately before root persistence, then
+assigns that one UTC Instant to both `createdAt` and `updatedAt` and to binding creation time where
+required. T063 never calls that clock or supplies, replaces, or overwrites either timestamp; a
+second persistence-clock invocation in one attempt is prohibited. There is no post-commit
+clock/database timestamp read. HTTP headers, Vert.x/REST request state, and payload
+representations never enter application or domain logic.
 
 **Business Validation and Calculation Stages**:
 
@@ -314,11 +383,11 @@ calculated-value check or permit Stage 11B to run before Stage 11A.
 | Operation | Adapter/port boundary | Classification | Execution context | Timeout/resource bound | Required evidence |
 |-----------|-----------------------|----------------|-------------------|------------------------|-------------------|
 | Header/body mapping, correlation, deadline, and time initialization | API → application mapping | Non-blocking bounded CPU | Event loop | 2 MiB, bounded fields/collections; one monotonic 10 s deadline; one request instant | Controlled no-sleep payload/header deadline races; oversized absent/valid/invalid correlation with zero database calls; expiry/cancellation/post-commit telemetry; midnight vector; max payload; blocked-thread check |
-| Fingerprint generation | Application normalization service | Bounded CPU, no I/O | Calling context | ≤2 MiB, SHA-256, version 1 | Vectors and maximum-payload benchmark |
+| Business-text normalization, canonical derivation, and fingerprint generation | Application `BusinessTextNormalizer` plus canonical fingerprint encoder | Bounded CPU, no I/O | Calling context | One Stage-6 normalizer invocation per supplied applicable value; ≤2 MiB; canonical-name maximum 300 Unicode code points; SHA-256 version 1 | Invocation-count, Unicode/`U+0130`, canonical-overflow, fingerprint vectors, and maximum-payload benchmark |
 | Monetary/domain calculation | Pure domain | Synchronous deterministic bounded CPU | Calling context | ≤500 lines | Exact vectors, p99 budget, no event-loop warning |
 | Binding/root lookup | Repository port/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Pool/query clamped to request's remaining budget | Unavailable, deadline, replay/conflict tests |
 | Buyer/IVA/payment reference lookup | ReferenceDataPort/reactive adapter | Non-blocking database I/O | Reactive PostgreSQL client | Every invocation receives remaining `Duration`; pool/query subscription uses min(configured timeout, remainder); no work at zero/negative remainder | Both minimum branches and mappings (configured timeout→503, shared deadline→504), exhausted-before-call, expiry-during-lookup, cancellation, and zero-state tests |
-| Aggregate/binding write | Repository port/reactive adapter | Non-blocking database I/O | Reactive transaction | Lesser of remaining request budget and 5 seconds | Rollback phase injection, deadline, uncertain-commit recovery, and concurrency |
+| Aggregate/binding write | `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>` / reactive adapter | Non-blocking database I/O | One opened-or-joined reactive transaction | Lesser of remaining request budget and 5 seconds | Timestamp-free candidate, final Application-owned identifiers, single clock call, equal creation timestamps, rollback phase injection, deadline, uncertain-commit recovery, and concurrency |
 | Flyway startup migration | Startup infrastructure | Blocking lifecycle operation outside requests | Controlled startup | Deployment timeout/empty-db evidence | Migration and readiness tests |
 
 No blocking filesystem/network operation, SOAP, XML, signature, certificate, SRI, or Company call
@@ -418,34 +487,60 @@ no authentication or authorization result.
 
 `productCode` uses the existing authoritative OpenAPI rule, made explicit as case-sensitive ASCII
 `^[A-Za-z0-9]{1,25}$`. Passport (`06`) and foreign identification (`08`) use case-sensitive ASCII
-`^[A-Za-z0-9]{1,20}$`. For all three, the API trims leading/trailing ASCII SP/HTAB once, changes no
-internal character or case, and performs no case folding or Unicode normalization. Valid/invalid
-vectors are `ABC123`/`sku9` versus `ABC-123`/`ÁBC1`/26 characters for product codes, and
-`A1234567`/`EC9Z` versus `A-123`/`Á123`/21 characters for buyer values.
+`^[A-Za-z0-9]{1,20}$`. API decodes and forwards these business values unchanged. At Stage 6,
+Application performs their one permitted leading/trailing ASCII SP/HTAB trim, changes no internal
+character or case, performs no case folding or Unicode normalization, and validates the exact
+ASCII expression. Valid/invalid vectors are `ABC123`/`sku9` versus
+`ABC-123`/`ÁBC1`/26 characters for product codes, and `A1234567`/`EC9Z` versus
+`A-123`/`Á123`/21 characters for buyer values.
 
-OpenAPI patterns and bounds, Java API validation, domain invariants over normalized values,
-locale-independent PostgreSQL checks, and test fixtures MUST be equivalent. PostgreSQL POSIX
-`[[:alnum:]]` is not equivalent to these ASCII expressions. Because committed Flyway migrations
-are immutable, V3 remains unchanged. T017 must create
-`V5__tighten_invoice_draft_ascii_constraints.sql`, replacing only the affected named constraints
-with exact explicit ASCII ranges; T018 must then prove identical cross-layer/PostgreSQL vectors and
-the final V3→V5 schema. Both remain pending: T017 follows the current analysis gate, and T018
-depends on T017.
+OpenAPI-documented patterns and bounds, production Java validation, domain invariants over
+normalized values, locale-independent PostgreSQL checks, and test fixtures MUST be equivalent.
+PostgreSQL POSIX `[[:alnum:]]` is not equivalent to these ASCII expressions. The approved
+corrective evidence sequence is:
 
-General human-readable single-line text is Unicode normalized to NFC exactly once at the
-API/application boundary. Categories `Cc`, `Cf`, `Cs`, `Co`, `Cn`, plus `U+2028` and `U+2029`, are
-rejected. Only `U+0020` is accepted as spacing: surrounding `U+0020` is trimmed; tab, CR, LF, NBSP,
-and all other separators are rejected; internal punctuation/`U+0020` runs and display case are
-preserved. Length is Unicode code points after NFC/trim, and comparison is case-sensitive unless a
-field overrides it. Assigned emoji category `So` is accepted when field format/length permits.
+1. T017 defines `src/test/resources/invoicedraft/ascii-validation-vectors.json` as the one
+   authoritative fixture.
+2. T017 validates fixture integrity and prepares intentional red PostgreSQL/Flyway evidence that
+   exposes the known V3 mismatch. It creates no migration and does not modify V3.
+3. T018 creates `V5__tighten_invoice_draft_ascii_constraints.sql`, guided by T017's failing
+   evidence and preserving immutable V3.
+4. T018 makes the PostgreSQL/Flyway evidence green, proves the V3-to-V5 upgrade, and runs Flyway
+   validation.
+5. T030 independently validates the approved OpenAPI expressions against the shared fixture and
+   does not invoke the database or domain validators.
+6. T045 independently validates the production buyer-identification Java behavior against the
+   fixture and does not invoke PostgreSQL, Flyway, OpenAPI parser, or HTTP infrastructure.
+7. T050 independently validates production product-code and text-rule Java behavior against the
+   fixture under the same dependency restrictions.
+8. The complete set of independent layer-specific results establishes cross-layer equivalence.
 
-Additional-information `canonicalName` is produced once by NFC → surrounding `U+0020` trim →
-collapse internal `U+0020` runs → lowercase with Java `Locale.ROOT`, then persisted and used for
-uniqueness/idempotency. PostgreSQL enforces stored non-null/nonempty/max-length/canonical values but
-does not reproduce Java normalization or recalculate with database locale. OpenAPI documents the
-policy; API/application performs it; domain receives normalized values; identical cross-layer
-vectors cover accented/decomposed text, spaces, prohibited code points/separators, emoji, case, and
-code-point boundaries.
+T017 may use a standalone Java `Pattern` only to verify fixture parsing or the approved literal
+regular expression; productive Java-validator equivalence does not exist during T017 or T018.
+Domain test suites remain free of PostgreSQL, Flyway, OpenAPI parser, and HTTP transport
+dependencies.
+
+General human-readable single-line text reaches Application exactly as API decoded it. At the
+beginning of Stage 6, Application alone invokes `BusinessTextNormalizer` exactly once for each
+supplied applicable value. The invocation normalizes to NFC; trims surrounding `U+0020`; rejects
+categories `Cc`, `Cf`, `Cs`, `Co`, `Cn`, `U+2028`, and `U+2029`; accepts only `U+0020` as spacing;
+rejects tab, CR, LF, NBSP, and all other separators; preserves internal punctuation, internal
+`U+0020` runs, and display case; and counts display length in Unicode code points. Comparison is
+case-sensitive unless a field overrides it. Assigned emoji category `So` is accepted when field
+format/length permits. Domain and Infrastructure receive the normalized values and never repeat
+the transformation.
+
+Within that same Stage-6 invocation, additional-information `canonicalName` reuses the normalized
+display value, collapses internal `U+0020` runs, lowercases with Java `Locale.ROOT`, and is then
+counted. The accepted result contains 1–300 Unicode code points, is never truncated, and is
+persisted and used for uniqueness/idempotency. Application rejects overflow before fingerprinting,
+Domain entry, or persistence with `BUSINESS_VALIDATION_FAILED` /
+`CANONICAL_NAME_TOO_LONG`, identifying the original field, maximum `300`, counting unit
+`UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`. PostgreSQL is only a defensive stored-length/
+nonempty/canonical-value barrier; it neither reproduces Java normalization nor recalculates using
+database locale. OpenAPI documents the policy; Application performs it; identical cross-layer
+vectors cover accented/decomposed text, spaces, prohibited code points/separators, emoji, case,
+code-point boundaries, and `U+0130` lowercase expansion at 150/151 occurrences.
 
 **Payment-Method Effectiveness**: Reference lookup receives `(paymentMethodId, emissionDate)` and
 requires existence, activity, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
@@ -469,17 +564,31 @@ Detailed schema/constraint/transaction decisions are in `data-model.md` and
 `persistence-design.md`. Detailed hashing/canonicalization/replay decisions are in
 `idempotency-design.md`.
 
+The creation handoff is the conceptual application-port operation
+`persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. For equivalent replay, the
+Company-scoped repository retrieves the committed `PersistedInvoiceDraft`; Application returns its
+original root identifier, `createdAt`, and `updatedAt`. Replay does not allocate another identifier,
+invoke the transactional clock, rebuild canonical values, construct a replacement aggregate, or
+mutate persisted state. The incoming retry still undergoes its one required Stage-6 normalization
+pass to produce a comparable fingerprint; after equivalence is established, no persisted
+canonical value is reconstructed.
+
 Key invariants:
 
 - root `company_id uuid NOT NULL` and non-nil;
-- root `created_at timestamptz NOT NULL` stores the single immutable UTC Instant captured once
-  inside the write transaction after validation and immediately before persistence; the response
-  and replay return that exact value, with no physical-commit-timestamp query; T076 is the sole
-  persistence-clock caller and T063 cannot supply or overwrite the value;
+- root `created_at timestamptz NOT NULL` and `updated_at timestamptz NOT NULL` both store the exact
+  same immutable UTC Instant on initial creation, captured by T076's single clock call inside the
+  active write transaction after validation and immediately before persistence; response and
+  replay return both original values with no physical-commit-timestamp query; T063 cannot supply or
+  overwrite either value;
+- Application owns final local root/child identifier allocation through `DraftIdentifierGenerator`
+  before constructing the candidate; persistence copies but never generates or replaces them;
 - quantity/unit price columns use `numeric(12,6)`; monetary columns use `numeric(17,2)`; tax-rate
   columns use `numeric(5,2)` with range checks mirrored by pre-persistence validation;
 - final schema after immutable V3 then pending V5 uses the exact locale-independent ASCII
-  product/buyer expressions above; T017 V5 replaces only the affected constraints and T018 proves it;
+  product/buyer expressions above; T017 creates no migration and first supplies the authoritative
+  fixture/red evidence; T018 alone creates V5, replaces only the affected constraints, and makes
+  the PostgreSQL/Flyway evidence green;
 - local children reference only the draft/line;
 - every aggregate/binding query or mutation uses authoritative CompanyId; global reference-catalog
   reads do not;
@@ -520,6 +629,7 @@ specs/001-create-invoice-draft/
 ├── traceability.md
 ├── quickstart.md
 ├── governance-nonconformity.md
+├── governance-corrective-assignment-addendum.md
 └── contracts/
     └── invoice-draft-api.openapi.yaml
 ```
@@ -554,9 +664,20 @@ src/test/java/com/alexastudillo/taxdocument/
 src/test/resources/
 ├── application.properties
 └── invoicedraft/
+    ├── ascii-validation-vectors.json
     ├── calculation-vectors.json
     └── idempotency-v1-vectors.json
 ```
+
+The established feature test-resource convention is
+`src/test/resources/invoicedraft/`, so the authoritative ASCII fixture is
+`src/test/resources/invoicedraft/ascii-validation-vectors.json`. Each entry conceptually records:
+the field; literal value; expected validity; applicable minimum or maximum boundary; expected
+stable error code when invalid; rationale; and the layer-specific suites that must consume the
+vector. Its consumers are T017 fixture-integrity/red persistence evidence, T018 PostgreSQL/Flyway
+green validation, T030 OpenAPI validation, T045 production buyer-identification validation, and
+T050 production product-code/text-rule validation. The fixture is planned here and is not created
+by this documentary reconciliation.
 
 Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
 is planned.
@@ -566,11 +687,12 @@ is planned.
 | Requirement/risk | Level/environment | Observable invariant | Required negative/boundary evidence |
 |------------------|-------------------|----------------------|-------------------------------------|
 | Company header/canonicalization | API + application | Valid/mixed-case UUID maps/stores/returns canonical CompanyId | missing/blank/malformed/nil/repeated; Company request body/input/path/query rejected while explicit response CompanyId remains present |
-| Clean layer handoff | Architecture + application | Command has explicit CompanyId; aggregate immutable CompanyId | no HTTP/security/thread-local/Gateway types below API |
+| Clean layer handoff | Architecture + application | Command has explicit CompanyId; API forwards decoded business text unchanged; Application alone normalizes at Stage 6 and constructs the timestamp-free candidate; aggregate has immutable CompanyId | no HTTP/security/thread-local/Gateway types below API; no API normalization; no Domain/Infrastructure re-normalization |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
-| Draft business rules | Domain/application | exact Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; NFC/canonical text | pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode vectors; numeric maxima/overflow and midnight/replay |
-| Persistence/Flyway | Real PostgreSQL from empty | immutable V3 then V5 exact ASCII constraints, local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, and T076-only immutable transaction-captured `createdAt` | identical ASCII boundary/category/Unicode/space/punctuation/empty vectors; V3→V5/Flyway validation; no prohibited fields/catalog Company columns; rollback; no physical commit timestamp or second clock call |
-| Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner | property/collection order, line order, response loss, no normalized payload storage |
+| Draft business rules | Domain/application | exact Stage 6 normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned NFC/canonical text and local identifiers | one normalizer invocation/value; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
+| ASCII cross-layer equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every applicable suite consumes `ascii-validation-vectors.json` and matches each stored expected outcome without domain tests importing transport/database infrastructure | fixture integrity; exact minimum/maximum/category/Unicode/space/punctuation/empty vectors; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
+| Persistence/Flyway | Real PostgreSQL from empty | immutable V3; T017 red evidence; T018-only V5 and green exact ASCII constraints; local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, timestamp-free candidate, Application-owned final IDs, T076-only one-call equal `createdAt`/`updatedAt`, and committed `PersistedInvoiceDraft` | T017 failure specificity and unrelated-behavior stability; T018 V3→V5/Flyway validation and final absence of locale-dependent POSIX classes; no prohibited fields/catalog Company columns; rollback; no identifier replacement, placeholder timestamp, physical commit timestamp, or second clock call |
+| Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner; replay loads `PersistedInvoiceDraft` | property/collection order, line order, response loss, no normalized payload storage, no new aggregate/identifier/clock call/canonical rebuild, original identifier and both timestamps unchanged |
 | API errors/correlation/deadline | Contract/integration with controlled deadline signal | API-exclusive Uni/deadline race, exactly-one terminal response, ordered upload/header/entity gate, mandatory exactly-one normalized Idempotency-Key and three stable errors, safe Problem Details only after arbitration | Missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
 | Published OpenAPI | Static and packaged runtime | canonical/runtime file equality; scan disabled; served `/q/openapi` semantic equality | no merged path/schema/security/401/403 drift |
 | No fiscal side effects | Application/architecture/trace | zero sequence/access-key/XML/signature/certificate/SRI/PDF/event activity | no fiscal adapter/config/span |
@@ -631,10 +753,13 @@ custom authentication framework.
 - Supporting designs: `error-catalog.md`, `persistence-design.md`,
   `idempotency-design.md`, `operational-requirements.md`, `traceability.md`, and the blocking
   `governance-nonconformity.md`, `governance-retrospective-review.md`, and
-  `governance-owner-approval.md` records.
+  `governance-owner-approval.md` records, plus the approved
+  `governance-corrective-assignment-addendum.md`.
 
 The requirements-quality content checks are reconciled to approved Constitution v2.0.1. The
 recorded pre-analysis sequence remains an approved historical non-conformity and cannot be
 corrected retroactively. `astudilloalex` approved D1–D3 with mandatory T017/T018 correction and
-released `GATE-GOV-001`. The current analysis gate remains before T017, and T019 remains ineligible
-until both corrective tasks complete successfully.
+released `GATE-GOV-001`. The later approved addendum assigns T017 red evidence and T018 V5/green
+persistence evidence without changing the retrospective findings or hash. Implementation permission
+is `PENDING_SUCCESSFUL_ANALYSIS`; T017 cannot start until the new analysis removes the CRITICAL
+assignment finding, and T019 remains ineligible until both corrective tasks complete successfully.

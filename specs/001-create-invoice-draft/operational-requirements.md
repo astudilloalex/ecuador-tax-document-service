@@ -2,7 +2,8 @@
 
 ## Measurement Boundary
 
-Request latency includes this service's header/body parsing, normalization, fingerprinting, local
+Request latency includes this service's API header/body decoding and Application Stage-6
+normalization/fingerprinting, local
 catalog/domain validation, calculation, reactive PostgreSQL work, and response serialization.
 
 It excludes gateway/BFF work, authentication, authorization, Company validation, and Company
@@ -21,24 +22,27 @@ Before performance evidence is accepted, record:
 
 Server-side request duration MUST use a monotonic timer captured at the earliest service request
 boundary and normally stopped when the response ends, so response serialization is included. It
-MUST NOT use wall-clock timestamps, `requestCreationInstant`, `createdAt`, or correlation
+MUST NOT use wall-clock timestamps, `requestCreationInstant`, `createdAt`, `updatedAt`, or correlation
 timestamps. Client network, gateway, and upstream queueing time are outside this server-side
 measurement.
 
 `requestCreationInstant` is separate functional evidence. The request boundary captures it exactly
 once from the approved wall clock and derives the expected emission date once using
 `America/Guayaquil`. It MUST be passed through validation and persistence without recapture, MUST
-remain fixed if commit crosses midnight, and MUST NOT be replaced by `createdAt`. Equivalent replay
+remain fixed if commit crosses midnight, and MUST NOT be replaced by `createdAt` or `updatedAt`. Equivalent replay
 may capture an operational request instant but MUST NOT use it to revalidate or mutate the original
 emission date.
 
-`createdAt` is separate functional persistence evidence: one UTC `java.time.Instant` is obtained
-by T076 from the injectable deterministic persistence clock exactly once inside its active
-transaction, after all business validations succeed and immediately before root persistence. T063
-never invokes this clock or supplies/replaces/overwrites the value. The same immutable value is
-persisted, returned after commit confirmation, and returned on replay; rollback never exposes it.
-It is not a PostgreSQL physical commit timestamp, is never queried or reconstructed after commit,
-and does not require `track_commit_timestamp`. It is not a latency measurement source.
+`createdAt` and `updatedAt` are separate functional persistence evidence: one UTC
+`java.time.Instant` is obtained by T076 from the injectable deterministic persistence clock exactly
+once inside its active transaction, after all business validations succeed and immediately before
+root persistence, then assigned to both fields. T063, API, Domain, and mappers never invoke this
+clock or supply/replace/overwrite either value. The equal immutable values are persisted, returned
+after commit confirmation, and returned on replay; rollback exposes neither. They are not
+PostgreSQL physical commit timestamps, are never queried or reconstructed after commit, and do not
+require `track_commit_timestamp`. Neither is a latency measurement source. Replay loads the
+original persisted representation and performs no clock call, identifier allocation, persisted
+canonical-value rebuild, or aggregate creation.
 
 Correlation initialization/validation time is included in request duration. Correlation identity
 never starts, stops, partitions, or otherwise changes a performance measurement.

@@ -177,14 +177,16 @@ substitute for the current analysis or T017/T018 implementation evidence.
   - Evidence: `spec.md` FR-013–FR-014/DR-016/DR-022; `data-model.md` §Payment;
     `reference-data-baseline.md` eight approved payment methods; `quickstart.md` §Fiscal, Monetary,
     and Boundary Vectors.
-- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing, separate
-  once-only in-transaction `createdAt`, rollback/non-physical-commit semantics, and replay-date/
-  timestamp semantics complete? [Clarity]
+- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing, one
+  T076-owned in-transaction clock invocation assigned equally to `createdAt`/`updatedAt`,
+  timestamp-free candidate, rollback/non-physical-commit semantics, and replay-date/timestamp
+  semantics complete? [Clarity]
   - Evidence: `spec.md` FR-006/DR-012; `plan.md` §Time Boundary;
     `operational-requirements.md` §Measurement Boundary; `quickstart.md` dynamic date.
-- [x] CHK036 Are text trimming, exact product/passport/foreign ASCII patterns, case/normalization,
-  limits, contact formats, control-character rejection, collection maxima, uniqueness, and order
-  semantics complete? [Coverage]
+- [x] CHK036 Are Application-only Stage-6 normalization, unchanged API handoff, zero downstream
+  normalization, exact product/passport/foreign ASCII patterns, canonical 300-code-point/
+  `CANONICAL_NAME_TOO_LONG` behavior, case/normalization, contact formats, control-character
+  rejection, collection maxima, uniqueness, and order semantics complete? [Coverage]
   - Evidence: `spec.md` FR-008–FR-010/FR-013/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
     `quickstart.md` §Strict Request Fields/Boundary Vectors.
 - [x] CHK037 Is every caller-supplied calculated field rejected consistently rather than ignored,

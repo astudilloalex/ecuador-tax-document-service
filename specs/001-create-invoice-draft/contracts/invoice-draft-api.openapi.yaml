@@ -28,7 +28,7 @@ paths:
         selects the published IVA rule appropriate to the product or transaction; this service
         does not classify products or determine legal eligibility. Observable processing precedence
         is payload size, Company context, correlation, idempotency-key presence/cardinality/
-        normalization/grammar, representation,
+        normalization/grammar, representation, Application-owned Stage 6 business-text
         normalization, local Company-scoped binding lookup, equivalent replay, idempotency
         conflict, Stage 10 independent business validation, Stage 11A deterministic monetary
         calculation, the exact Stage 11B order (range/overflow; discount-over-gross;
@@ -52,7 +52,13 @@ paths:
               $ref: '#/components/schemas/CreateInvoiceDraftRequest'
       responses:
         '201':
-          description: A new Invoice Draft and idempotency binding were committed.
+          description: >-
+            A new Invoice Draft and idempotency binding were committed. The Application-created,
+            timestamp-free InvoiceDraftCandidate was accepted by persistence; the persistence port
+            returned an internal PersistedInvoiceDraft, which the API mapped to the declared
+            InvoiceDraftResponse. Neither internal model is an HTTP representation. The response's
+            createdAt and updatedAt are the exact same Instant obtained from one
+            transactional-clock invocation.
           headers:
             X-Correlation-Id:
               $ref: '#/components/headers/CorrelationId'
@@ -65,7 +71,9 @@ paths:
         '200':
           description: >-
             An equivalent request returned the original committed Invoice Draft without
-            revalidating its emission date against the current Ecuadorian date.
+            revalidating its emission date against the current Ecuadorian date or invoking the
+            transactional clock. The originally persisted createdAt and updatedAt are returned
+            unchanged.
           headers:
             X-Correlation-Id:
               $ref: '#/components/headers/CorrelationId'
@@ -159,7 +167,9 @@ components:
         type: boolean
         const: false
     ReplayedResult:
-      description: Indicates that this response represents an equivalent replay.
+      description: >-
+        Indicates that this response represents an equivalent replay. Both originally persisted
+        timestamps are returned unchanged and the transactional clock is not invoked.
       required: true
       schema:
         type: boolean
@@ -177,7 +187,26 @@ components:
       additionalProperties: false
       description: >-
         Client-controlled inputs only. Company identifiers, including companyId, are forbidden in
-        this request schema and are accepted only through X-Company-Id.
+        this request schema and are accepted only through X-Company-Id. The API decodes HTTP/JSON,
+        rejects malformed representations, validates transport structure, and forwards decoded
+        business-text values unchanged. It does not normalize NFC, trim or collapse business
+        spaces, lowercase text, or derive canonicalName. At Stage 6, Application invokes
+        BusinessTextNormalizer exactly once for each supplied applicable value and zero times for
+        an absent optional value. canonicalName, createdAt, and updatedAt are server-derived and
+        are not request properties.
+      x-business-text-processing:
+        owner: Application
+        stage: 6
+        invocationCardinality: exactly once for each supplied applicable value; zero for absent optional values
+        wireSchemaScope: standard JSON Schema facets validate decoded JSON type and structure only
+        postNormalizationRules: documented by each field's x-application-stage-6 extension
+        generalTextOperationOrder:
+          - NFC_NORMALIZATION
+          - LEADING_TRAILING_U+0020_TRIM
+          - PROHIBITED_CODE_POINT_AND_WHITESPACE_VALIDATION
+          - DISPLAY_CODE_POINT_LENGTH_VALIDATION
+          - CANONICAL_NAME_DERIVATION_WHEN_APPLICABLE
+          - CANONICAL_NAME_CODE_POINT_LENGTH_VALIDATION_WHEN_APPLICABLE
       required:
         - emissionPointId
         - emissionDate
@@ -223,8 +252,11 @@ components:
           maxItems: 15
           default: []
           description: >-
-            Order is representation-only; persisted canonical names must be unique. canonicalName
-            is NFC, surrounding U+0020 trim, collapse U+0020 runs, then Java Locale.ROOT lowercase.
+            Order is representation-only; persisted canonical names must be unique. At Stage 6,
+            the Application normalizes and trims each supplied name once; within that same
+            per-name invocation, canonical derivation reuses the normalized display value,
+            collapses U+0020 runs, and lowercases with Java Locale.ROOT without a second NFC or
+            trim. The result must contain at most 300 Unicode code points and is never truncated.
           items:
             $ref: '#/components/schemas/AdditionalInformationInput'
 
@@ -239,49 +271,82 @@ components:
           description: Official SRI buyer-identification code from SRI-OFFLINE-2.32-TARGET-1.
         identification:
           type: string
-          minLength: 1
-          maxLength: 20
-          pattern: '^[A-Za-z0-9]{1,20}$'
+          x-application-stage-6:
+            owner: Application
+            trim: ASCII_SP_HTAB
+            unicodeNormalization: none
+            normalizedPatternForTypes06And08: '^[A-Za-z0-9]{1,20}$'
+            normalizedMinLength: 1
+            normalizedMaxLength: 20
+            countingUnit: ASCII_CHARACTERS
           description: >-
             Validated by the selected approved baseline strategy: 04 is exactly 13 ASCII digits,
             05 is exactly 10 ASCII digits, 06 and 08 match case-sensitive ASCII
-            ^[A-Za-z0-9]{1,20}$, and 07 is exactly 9999999999999. For 06/08, leading/trailing ASCII
-            SP/HTAB is trimmed once before validation; internal characters and case are preserved,
-            with no case folding or Unicode normalization. The schema pattern describes the
-            normalized value. Valid examples include A1234567 and EC9Z; invalid examples include
-            A-123, A 123, Á123, empty, and 21 characters. This feature applies no RUC or
-            identity-card checksum.
+            ^[A-Za-z0-9]{1,20}$, and 07 is exactly 9999999999999. For 06/08, the Application trims
+            leading/trailing ASCII SP/HTAB once before validation; internal characters and case
+            are preserved, with no case folding or Unicode normalization. The API forwards the
+            decoded value unchanged. The standard wire schema intentionally constrains only the
+            decoded string type; x-application-stage-6 documents the post-trim executable rule so
+            Stage 5 cannot preempt Application validation. Valid examples include A1234567 and
+            EC9Z; invalid examples include A-123, A 123, Á123, empty, and 21 characters. This
+            feature applies no RUC or identity-card checksum.
         legalName:
           type: string
-          minLength: 1
-          maxLength: 300
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            General single-line Unicode text: normalize to NFC once, trim surrounding U+0020,
-            preserve internal punctuation/U+0020 and case, then count 1-300 Unicode code points.
-            Reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP, and every separator other than
-            U+0020. Assigned emoji category So is allowed within the length/format boundary.
+            General single-line Unicode text. At Application Stage 6 only, normalize to NFC once,
+            trim surrounding U+0020, reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP,
+            and every separator other than U+0020, then validate 1-300 Unicode code points while
+            preserving internal punctuation/U+0020 and case. Assigned emoji category So is allowed
+            within the length/format boundary. The API forwards the decoded value unchanged; standard
+            wire-schema length facets are deliberately absent because length is evaluated only
+            after the Application transformation.
         address:
           type: string
-          minLength: 1
-          maxLength: 300
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            Optional general single-line Unicode text governed by the legalName normalization,
-            prohibited-code-point, U+0020, case, and Unicode-code-point length policy.
+            Optional general single-line Unicode text governed by the Application-owned legalName
+            normalization, prohibited-code-point, U+0020, case, and Unicode-code-point length
+            policy. The API forwards the decoded value unchanged.
         email:
           type: string
-          format: email
-          maxLength: 254
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedFormat: email
+            normalizedMaxCodePoints: 254
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            Optional email after the one general-text NFC/U+0020 boundary pass; prohibited Unicode
-            categories/separators are rejected and length is Unicode code points.
+            Optional email after the one Application-owned Stage 6 general-text NFC/U+0020 pass;
+            prohibited Unicode categories/separators are rejected and length is Unicode code
+            points. The API forwards the decoded value unchanged.
         telephone:
           type: string
-          minLength: 7
-          maxLength: 20
-          pattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedPattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+            normalizedMinCodePoints: 7
+            normalizedMaxCodePoints: 20
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            Optional value after the general boundary pass; only ASCII digits, plus, parentheses,
-            hyphen, and U+0020 remain valid, with 7-15 digits and at most 20 code points.
+            Optional value after the Application-owned Stage 6 general-text pass; only ASCII
+            digits, plus, parentheses, hyphen, and U+0020 remain valid, with 7-15 digits and at
+            most 20 code points. The API forwards the decoded value unchanged.
 
     InvoiceLineInput:
       type: object
@@ -290,24 +355,36 @@ components:
       properties:
         productCode:
           type: string
-          minLength: 1
-          maxLength: 25
-          pattern: '^[A-Za-z0-9]{1,25}$'
+          x-application-stage-6:
+            owner: Application
+            trim: ASCII_SP_HTAB
+            unicodeNormalization: none
+            normalizedPattern: '^[A-Za-z0-9]{1,25}$'
+            normalizedMinLength: 1
+            normalizedMaxLength: 25
+            countingUnit: ASCII_CHARACTERS
           description: >-
-            Case-sensitive ASCII letters and digits only. Leading/trailing ASCII SP/HTAB is
-            trimmed once before validation; internal characters and case are preserved, with no
-            case folding or Unicode normalization. The schema pattern describes the normalized
-            value. ABC123 and sku9 are valid; ABC-123, ABC 123, ÁBC1, empty, and 26 characters are
-            invalid.
+            Case-sensitive ASCII letters and digits only. The Application trims leading/trailing
+            ASCII SP/HTAB once before validation; internal characters and case are preserved, with
+            no case folding or Unicode normalization. The API forwards the decoded value unchanged.
+            The standard wire schema intentionally constrains only the decoded string type;
+            x-application-stage-6 carries the exact post-trim pattern and bounds. ABC123 and sku9
+            are valid; ABC-123, ABC 123, ÁBC1, empty, and 26 characters are invalid.
         description:
           type: string
-          minLength: 1
-          maxLength: 300
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            General single-line Unicode text: NFC once, trim surrounding U+0020, preserve internal
-            punctuation/U+0020 and case, count Unicode code points, and reject Cc/Cf/Cs/Co/Cn,
-            U+2028/U+2029, tab, CR, LF, NBSP, and separators other than U+0020. Assigned emoji So is
-            allowed within 1-300 code points.
+            General single-line Unicode text. At Application Stage 6 only, normalize to NFC once,
+            trim surrounding U+0020, reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP,
+            and separators other than U+0020, then validate 1-300 Unicode code points while
+            preserving internal punctuation/U+0020 and case. Assigned emoji So is allowed within
+            that boundary. The API forwards the decoded value unchanged.
         quantity:
           $ref: '#/components/schemas/PositiveSixScaleDecimal'
         unitPrice:
@@ -348,20 +425,42 @@ components:
       properties:
         name:
           type: string
-          minLength: 1
-          maxLength: 300
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            canonicalCollapse: consecutive U+0020 to one U+0020
+            canonicalCaseMapping: Java Locale.ROOT lowercase
+            canonicalMaxCodePoints: 300
+            canonicalOverflowCode: CANONICAL_NAME_TOO_LONG
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            General single-line Unicode display text under the exact NFC/U+0020/prohibited-category
-            policy. Persisted canonicalName is computed once as NFC, surrounding U+0020 trim,
-            collapse U+0020 runs, then Java Locale.ROOT lowercase; database locale does not
-            recalculate it.
+            General single-line Unicode display text. At Application Stage 6,
+            BusinessTextNormalizer is invoked exactly once for this supplied value: NFC normalization,
+            surrounding U+0020 trim, prohibited-category/whitespace validation, and display length
+            validation precede canonicalName derivation. From that already NFC-normalized and
+            trimmed display value—without a second NFC or trim—canonicalName collapses U+0020 runs,
+            lowercases with Java Locale.ROOT, and must contain at most 300 Unicode code points. It
+            is never truncated and the database does not recalculate it. Lowercase expansion can
+            therefore reject an otherwise valid display value; 150 repetitions of U+0130 produce
+            300 canonical code points and are valid, while 151 produce 302 and yield nested
+            CANONICAL_NAME_TOO_LONG with field, maximum 300, counting unit Unicode code points,
+            and validation stage canonicalization. The API forwards the decoded name unchanged.
         value:
           type: string
-          minLength: 1
-          maxLength: 300
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
           description: >-
-            General single-line Unicode display text under the exact NFC/U+0020/prohibited-category,
-            case-sensitive, Unicode-code-point length policy; assigned emoji So is allowed.
+            General single-line Unicode display text normalized exactly once by Application Stage
+            6 under the NFC/U+0020/prohibited-category, case-sensitive, Unicode-code-point length
+            policy; assigned emoji So is allowed. The API forwards the decoded value unchanged.
 
     InvoiceDraftResponse:
       type: object
@@ -429,7 +528,7 @@ components:
           type: array
           maxItems: 15
           items:
-            $ref: '#/components/schemas/AdditionalInformationInput'
+            $ref: '#/components/schemas/AdditionalInformationResult'
         subtotalBeforeTaxes:
           $ref: '#/components/schemas/MoneyDecimal'
         totalDiscount:
@@ -449,15 +548,71 @@ components:
             commit, requires no track_commit_timestamp, and does not determine the emission date.
             Rollback never exposes it as a created resource. The transactional persistence
             operation is the sole persistence-clock caller and the application use case neither
-            supplies nor overwrites this value.
+            supplies nor overwrites this value. On initial creation, updatedAt is assigned this
+            exact same java.time.Instant.
           examples: ['2026-07-15T23:45:12.345Z']
         updatedAt:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$'
+          description: >-
+            On initial creation, this is the exact same immutable java.time.Instant as createdAt,
+            assigned from the persistence adapter's single clock invocation and persisted
+            atomically. Application, Domain, API, and mappers do not generate it. Equivalent
+            replay returns the originally persisted value without invoking the clock; rollback
+            exposes neither timestamp as a created resource.
+          examples: ['2026-07-15T23:45:12.345Z']
 
     BuyerResult:
-      allOf:
-        - $ref: '#/components/schemas/BuyerInput'
+      type: object
+      additionalProperties: false
+      required: [identificationType, identification, legalName]
+      properties:
+        identificationType:
+          type: string
+          enum: ['04', '05', '06', '07', '08']
+        identification:
+          type: string
+          minLength: 1
+          maxLength: 20
+          pattern: '^[A-Za-z0-9]{1,20}$'
+          description: Persisted type-valid identification value after Application validation.
+        legalName:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
+        address:
+          type: string
+          minLength: 1
+          maxLength: 300
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        telephone:
+          type: string
+          minLength: 7
+          maxLength: 20
+          pattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+
+    AdditionalInformationResult:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: >-
+            Persisted NFC/U+0020-normalized display name whose server-side canonicalName is at most
+            300 Unicode code points; canonicalName is not exposed.
+        value:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
 
     InvoiceLineResult:
       type: object
@@ -689,9 +844,40 @@ components:
           type: array
           description: >-
             Safe validation details. BUSINESS_VALIDATION_FAILED uses MONETARY_RANGE_EXCEEDED for
-            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow.
+            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow,
+            and CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code
+            points.
           items:
             $ref: '#/components/schemas/Violation'
+      allOf:
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+          then:
+            required: [violations]
+            properties:
+              status:
+                const: 422
+              violations:
+                minItems: 1
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      const: CANONICAL_NAME_TOO_LONG
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
 
     Violation:
       type: object
@@ -703,7 +889,40 @@ components:
           pattern: '^[A-Z][A-Z0-9_]*$'
         field:
           type: string
-          description: Safe request field path; never contains the rejected value.
+          minLength: 1
+          description: >-
+            Safe original request field path; never contains the rejected value. For
+            CANONICAL_NAME_TOO_LONG this identifies the additional-information name that produced
+            the canonical value.
+        maximum:
+          type: integer
+          minimum: 1
+          description: Maximum permitted length when the violation is length-related.
+        countingUnit:
+          type: string
+          enum: [UNICODE_CODE_POINTS]
+          description: Unit used for a Unicode length violation.
+        validationStage:
+          type: string
+          enum: [CANONICALIZATION]
+          description: Deterministic validation stage that produced the violation.
+      allOf:
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: CANONICAL_NAME_TOO_LONG
+          then:
+            required: [maximum, countingUnit, validationStage]
+            properties:
+              field:
+                pattern: '^additionalInformation\[[0-9]+\]\.name$'
+              maximum:
+                const: 300
+              countingUnit:
+                const: UNICODE_CODE_POINTS
+              validationStage:
+                const: CANONICALIZATION
 
   responses:
     BadRequest:
@@ -746,10 +965,12 @@ components:
     ValidationFailure:
       description: >-
         PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. Numeric-envelope breaches use
-        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Stage 10 contains only
-        calculation-independent validation; Stage 11A calculates monetary values; Stage 11B then
-        checks range/overflow, discount-over-gross, final-consumer calculated-total limit,
-        total-dependent payment shape/positivity, and exact reconciliation in that order.
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Application Stage 6
+        post-canonicalization overflow uses nested CANONICAL_NAME_TOO_LONG and reports the original
+        request field, maximum 300, Unicode-code-point counting, and canonicalization stage. Stage
+        10 contains only calculation-independent validation; Stage 11A calculates monetary values;
+        Stage 11B then checks range/overflow, discount-over-gross, final-consumer calculated-total
+        limit, total-dependent payment shape/positivity, and exact reconciliation in that order.
       headers:
         X-Correlation-Id:
           $ref: '#/components/headers/CorrelationId'
@@ -757,6 +978,23 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            canonicalNameTooLong:
+              summary: Locale.ROOT lowercase expansion exceeds the canonical-name limit
+              value:
+                type: https://ecuador-tax-document-service.invalid/problems/business-validation-failed
+                title: Business validation failed
+                status: 422
+                code: BUSINESS_VALIDATION_FAILED
+                detail: One or more business fields are invalid.
+                instance: https://ecuador-tax-document-service.invalid/api/v1/invoice-drafts
+                correlationId: 6c45d352-1ac4-4cb8-84d3-2634611e7cb7
+                violations:
+                  - code: CANONICAL_NAME_TOO_LONG
+                    field: additionalInformation[0].name
+                    maximum: 300
+                    countingUnit: UNICODE_CODE_POINTS
+                    validationStage: CANONICALIZATION
     PersistenceUnavailable:
       description: PERSISTENCE_UNAVAILABLE; retry with the same Company, key, and content.
       headers:

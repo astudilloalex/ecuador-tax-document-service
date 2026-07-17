@@ -36,9 +36,10 @@ complete successfully.
   `requestCreationInstant` once at the request boundary and derive the expected date in
   `America/Guayaquil`. That date remains fixed across midnight and commit. `createdAt` is the UTC
   instant captured exactly once inside the persistence transaction, after all business validations
-  have succeeded and immediately before the new Invoice Draft is persisted. The value becomes
-  externally observable only after transaction commit is confirmed, and equivalent replay returns
-  that originally persisted value without current-date revalidation.
+  have succeeded and immediately before the new Invoice Draft is persisted. For initial creation,
+  `updatedAt` is assigned that exact same `java.time.Instant`. Both values become externally
+  observable only after transaction commit is confirmed, and equivalent replay returns both
+  originally persisted values without current-date revalidation or another clock invocation.
 - Q: What reference-data baseline is required before tasks? → A: Identification types, IVA rules,
   and payment methods use the approved `SRI-OFFLINE-2.32-TARGET-1` baseline in
   `reference-data-baseline.md`. Tax-rule and payment-method identifiers are deterministic UUIDv5
@@ -116,11 +117,14 @@ complete successfully.
   uses case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`; passport (`06`) and foreign identification
   (`08`) use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`. Each field permits one leading/trailing
   ASCII SP/HTAB trim before validation and no other normalization.
-- Q: What policy governs general human-readable text? → A: Normalize to NFC once at the
-  API/application boundary; reject Unicode categories `Cc`, `Cf`, `Cs`, `Co`, and `Cn`, plus
+- Q: What policy governs general human-readable text? → A: At the beginning of FR-041 Stage 6,
+  Application alone normalizes each applicable value to NFC exactly once; reject Unicode categories
+  `Cc`, `Cf`, `Cs`, `Co`, and `Cn`, plus
   `U+2028` and `U+2029`; permit only ASCII SPACE `U+0020` as spacing inside canonical single-line
   text; trim surrounding `U+0020`; preserve internal punctuation and display case; and count
-  Unicode code points after normalization and trimming. Field-specific ASCII rules remain stricter.
+  Unicode code points after normalization and trimming. API only decodes and validates transport
+  representation; Domain and Infrastructure receive normalized values. Field-specific ASCII rules
+  remain stricter.
 - Q: Which date governs payment-method validity? → A: The invoice `emissionDate`. A method is valid
   only when it exists, is active, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
   emissionDate <= effectiveTo`; both finite boundaries are inclusive.
@@ -130,8 +134,35 @@ complete successfully.
   transport-neutral and receive deadline context only for cooperative budget checks.
 - Q: Who invokes the persistence clock? → A: The transactional persistence operation represented
   by T076 invokes the injected clock exactly once inside its active transaction after all business
-  validation and immediately before root persistence. Use-case orchestration never invokes,
-  supplies, replaces, or overwrites `createdAt`.
+  validation and immediately before root persistence, assigning the exact same returned
+  `java.time.Instant` to `createdAt` and `updatedAt`. Use-case orchestration never invokes the clock
+  or supplies, replaces, or overwrites either timestamp.
+
+### Session 2026-07-16
+
+- Q: Which layer owns business-text normalization? → A: Application is the sole owner. At the
+  beginning of FR-041 Stage 6 it invokes one `BusinessTextNormalizer` exactly once per applicable
+  value to perform NFC, surrounding `U+0020` trim, prohibited-code-point/whitespace validation,
+  display-length validation, `canonicalName` derivation, and post-canonicalization length
+  validation. API only decodes and validates transport representation; Domain and Infrastructure
+  never normalize again.
+- Q: What crosses the persistence boundary before and after creation? → A: Application produces a
+  fully validated and calculated `InvoiceDraftCandidate` containing no timestamps, persistence
+  entities, HTTP information, or commit metadata. The persistence port accepts that candidate and
+  returns a `PersistedInvoiceDraft` with the final identifier, response-relevant persisted business
+  values, `createdAt`, and `updatedAt`; provisional, null, zero, placeholder, or fabricated
+  timestamps are prohibited.
+- Q: What are the initial and replay timestamp semantics? → A: The persistence adapter invokes the
+  transactional clock once inside the active transaction immediately before root persistence and
+  assigns the exact same `java.time.Instant` to `createdAt` and `updatedAt`. It persists and returns
+  both atomically. Replay returns both original values without another clock invocation; rollback
+  exposes neither as a created resource.
+- Q: What limit applies after `canonicalName` transformation? → A: After NFC, approved trim,
+  internal `U+0020` collapse, and Java `Locale.ROOT` lowercase, Application counts Unicode code
+  points and rejects more than 300 without truncation. The stable violation code is
+  `CANONICAL_NAME_TOO_LONG` and identifies the original field, maximum `300`, counting unit
+  `UNICODE_CODE_POINTS`, and validation stage `CANONICALIZATION`; vectors include `U+0130`
+  lowercase expansion.
 
 ## Scope and Evidence *(mandatory)*
 
@@ -288,9 +319,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
    emission-point identifier, valid buyer data, at least one valid line, and payments equal to the
    calculated grand total, **when** the internal billing client creates the draft, **then** exactly
    one complete draft is persisted with status `DRAFT`, the normalized Company UUID, a unique draft
-   identifier, calculated amounts, and the immutable `createdAt` captured once inside the
-   transaction after successful business validation and immediately before persistence; the same
-   value is returned only after commit confirmation.
+   identifier, calculated amounts, and immutable `createdAt` and `updatedAt` values equal to the
+   single `java.time.Instant` captured inside the transaction after successful business validation
+   and immediately before persistence; both are returned only after commit confirmation.
 2. **Given** a line with quantity `2`, unit price `10.00`, discount `5.00`, and the approved IVA
    15% rule selected solely as a mathematical rounding vector, **when** the draft is calculated,
    **then** gross amount is `20.00`, net amount is `15.00`, tax is `2.25`, and that line contributes
@@ -356,8 +387,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     **then** the request is rejected and no draft is persisted.
 20. **Given** a successfully committed creation command, **when** the same Company UUID,
     idempotency key, and semantically equivalent normalized business content are submitted
-    again through the current `X-Company-Id` header, **then** the original draft is returned and no
-    new draft is created or modified.
+    again through the current `X-Company-Id` header, **then** the original draft, `createdAt`, and
+    `updatedAt` are returned, no clock is invoked, and no new draft is created or modified.
 21. **Given** a scoped idempotency key already bound by a successful command, **when** the same
     Company UUID and key are submitted with different business content, **then** a stable
     `IDEMPOTENCY_CONFLICT` error is returned and no draft is created or modified.
@@ -391,10 +422,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     15 additional-information entries, **when** draft creation is attempted, **then** the request is
     rejected and no draft or child data is persisted.
 31. **Given** otherwise valid text values exactly at their approved maximum lengths and formats,
-    **when** draft creation is attempted, **then** general text is accepted after one NFC pass and
-    surrounding `U+0020` trimming with length counted in Unicode code points; `productCode` and
-    buyer types `06`/`08` instead satisfy their stricter exact case-sensitive ASCII expressions
-    after their one surrounding SP/HTAB trim, without case folding or Unicode normalization.
+    **when** draft creation is attempted, **then** API forwards the decoded business values without
+    normalization and Application accepts general text only after its one Stage-6 NFC pass,
+    surrounding `U+0020` trim, prohibited-code-point validation, and Unicode-code-point length
+    check; `productCode` and buyer types `06`/`08` instead satisfy their stricter exact
+    case-sensitive ASCII expressions after their one Application-owned surrounding SP/HTAB trim,
+    without case folding or Unicode normalization; an additional-information display name is
+    accepted at its own 300-code-point maximum only when its derived `canonicalName` also remains
+    at or below 300 code points, with expansion governed by scenario 70.
 32. **Given** a product code, description, buyer name, contact field, additional-information name or
     value, or idempotency key exceeding its maximum length, **when** draft creation is attempted,
     **then** the applicable stable validation error is returned—`IDEMPOTENCY_KEY_INVALID` for the
@@ -477,9 +512,10 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 51. **Given** `requestCreationInstant` is captured immediately before midnight in
     `America/Guayaquil` and the supplied emission date equals the date derived from that instant,
     **when** validation succeeds before midnight but commit completes after midnight, **then** the
-    original derived emission date remains accepted and `createdAt` is the separate UTC Instant
-    captured once inside the persistence transaction after all business validations succeeded and
-    immediately before the new draft was persisted; it is not the physical commit timestamp.
+    original derived emission date remains accepted and `createdAt` and `updatedAt` are the same
+    separate UTC Instant captured once inside the persistence transaction after all business
+    validations succeeded and immediately before the new draft was persisted; neither is the
+    physical commit timestamp.
 52. **Given** a committed draft is replayed on a later Ecuadorian civil date with the same Company,
     key, and equivalent content, **when** the binding is resolved, **then** the original draft and
     emission date are returned without revalidating the emission date against the replay date.
@@ -518,7 +554,8 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
     internal characters, **when** the API validates it, **then** the API trims the surrounding
     ASCII SP/HTAB exactly once, preserves internal characters and case, validates the
     normalized 1–128-character value, and uses that identical normalized value for idempotency
-    lookup, hashing, and persistence; replay returns the original persisted `createdAt`.
+    lookup, hashing, and persistence; replay returns the original persisted `createdAt` and
+    `updatedAt` without invoking the transactional clock.
 62. **Given** a payment method whose `effectiveFrom` equals the invoice `emissionDate`, **when** it
     exists and is active, **then** it is accepted because the lower boundary is inclusive.
 63. **Given** a payment method with finite `effectiveTo` equal to the invoice `emissionDate`,
@@ -537,6 +574,23 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 68. **Given** an active payment method whose date interval excludes the invoice `emissionDate`,
     **when** independent business validation runs, **then** it is rejected without consulting the
     server date, request arrival time, transaction time, or `createdAt`.
+69. **Given** syntactically decodable JSON containing applicable raw business-text values, **when**
+    request processing reaches FR-041 Stage 6, **then** API has forwarded those values without NFC,
+    trimming, space collapse, lowercase, or `canonicalName` calculation; Application invokes one
+    `BusinessTextNormalizer` exactly once for each applicable value, and Domain and Infrastructure
+    receive only the resulting normalized values without repeating any transformation.
+70. **Given** an additional-information display name that contains no more than 300 Unicode code
+    points but whose Java `Locale.ROOT` lowercase result exceeds 300 code points—for example, 300
+    occurrences of `U+0130`, which expand to `i` plus `U+0307`—**when** Stage-6 canonicalization
+    runs, **then** the request is rejected without truncation or persistence using
+    `BUSINESS_VALIDATION_FAILED` with violation `CANONICAL_NAME_TOO_LONG`, the original request field,
+    maximum `300`, counting unit `UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`.
+71. **Given** a logically new command that has completed Stage 10, Stage 11A, and Stage 11B,
+    **when** Application delegates persistence, **then** it supplies an `InvoiceDraftCandidate`
+    containing no timestamp; the persistence adapter captures one Instant inside the active
+    transaction, assigns it to both timestamps, persists atomically, and returns a
+    `PersistedInvoiceDraft`. A rollback exposes neither timestamp and no null, zero, placeholder,
+    provisional, or fabricated timestamp crosses the boundary.
 
 ### Edge Cases
 
@@ -642,7 +696,14 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - General human-readable text MUST follow the executable NFC/U+0020 policy in FR-035 and DR-019;
   fields with an explicit stricter ASCII rule follow that rule instead. A required or supplied
   optional value that is empty after its specified normalization MUST be rejected.
-- Prohibited Unicode categories and separators in FR-035 MUST be rejected before domain entry.
+- API MUST forward decoded business text without normalization. Prohibited Unicode categories and
+  separators in FR-035 MUST be rejected by exactly one Application Stage-6 normalizer invocation
+  for each supplied applicable value before domain entry; an absent optional value causes no
+  invocation. Domain and Infrastructure MUST NOT repeat any value's pass.
+- An additional-information display name that passes its own 300-code-point limit MAY still fail
+  after `Locale.ROOT` lowercase expansion. Application MUST reject a derived `canonicalName` over
+  300 Unicode code points with `CANONICAL_NAME_TOO_LONG`; it MUST NOT truncate it or let PostgreSQL
+  discover the overflow as a persistence failure.
 
 ## Requirements *(mandatory)*
 
@@ -740,28 +801,40 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-015**: Optional additional information MUST contain no more than 15 named textual entries.
   Each entry's display name and value MUST contain 1 to 300 Unicode code points under FR-035.
   Names MUST be unique within the draft by the persisted `canonicalName` produced exactly as
-  DR-019 defines; database locale MUST NOT recalculate it.
+  DR-019 defines. After the complete canonical transformation, `canonicalName` MUST contain 1 to
+  300 Unicode code points. Application MUST reject a longer derived value during Stage 6 using
+  `BUSINESS_VALIDATION_FAILED` with violation `CANONICAL_NAME_TOO_LONG`; it MUST NOT truncate it,
+  fingerprint it, send it to Domain, or attempt persistence. Database locale MUST NOT recalculate it.
 - **FR-016**: The invoice currency MUST be USD.
 - **FR-017**: A successfully created record MUST have internal target status `DRAFT`. That status
   MUST NOT be represented as an official SRI status or evidence of fiscal issuance.
 - **FR-018**: A successfully created draft MUST receive a unique draft identifier unrelated to an
   official sequential number, access key, or authorization number.
-- **FR-019**: Creation and last-modification timestamps MUST be returned as unambiguous instants.
-  `createdAt` MUST be the UTC instant captured exactly once inside the persistence transaction,
+- **FR-019**: `createdAt` and `updatedAt` MUST be returned as unambiguous UTC instants. For initial
+  creation, `updatedAt` MUST equal `createdAt`, and both MUST use the exact same
+  `java.time.Instant` captured exactly once inside the persistence transaction,
   after all business validations have succeeded and immediately before the new Invoice Draft is
-  persisted. The value becomes externally observable only after the transaction commit has been
-  confirmed. It is not the PostgreSQL physical commit timestamp; the service MUST NOT query or
-  reconstruct a timestamp after commit and PostgreSQL `track_commit_timestamp` MUST NOT be
-  required. The same immutable `java.time.Instant` value MUST be persisted and returned. Rollback
-  means that value is never exposed as a created resource, and idempotent replay MUST return the
-  originally persisted `createdAt`. The application clock abstraction MUST remain injectable and
+  persisted. Both values become externally observable only after the transaction commit has been
+  confirmed. Neither value is the PostgreSQL physical commit timestamp; the service MUST NOT query
+  or reconstruct either timestamp after commit and PostgreSQL `track_commit_timestamp` MUST NOT be
+  required. The same immutable `java.time.Instant` value MUST be persisted in and returned as both
+  fields. Rollback means neither value is exposed as a created resource, and idempotent replay MUST
+  return the originally persisted `createdAt` and `updatedAt` without invoking the clock again. The
+  application clock abstraction MUST remain injectable and
   deterministic for tests. The transactional persistence operation represented by T076 is the sole
   persistence-clock invocation owner; it calls once at the defined point and use-case orchestration
-  neither calls that clock nor supplies, replaces, or overwrites `createdAt`. `createdAt` MUST NOT
-  derive the accepted emission date, and the
-  last-modification timestamp MUST NOT precede it.
+  neither calls that clock nor supplies, replaces, or overwrites either timestamp. Neither timestamp
+  derives the accepted emission date. Update behavior is outside this feature; replay MUST NOT
+  mutate `updatedAt`. Application, Domain, API, and mapping components MUST NOT generate either
+  timestamp; mapping components only copy values supplied by `PersistedInvoiceDraft`.
 - **FR-020**: The complete draft, its invoice lines, tax selections and calculated amounts,
-  payments, and additional information MUST be persisted as one all-or-nothing outcome.
+  payments, and additional information MUST be persisted as one all-or-nothing outcome. After all
+  validation and calculation, Application MUST produce an `InvoiceDraftCandidate` containing all
+  approved business data and no `createdAt`, `updatedAt`, database entity, HTTP information, or
+  commit metadata. The persistence port MUST accept that candidate and, only after successful
+  commit, return a `PersistedInvoiceDraft` containing the final identifier, response-relevant
+  persisted business values, `createdAt`, and `updatedAt`. Null, zero, placeholder, provisional, or
+  fabricated timestamps are prohibited.
 - **FR-021**: A request-contract, business-validation, reference-data, or deadline failure confirmed
   before persistence begins, and a persistence failure confirmed fully rolled back, MUST leave no
   draft, child data, or idempotency binding. This zero-state guarantee MUST NOT be asserted while a
@@ -770,8 +843,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **FR-022**: A successful response MUST include the draft identifier, `DRAFT` status, captured
   normalized Company identifier, opaque emission-point identifier, buyer information, emission
   date, lines, payments, additional information, every calculated line amount, grouped tax totals,
-  invoice totals, and both timestamps. It MUST NOT include a Company, Issuer, establishment, or
-  emission-point master-data snapshot.
+  invoice totals, `createdAt`, and `updatedAt`. For initial creation and every idempotent replay,
+  both timestamps MUST be the originally persisted values and MUST be equal. It MUST NOT include a
+  Company, Issuer, establishment, or emission-point master-data snapshot.
 - **FR-023**: Draft creation MUST NOT reserve an official sequential number; generate an SRI access
   key, XML, signature, PDF, or RIDE; load a certificate; call the SRI; publish an asynchronous
   integration job or notification event; or send a notification. This prohibition does not exclude
@@ -851,24 +925,34 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   capability, authenticate or authorize the client, validate current Company, Issuer, or
   emission-point state, refresh external data, or apply current Company data. An idempotency key
   MUST NOT be treated as an authentication or authorization credential. Replay MUST NOT revalidate
-  the original emission date against the current Ecuadorian civil date.
+  the original emission date against the current Ecuadorian civil date, invoke the transactional
+  clock, or modify the originally persisted equal `createdAt` and `updatedAt` values.
 - **FR-034**: The invoice-draft capability MUST own its idempotency binding and MUST NOT delegate
   that responsibility to a Company capability, gateway, BFF, or other external service.
 - **FR-035**: Buyer legal name MUST contain 1 to 300 Unicode code points. Unless a field has a
   stricter approved rule, every human-readable single-line text input MUST be interpreted as
-  Unicode and normalized to NFC exactly once at the API/application boundary. That boundary MUST
-  reject code points in Unicode categories `Cc`, `Cf`, `Cs`, `Co`, and `Cn`; reject line separator
+  Unicode. API MUST only decode HTTP/JSON, reject malformed representations, validate transport
+  structure, and forward decoded business values unchanged; it MUST NOT perform NFC normalization,
+  business-text trimming, internal-space collapse, lowercase conversion, or `canonicalName`
+  calculation. At the beginning of FR-041 Stage 6, Application MUST invoke one
+  `BusinessTextNormalizer` exactly once for each applicable value. That invocation MUST normalize
+  to NFC, trim leading and trailing `U+0020`, reject code points in Unicode categories `Cc`, `Cf`,
+  `Cs`, `Co`, and `Cn`; reject line separator
   `U+2028` and paragraph separator `U+2029`; and accept only ASCII SPACE `U+0020` as spacing within
   canonical single-line text. Tabs, carriage returns, line feeds, non-breaking spaces, and every
-  other Unicode separator MUST be rejected. Leading and trailing `U+0020` MUST be trimmed; internal
-  punctuation and internal `U+0020` runs MUST otherwise remain unchanged for display values.
+  other Unicode separator MUST be rejected. Internal punctuation and internal `U+0020` runs MUST
+  otherwise remain unchanged for display values.
   Length MUST be counted in Unicode code points after NFC normalization and trimming. Display case
   MUST be preserved and comparison MUST be case-sensitive unless a field-specific rule explicitly
   says otherwise. A required or supplied optional value empty after that processing MUST be
   rejected without persistence. Emoji whose assigned code point is not in a prohibited category
   (for example `U+1F600`, category `So`) is accepted when the field's length and format allow it.
+  When the field requires `canonicalName`, the same invocation MUST derive it and validate its
+  post-canonicalization length under DR-019. After Stage 6, Domain and Infrastructure MUST receive
+  already normalized values and MUST NOT normalize them again.
   Product code and buyer-identification fields in the Executable ASCII Repertoires table override
-  this general policy with their stricter rules.
+  this general policy with their stricter rules; their permitted one-time SP/HTAB trim is likewise
+  Application-owned rather than an API transformation.
 - **FR-036**: Create Invoice Draft MUST NOT call a Company Service or introduce a Company-context
   port, client, repository, entity, validation or authorization adapter, eligibility lookup, status
   cache, master-data replica, direct Company-database access, cross-service foreign key, shared
@@ -901,8 +985,15 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
   3. `X-Correlation-Id` validation;
   4. `Idempotency-Key` presence, parsed cardinality, one-time ASCII SP/HTAB trimming, normalized
      grammar validation, and the FR-027 stable error codes;
-  5. request representation and unknown/prohibited-property validation;
-  6. normalized business-content generation under FR-035/DR-019;
+  5. API-owned request representation and unknown/prohibited-property validation, with decoded
+     business values forwarded without normalization;
+  6. **Application-owned business-text normalization**: at the beginning of this stage invoke one
+     `BusinessTextNormalizer` exactly once per applicable value; perform NFC normalization,
+     leading/trailing `U+0020` trim, prohibited-category/whitespace validation, display-value
+     Unicode-code-point length validation, `canonicalName` derivation, and post-canonicalization
+     1–300-code-point validation; then generate normalized business content under FR-035/DR-019.
+     `CANONICAL_NAME_TOO_LONG` is selected here before fingerprinting, lookup, Domain entry, or
+     persistence;
   7. local Company-scoped idempotency lookup;
   8. equivalent binding returns the original persisted draft;
   9. different-content binding returns `IDEMPOTENCY_CONFLICT`;
@@ -925,7 +1016,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
       5. exact payment-sum reconciliation against the calculated invoice total; and
       6. any future calculated-value limit or invariant added by this feature, only after an
          approved artifact amendment places it deterministically in this list; and
-  12. atomic aggregate and idempotency-binding persistence.
+  12. construct the timestamp-free `InvoiceDraftCandidate`; atomically persist the aggregate and
+      idempotency binding; and return the committed `PersistedInvoiceDraft` containing the one
+      persistence-clock Instant as both `createdAt` and `updatedAt`.
 
   Stage 10 MUST NOT reject a structurally valid discount merely because it may exceed a not-yet-
   calculated gross amount, apply a final-consumer total threshold, or reconcile payments. Stage 11B
@@ -1052,22 +1145,23 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **DR-012**: The request boundary MUST capture `requestCreationInstant` exactly once and derive the
   expected date-only Ecuadorian civil date using `America/Guayaquil`. That expected date MUST remain
   fixed through validation and commit, including when commit crosses midnight. Separately,
-  `createdAt` MUST be the UTC `java.time.Instant` captured exactly once inside the persistence
+  `createdAt` and `updatedAt` MUST be the same UTC `java.time.Instant` captured exactly once inside the persistence
   transaction after all business validations have succeeded and immediately before the new Invoice
-  Draft is persisted. That same immutable value MUST be persisted and returned only after commit
+  Draft is persisted. That same immutable value MUST be assigned to both root timestamp fields and
+  to every persistence record requiring the draft creation time, then returned only after commit
   confirmation. It is not PostgreSQL's physical commit timestamp; no post-commit timestamp query or
-  reconstruction and no `track_commit_timestamp` setting is permitted or required. Rollback never
-  exposes it as a created resource, and equivalent replay returns the originally persisted value.
+  reconstruction and no `track_commit_timestamp` setting is permitted or required. Rollback exposes
+  neither root timestamp as a created resource, and equivalent replay returns both originally
+  persisted values without another clock invocation.
   The transactional persistence operation is the sole persistence-clock invocation owner. It MUST
   invoke the injected clock exactly once inside the active transaction at that defined point and
-  use the same returned `java.time.Instant` for every persistence record that requires the draft
-  creation timestamp. Use-case orchestration MUST NOT invoke the persistence clock, calculate,
-  supply, replace, or overwrite `createdAt`; no second persistence-clock invocation is permitted for
-  one creation attempt. The injectable clock abstraction MUST support deterministic tests.
-  `createdAt` MUST NOT determine
-  the accepted emission date. Creation and last-modification timestamps MUST be unambiguous
-  instants, and replay MUST return the original emission date without comparison to the current
-  Ecuadorian date.
+  use the same returned `java.time.Instant` for both timestamps. Use-case orchestration MUST produce
+  a timestamp-free `InvoiceDraftCandidate` and MUST NOT invoke the persistence clock, calculate,
+  supply, replace, or overwrite either timestamp; no second persistence-clock invocation is
+  permitted for one creation attempt. The adapter returns a committed `PersistedInvoiceDraft` with
+  both timestamps. The injectable clock abstraction MUST support deterministic tests. Neither
+  timestamp determines the accepted emission date. Replay MUST return the original emission date
+  without comparison to the current Ecuadorian date.
 - **DR-013**: Impossible dates, inconsistent totals, inactive or temporally inapplicable catalog
   combinations, unsupported identification types, and invalid local aggregate relationships MUST
   be rejected without partial persistence. A payment method is temporally applicable only when
@@ -1100,27 +1194,40 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 - **DR-018**: Idempotency scope MUST be exactly normalized Company UUID plus idempotency key. A
   Company UUID is business context, and neither it nor an idempotency key authenticates a caller,
   authorizes access, or proves entitlement.
-- **DR-019**: For general human-readable fields, the API/application boundary MUST perform exactly
-  one NFC normalization pass, reject every prohibited code point/separator in FR-035, trim only
-  surrounding `U+0020`, preserve internal punctuation, internal `U+0020` runs, and display case,
-  and count length in Unicode code points afterward. Comparison is case-sensitive unless explicitly
-  overridden. These normalized display values are used for persistence and idempotency
-  equivalence. The domain receives already normalized values and enforces business invariants.
-  OpenAPI documents format and length expectations. PostgreSQL enforces non-null, nonempty,
-  approved maximum length, and required stored canonical values but MUST NOT claim to reproduce
-  Java Unicode normalization.
+- **DR-019**: For general human-readable fields, API MUST pass decoded values to Application without
+  NFC normalization, business-text trimming, internal-space collapse, lowercase conversion, or
+  `canonicalName` calculation. At the beginning of FR-041 Stage 6, Application MUST invoke one
+  `BusinessTextNormalizer` exactly once per applicable value. It MUST perform exactly one NFC pass,
+  trim only surrounding `U+0020`, reject every prohibited code point/separator in FR-035, preserve
+  internal punctuation, internal `U+0020` runs, and display case, and count display length in Unicode
+  code points afterward. Comparison is case-sensitive unless explicitly overridden. These
+  normalized display values are used for persistence and idempotency equivalence. Domain and
+  Infrastructure receive already normalized values and MUST NOT normalize them again. OpenAPI
+  documents format and length expectations. PostgreSQL enforces non-null, nonempty, approved
+  maximum length, and required stored canonical values but MUST NOT claim to reproduce Java Unicode
+  normalization.
 
-  `canonicalName` MUST be produced exactly once by: (1) NFC normalization; (2) leading/trailing
-  `U+0020` trim; (3) collapse of each consecutive internal `U+0020` run to one `U+0020`; (4)
-  lowercase conversion with Java `Locale.ROOT`; (5) persistence of that result; and (6) use of the
-  persisted canonical value for additional-information uniqueness and the applicable idempotency
-  comparison. PostgreSQL/database locale MUST NOT recalculate it. `productCode`, passport, and
+  `canonicalName` MUST be produced exactly once by Application during that same per-value Stage-6
+  invocation. Viewed from the raw display-name input, its complete transformation is: (1) the one
+  NFC normalization already used for the display value; (2) the one leading/trailing `U+0020` trim
+  already used for the display value; (3) collapse of each consecutive internal `U+0020` run to one
+  `U+0020`; (4) lowercase conversion with Java `Locale.ROOT`; (5)
+  count the result in Unicode code points; (6) reject it without truncation when it exceeds 300;
+  (7) persist the accepted result; and (8) use the persisted canonical value for
+  additional-information uniqueness and the applicable idempotency comparison. A display name that
+  satisfies its own input limit MAY therefore be rejected when lowercase expansion makes the
+  derived value exceed 300 code points. The stable outcome is `BUSINESS_VALIDATION_FAILED` with
+  violation code `CANONICAL_NAME_TOO_LONG`, the original request field, maximum `300`, counting unit
+  `UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`. This decision MUST occur before fingerprinting,
+  binding lookup, Domain entry, or persistence. PostgreSQL/database locale MUST NOT recalculate it.
+  `productCode`, passport, and
   foreign identification use their stricter one-time ASCII SP/HTAB trim and otherwise preserve
-  case/internal characters. `Idempotency-Key` is a transport header governed exclusively by
+  case/internal characters; that business-value trim is Application-owned. `Idempotency-Key` is a
+  transport header governed exclusively by
   FR-027 and is not a domain text value. Cross-layer tests MUST use identical approved vectors for
   accented Latin, decomposed/composed equivalents, surrounding/repeated `U+0020`, tab, newline,
-  non-breaking space, zero-width `Cf`, accepted emoji `So`, case differences, and code-point length
-  boundaries.
+  non-breaking space, zero-width `Cf`, accepted emoji `So`, case differences, code-point length
+  boundaries, and `U+0130` lowercase expansion.
 - **DR-020**: Every draft MUST have exactly one immutable normalized Company UUID. Every line,
   payment, tax selection, tax total, and additional-information entry MUST belong to that draft;
   accidental mixing of child data between Company-scoped drafts is prohibited.
@@ -1143,9 +1250,9 @@ snapshots, sequence, access-key, XML, certificate, notification, and SRI evidenc
 | Passport identification (`06`) | ASCII `A-Z`, `a-z`, `0-9`; `^[A-Za-z0-9]{1,20}$` | 1–20 | Case-sensitive | Trim leading/trailing ASCII SP/HTAB once; preserve everything else | `A1234567`, `EC9Z` | `A-123`, `A 123`, `Á123`, empty, 21 characters |
 | Foreign identification (`08`) | ASCII `A-Z`, `a-z`, `0-9`; `^[A-Za-z0-9]{1,20}$` | 1–20 | Case-sensitive | Trim leading/trailing ASCII SP/HTAB once; preserve everything else | `A1234567`, `EC9Z` | `A-123`, `A 123`, `Á123`, empty, 21 characters |
 
-For each row, OpenAPI MUST expose the exact pattern and bounds; Java API validation MUST reject a
-nonmatching normalized value; domain value objects MUST enforce the same invariant after transport
-normalization; PostgreSQL MUST use locale-independent ASCII checks as a final integrity barrier
+For each row, OpenAPI MUST expose the exact pattern and bounds; Application validation MUST reject a
+nonmatching value after its one permitted business-value trim; domain value objects MUST enforce the
+same invariant over the already normalized value; PostgreSQL MUST use locale-independent ASCII checks as a final integrity barrier
 where the value is stored; and test vectors MUST exercise every valid/invalid example and both
 length boundaries. POSIX `[[:alnum:]]`, Unicode character classes, locale-dependent matching, and
 broader repertoires are not equivalent. Any broader repertoire requires separately documented and
@@ -1169,16 +1276,30 @@ points after NFC and surrounding `U+0020` trim.
 | `Acme\u2028Uno` or `Acme\u2029Uno` | none | No | Line and paragraph separators are expressly prohibited |
 | `Happy 😀` | unchanged | Yes when within field format/length | `U+1F600` is assigned category `So`, which is not prohibited |
 | `Acme` versus `ACME` display values | unchanged and distinct | Yes | Display comparison is case-sensitive; both canonical names become `acme` |
+| 150 occurrences of `U+0130` | 300 code points (`i` + `U+0307` per occurrence) | Yes | `Locale.ROOT` lowercase expansion reaches the inclusive canonical maximum |
+| 151 occurrences of `U+0130` | 302 code points | No | Post-canonicalization maximum exceeded; return `CANONICAL_NAME_TOO_LONG` without truncation |
+| 300 occurrences of `U+0130` | 600 code points | No | A display value at its own limit can exceed the derived canonical limit |
 | Exactly the field maximum after normalization/trim | unchanged | Yes | Inclusive upper boundary |
 | Field maximum plus one code point | none | No | Code-point upper boundary exceeded |
 | Empty or only `U+0020` | empty | No for required/supplied text | Empty after the specified trim |
 
-OpenAPI documents these expectations; API/application code performs Unicode operations; the domain
-receives normalized values; PostgreSQL enforces stored non-null/nonempty/max-length/canonical
-barriers without reproducing Java normalization; and contract tests use these same vectors.
+OpenAPI documents these expectations and API forwards decoded business values unchanged;
+Application invokes the Stage-6 `BusinessTextNormalizer` exactly once for each supplied applicable
+value (and zero times for an absent optional value) to perform that value's Unicode operations,
+display checks, canonical derivation when applicable, and canonical-length check; Domain and
+Infrastructure receive normalized values and do not normalize again. PostgreSQL enforces stored
+non-null/nonempty/max-length/canonical barriers without reproducing Java normalization, and contract
+tests use these same vectors.
 
 ### Key Entities
 
+- **InvoiceDraftCandidate**: Fully normalized, validated, and calculated Application model prepared
+  for persistence. It contains all approved business data but no `createdAt`, `updatedAt`, database
+  entity, HTTP information, or commit metadata. It is never returned by the public API.
+- **PersistedInvoiceDraft**: Successful persistence result returned by the persistence port after
+  commit. It contains the final identifier, response-relevant persisted business values,
+  `createdAt`, and `updatedAt`. For initial creation the two timestamps are the same single
+  transactional-clock `java.time.Instant`; replay returns the stored result without mutation.
 - **Invoice Draft**: Internal pre-issuance record identified by a unique draft identifier and owned
   through one external Company identifier. It is fixed to USD and `DRAFT`, contains captured
   emission-point reference, emission date, buyer data, lines, selected tax-rule references,
@@ -1215,12 +1336,13 @@ barriers without reproducing Java normalization; and contract tests use these sa
   at most once.
 - **Additional Information**: Optional named textual entry captured for later review. A draft has
   at most 15 entries; each NFC-normalized/`U+0020`-trimmed display name and value has 1 to 300
-  Unicode code points, and names are unique by persisted `canonicalName` from DR-019.
+  Unicode code points, each derived `canonicalName` has at most 300 Unicode code points after
+  `Locale.ROOT` lowercase, and names are unique by the persisted value from DR-019.
 - **Idempotency Binding**: Company-scoped association among a hash of a caller-generated key,
   normalized creation-command business content, and the successfully committed invoice draft. Its
   uniqueness boundary is Company identifier plus key hash; its lifetime equals the draft's lifetime
   and has no time-based expiration. Replay returns the draft's originally persisted immutable
-  `createdAt`.
+  `createdAt` and `updatedAt` without invoking the clock or modifying either value.
 
 ## Success Criteria *(mandatory)*
 
@@ -1228,10 +1350,12 @@ barriers without reproducing Java normalization; and contract tests use these sa
 
 - **SC-001**: In the approved acceptance suite, 100% of logically new valid create commands whose
   successful creation outcome is conclusively selected before the request deadline expires
-  atomically persist exactly one complete Invoice Draft aggregate with all child records and its
-  Company-scoped idempotency binding, retain the deterministic calculated values, return the
-  approved `201` successful response with every field required by FR-022, and perform no SRI
-  issuance side effect. If the deadline expires before successful creation is conclusively
+  produce one timestamp-free `InvoiceDraftCandidate`, atomically persist exactly one complete
+  Invoice Draft aggregate with all child records and its Company-scoped idempotency binding; the
+  persistence port returns one internal `PersistedInvoiceDraft`, and API maps it to the approved
+  `201` response with every field required by FR-022, including equal `createdAt` and `updatedAt`
+  values from the single transactional clock invocation. Neither internal model is exposed as an
+  HTTP representation. No SRI issuance side effect occurs. If the deadline expires before successful creation is conclusively
   selected, FR-041 governs and requires `REQUEST_TIMEOUT` under the approved deadline-arbitration
   rules.
 - **SC-002**: In the approved validation and failure suite, 100% of confirmed pre-commit rejections
@@ -1256,7 +1380,8 @@ barriers without reproducing Java normalization; and contract tests use these sa
   and MUST NOT be replaced by a later deadline signal.
 - **SC-007**: All accepted drafts expose enough persisted captured and calculated information for a
   billing client to review Company identifier, opaque emission-point identifier, buyer, lines,
-  taxes, payments, totals, status, and timestamps without invoking any fiscal-issuance capability.
+  taxes, payments, totals, status, `createdAt`, and `updatedAt` without invoking any fiscal-issuance
+  capability; for initial creation both timestamps are equal.
 - **SC-008**: The feature's acceptance scenarios can be validated independently of draft update,
   deletion, fiscal numbering, XML, signature, SRI authorization, PDF, and notification features.
 - **SC-009**: Every accepted invoice line has exactly one active IVA tax rule effective on the
@@ -1278,16 +1403,19 @@ barriers without reproducing Java normalization; and contract tests use these sa
   `IDEMPOTENCY_KEY_MULTIPLE` for repeated, parser-multiple, or comma-containing/comma-combined
   input; no vector selects the first value. Every accepted vector uses the same one-time
   SP/HTAB-trimmed value for lookup, hashing, and persistence, and replay returns the originally
-  persisted immutable `createdAt`.
+  persisted immutable `createdAt` and `updatedAt` without invoking the transactional clock or
+  modifying either timestamp.
 - **SC-013**: Every accepted new draft uses the date derived from the one captured
   `requestCreationInstant` in `America/Guayaquil`; all midnight-boundary vectors retain that date
   through commit, and every different or impossible date is rejected without persisted draft data.
-  Every new accepted draft also persists and returns the one `createdAt` Instant captured inside
-  the transaction after successful business validation and immediately before persistence; no
+  Every new accepted draft also persists and returns equal `createdAt` and `updatedAt` values using
+  the one Instant captured inside the transaction after successful business validation and
+  immediately before persistence; no
   vector relies on a physical commit timestamp or post-commit reconstruction. Persistence evidence
   proves that the T076 transactional operation is the only persistence-clock caller, calls it once
-  per creation attempt, writes the same Instant wherever required, and that orchestration never
-  supplies or overwrites it.
+  per creation attempt, accepts a candidate containing neither timestamp, writes the same Instant to
+  both root timestamp fields and every creation-time record that requires it, returns the persisted
+  model, and that orchestration never supplies or overwrites either timestamp.
 - **SC-014**: Every request containing one or more system-calculated monetary fields is rejected
   with the same stable error category and persists no draft or child data, regardless of whether a
   supplied value matches the system's calculation.
@@ -1295,10 +1423,15 @@ barriers without reproducing Java normalization; and contract tests use these sa
   additional-information entries are accepted when otherwise valid, and every request exceeding
   any limit is rejected without persisted draft data.
 - **SC-016**: Identical OpenAPI/API/application/domain/PostgreSQL vectors prove the exact general
-  text policy: NFC accented and decomposed/composed equivalents; surrounding and repeated internal
+  text policy and layer ownership: API forwards decoded business values without normalization;
+  Application invokes `BusinessTextNormalizer` exactly once for each supplied applicable value and
+  zero times for absent optional values; Domain and Infrastructure perform none. Vectors
+  cover NFC accented and decomposed/composed equivalents; surrounding and repeated internal
   `U+0020`; tab/newline/NBSP/U+2028/U+2029/zero-width rejection; assigned emoji `So` acceptance
   when the field format/length permits; display-case sensitivity; `Locale.ROOT` canonical-name
-  folding; and Unicode-code-point minimum/maximum boundaries. Every invalid or duplicate persisted
+  folding; Unicode-code-point minimum/maximum boundaries; and `U+0130` expansion at and beyond the
+  300-code-point canonical maximum. Every overflow uses `CANONICAL_NAME_TOO_LONG` with the original
+  field, maximum, counting unit, and stage, and every invalid or duplicate persisted
   `canonicalName` vector creates no state. Stricter ASCII fields use their own table; transport
   `Idempotency-Key` evidence remains governed separately by SC-012.
 - **SC-017**: Every accepted draft stores exactly one normalized immutable Company UUID and every

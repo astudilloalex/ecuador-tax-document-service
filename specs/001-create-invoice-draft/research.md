@@ -1,7 +1,7 @@
 # Research: Create Invoice Draft
 
 **Feature**: `001-create-invoice-draft`
-**Date**: 2026-07-12
+**Date**: 2026-07-16
 **Constitution**: v2.0.1
 **Status**: Complete — official evidence and target mappings are approved in
 `reference-data-baseline.md`, and no material research Pending Functional Validation remains
@@ -191,7 +191,7 @@ Normalization version 1:
 
 - canonical lowercase hyphenated UUIDs;
 - ISO `YYYY-MM-DD` emission date;
-- trimmed validated text;
+- Application Stage-6 normalized and validated business text; API does not normalize it;
 - canonical plain decimal representations with numerical equivalents normalized identically;
 - absent optional collections normalized to empty collections;
 - invoice-line order preserved;
@@ -219,11 +219,15 @@ arbiter under PostgreSQL `READ COMMITTED`.
 Before the transaction, perform the approved request/fingerprint checks and a Company-scoped
 binding lookup. If no binding exists, Stage 10 validates independent structure/catalog rules
 (including payment methods against `emissionDate`), Stage 11A calculates, and Stage 11B applies the
-exact derived-value order. T063 delegates persistence without invoking or supplying `createdAt`;
-T076 alone captures it once inside its active transaction after validation and immediately before
-root persistence, then writes the same value to aggregate/binding atomically. If concurrent insertion
-loses the uniqueness race, its transaction rolls back completely; a fresh Company-scoped lookup
-compares the winner's fingerprint and returns replay or conflict.
+exact derived-value order. Application allocates final local root/child identifiers through
+`DraftIdentifierGenerator`, constructs a timestamp-free `InvoiceDraftCandidate`, and delegates
+through `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. T063 invokes no persistence
+clock and supplies neither timestamp. T076 alone captures one Instant inside its active transaction
+after validation and immediately before root persistence, assigns it to both `createdAt` and
+`updatedAt`, and writes the aggregate/binding atomically without replacing candidate identifiers.
+If concurrent insertion loses the uniqueness race, its transaction rolls back completely; a fresh
+Company-scoped lookup compares the winner's fingerprint and returns the winner's persisted result
+as replay or conflict.
 
 **Rationale**: The uniqueness constraint provides cross-process arbitration without application
 locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordination.
@@ -268,25 +272,31 @@ rejected before persistence as `BUSINESS_VALIDATION_FAILED` with
 
 `productCode` uses case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`; passport (`06`) and foreign
 identification (`08`) use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`. Each receives one
-leading/trailing ASCII SP/HTAB trim and no other normalization. OpenAPI, Java/API validation,
-domain invariants, locale-independent PostgreSQL checks, and test vectors use those exact
+Application-owned leading/trailing ASCII SP/HTAB trim and no other normalization; API only decodes
+and forwards the value. OpenAPI, Java Application validation, domain invariants over accepted
+values, locale-independent PostgreSQL checks, and test vectors use those exact
 expressions; POSIX `[[:alnum:]]`, Unicode classes, case folding, and locale-dependent matching are
 rejected because no approved fiscal evidence justifies a broader repertoire.
 
 Capture one `requestCreationInstant` at the request boundary and derive the expected emission date
 once using `America/Guayaquil`. Commit crossing midnight does not change the accepted date;
-`createdAt` is separately captured once as a UTC `java.time.Instant` inside the persistence
-transaction after all business validations succeed and immediately before root persistence. That
-same immutable value is persisted/returned after commit and replayed unchanged; rollback does not
-expose it. It is not a physical PostgreSQL commit timestamp, uses no post-commit reconstruction or
-`track_commit_timestamp`, and the injectable clock stays deterministic for tests. Equivalent
-replay does not revalidate the date.
+`createdAt` and `updatedAt` are separately assigned by the persistence adapter from one exact UTC
+`java.time.Instant` captured inside the active transaction after all business validations succeed
+and immediately before root persistence. Both immutable values are persisted/returned after commit
+and replayed unchanged; rollback exposes neither. They are not physical PostgreSQL commit
+timestamps, use no post-commit reconstruction or `track_commit_timestamp`, and the injectable clock
+stays deterministic for tests. Equivalent replay does not invoke the clock or revalidate the date.
 
-General human-readable text uses one NFC pass, rejects `Cc`/`Cf`/`Cs`/`Co`/`Cn` and
+At Stage 6, Application alone invokes `BusinessTextNormalizer` once per supplied applicable
+business-text value. General human-readable text uses one NFC pass, rejects
+`Cc`/`Cf`/`Cs`/`Co`/`Cn` and
 `U+2028`/`U+2029`, permits only `U+0020` spacing, trims surrounding `U+0020`, preserves internal
 punctuation/case, and counts Unicode code points. Assigned emoji `So` is allowed within field
 format/length. Additional `canonicalName` uses NFC → trim → collapse U+0020 runs → Java
-`Locale.ROOT` lowercase and is persisted; PostgreSQL never recalculates Java normalization.
+`Locale.ROOT` lowercase, is limited to 300 Unicode code points after lowercase, and is persisted;
+overflow returns `CANONICAL_NAME_TOO_LONG` before fingerprinting/persistence and is never
+truncated. PostgreSQL never recalculates Java normalization. API only decodes/forwards business
+text; Domain and Infrastructure receive accepted normalized values and never normalize again.
 
 Payment lookup receives `(paymentMethodId, emissionDate)` and requires existence, activity,
 inclusive `effectiveFrom <= emissionDate`, and null-or-inclusive `effectiveTo`. It never uses
@@ -402,3 +412,51 @@ static contract.
 - [Quarkus REST request filters and Jackson exception mapping](https://quarkus.io/guides/rest#request-or-response-filters)
 - [Quarkus strict Jackson unknown-property configuration](https://quarkus.io/guides/rest-json#configuring-json-support)
 - [Quarkus static OpenAPI publication and scan disabling](https://quarkus.io/guides/openapi-swaggerui#loading-openapi-schema-from-static-files)
+
+## 15. Normalization and Persistence Boundary Ownership
+
+**Decision**: Application is the sole business-text normalization owner. API decodes HTTP/JSON,
+rejects malformed representation, validates transport structure and headers, and forwards decoded
+business values unchanged. At the beginning of FR-041 Stage 6, Application invokes one
+`BusinessTextNormalizer` exactly once for each supplied applicable value, performs the complete
+Unicode/display/canonical validation, and returns transport-neutral failures. Domain receives
+normalized values and enforces business invariants; Infrastructure persists supplied values. No
+other layer repeats NFC, business trim, internal-space collapse, lowercase conversion, or
+`canonicalName` derivation.
+
+**Decision**: The Application-to-persistence creation contract is conceptually
+`persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. Application owns all final local
+draft/child identifier allocation through `DraftIdentifierGenerator` and constructs the candidate
+after validation and calculation. The candidate contains no timestamp, HTTP type, commit metadata,
+or persistence entity. T076 opens or joins the reactive transaction, invokes the injected
+transactional clock once immediately before root persistence, assigns the same Instant to
+`createdAt` and `updatedAt`, commits aggregate and binding atomically, and returns the persisted
+representation. Persistence preserves candidate identifiers; it never generates or replaces them.
+
+**Decision**: Equivalent replay loads the committed `PersistedInvoiceDraft` and returns its original
+identifier, business values, `createdAt`, and `updatedAt`. Replay performs no identifier allocation,
+clock invocation, canonical-value rebuild, aggregate creation, timestamp mutation, or current-date
+revalidation. The retry request still receives the one mandatory Application Stage-6 pass needed
+to compute its comparison fingerprint; a matching binding loads rather than reconstructs the
+persisted canonical values.
+
+**Rationale**: A timestamp-free candidate makes impossible states unrepresentable at the port and
+keeps transaction-only time inside the adapter that owns atomic persistence. Application-owned
+identifier allocation preserves deterministic use-case tests without leaking infrastructure
+entities. One normalization owner prevents cross-layer Unicode and locale drift, while the
+committed-result model makes replay semantics explicit.
+
+**Alternatives considered**:
+
+- API normalization was rejected because it mixes business canonicalization with transport
+  decoding and makes the application depend on an undocumented pre-normalized input assumption.
+- Domain or PostgreSQL normalization was rejected because Domain must remain independent of Unicode
+  mechanics and PostgreSQL cannot reproduce Java NFC/`Locale.ROOT` semantics reliably.
+- A candidate carrying null, zero, placeholder, provisional, or API-generated timestamps was
+  rejected because timestamps exist only after the adapter's in-transaction clock invocation.
+- Infrastructure-generated draft/child identifiers were rejected because the approved
+  `DraftIdentifierGenerator` is an Application port and the candidate must identify the complete
+  aggregate before persistence; reference/fiscal identifiers remain separately governed and are
+  never generated by this port.
+- Returning Panache entities or HTTP errors from the persistence port was rejected because it
+  violates Clean Architecture and transport-neutral orchestration.

@@ -18,6 +18,25 @@ Hibernate Reactive with Panache is used for business persistence. Panache models
 supported migration datasource during controlled startup; production schema auto-generation is
 disabled except for non-mutating validation where supported.
 
+For creation, Infrastructure implements the Application-owned conceptual port contract:
+
+```text
+persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>
+```
+
+`InvoiceDraftCandidate` contains final Application-allocated root/child identifiers and all
+normalized, validated, calculated business values, plus authoritative CompanyId and safe binding
+inputs (key hash, request fingerprint, normalization version), but no raw key or timestamp. The
+adapter accepts no HTTP type, placeholder timestamp, commit metadata, or Panache entity from its
+caller. It must not generate or replace candidate identifiers. `PersistedInvoiceDraft` is built
+only from committed state and contains the original final identifier, response-relevant business
+values, `createdAt`, and `updatedAt`.
+
+The persistence mapper copies supplied candidate values into infrastructure entities, applies the
+single adapter-owned clock result to the required timestamp columns, and maps committed rows back
+to `PersistedInvoiceDraft`. It does not normalize, trim, lowercase, derive `canonicalName`, allocate
+an identifier, invoke another clock, fabricate a timestamp, expose an entity, or map an HTTP error.
+
 ## Flyway Migration Design
 
 The initial feature migration set MUST:
@@ -44,7 +63,8 @@ T017 creates V5 to inspect/drop/replace only `ck_invoice_draft_buyer_identificat
 `ck_invoice_line_product_code` with the exact explicit ASCII expressions in spec/OpenAPI. It must
 not use POSIX/locale/Unicode shorthand and relies on PostgreSQL transactional-DDL
 rollback-by-failure where supported. T018 proves V3→V5, empty-database migration, Flyway validation,
-and identical OpenAPI/Java/PostgreSQL vectors. Neither task is complete or currently authorized.
+and identical OpenAPI/Java/PostgreSQL vectors. Neither task is complete; T017 remains subject to the
+current mandatory analysis condition and T018 remains dependent on successful T017.
 
 ## Exact Local Catalog Structures
 
@@ -96,35 +116,36 @@ catalog versions MUST NOT reinterpret historical drafts.
 
 ## Aggregate Write Transaction
 
-For a logically new command:
+Payload/header/representation gates, Stage-6 normalization/fingerprinting, Company-scoped binding
+lookup, Stage 10, Stage 11A, and Stage 11B all complete before the new-write transaction is opened.
+Application's Stage-6 `BusinessTextNormalizer` is the only business-text normalization owner.
+Infrastructure receives normalized/canonical values and never performs NFC, trim, space collapse,
+lowercase conversion, or canonical derivation. Payment lookup receives
+`(paymentMethodId, emissionDate)` and applies inclusive start/end plus activity, never a server,
+request, transaction, or creation clock. Every reference-data invocation receives the explicit
+remaining `Duration` and is clamped as described below.
 
-1. Complete payload, Company/correlation header, exact single-valued Idempotency-Key
-   presence/cardinality/one-time SP/HTAB normalization/grammar, request-body validation, and
-   fingerprint generation before opening the write transaction. Only the normalized accepted key
-   proceeds; repeated or comma-combined input never selects a first value.
-2. Perform the one general-text NFC/U+0020/prohibited-code-point pass and persisted
-   `canonicalName` derivation, then resolve applicable local reference-catalog rows and domain
-   values without external calls. Payment lookup receives `(paymentMethodId, emissionDate)` and
-   applies inclusive start/end plus activity, never a server/request/transaction/creation clock.
-   Every
-   reference-data invocation receives the explicit remaining `Duration` derived from the one
-   application `RequestDeadline`; its reactive adapter clamps pool acquisition and every query
-   subscription to the minimum of configured database-operation timeout and that remainder and
-   starts no database operation when the remainder is zero or negative.
-3. Stage 10 completes calculation-independent validation; Stage 11A calculates monetary values;
-   Stage 11B applies the exact range/overflow → discount/gross → final-consumer-total → payment
-   shape/positivity → reconciliation order.
-4. Delegate to T076, which starts/owns one bounded reactive PostgreSQL transaction. T063 never
-   invokes the persistence clock and never supplies/replaces/overwrites `createdAt`.
-5. After every business validation succeeds and immediately before root persistence, T076 calls
-   the injected persistence clock exactly once inside the active transaction to obtain `createdAt`
-   as a UTC `java.time.Instant`; no second call is permitted for the attempt.
-6. Persist the Invoice Draft root with that immutable value.
-7. Persist every line and exactly one line-tax selection per line.
-8. Persist grouped tax totals, payments, and additional-information rows; persist the
-   application-produced canonical names without database-locale recomputation.
-9. Persist the idempotency binding last with the same `createdAt` value.
-10. Commit once; expose success only after commit is confirmed, returning the same persisted value.
+For a logically new command, the authoritative creation sequence is:
+
+1. API decodes the request and forwards decoded business values unchanged.
+2. Application performs ordered validation.
+3. Application normalizes business text in Stage 6 exactly once per supplied applicable value.
+4. Application calculates monetary values.
+5. Application allocates all final local root/child UUIDs through `DraftIdentifierGenerator` and
+   constructs `InvoiceDraftCandidate`.
+6. Application calls `persist(InvoiceDraftCandidate)` on the persistence port.
+7. T076 opens or joins one bounded reactive PostgreSQL transaction.
+8. After all validations have succeeded and immediately before root persistence, T076 invokes the
+   injected transactional clock exactly once.
+9. T076 assigns that same UTC `java.time.Instant` to root `created_at` and `updated_at`, and to
+   binding `created_at` where the creation timestamp is required.
+10. T076 persists the complete root, every line and line tax, grouped tax totals, payments,
+    additional-information rows, and idempotency binding atomically, preserving all supplied
+    identifiers and Application-produced canonical values.
+11. After successful commit, T076 returns `PersistedInvoiceDraft` with the original root identifier,
+    response-relevant persisted business values, `createdAt`, and `updatedAt`.
+12. Application maps that representation to a transport-neutral result.
+13. API alone arbitrates the terminal result and maps the accepted result to HTTP.
 
 A failure at any write step rolls back the root, all children, and the binding. No external call,
 filesystem write, event publication, SRI operation, or Company operation occurs within or adjacent
@@ -135,9 +156,13 @@ ambiguous row before persistence. Payment effectiveness is evaluated inclusively
 `emissionDate`. Initial valid references are exactly those published in
 `SRI-OFFLINE-2.32-TARGET-1`; product/tax legal classification remains upstream responsibility.
 
-`createdAt` is not PostgreSQL's physical commit timestamp. Persistence MUST NOT query or reconstruct
-it after commit and MUST NOT require `track_commit_timestamp`. Rollback means it is never exposed as
-a created resource; equivalent replay loads and returns the originally persisted value.
+Neither `createdAt` nor `updatedAt` is PostgreSQL's physical commit timestamp. Persistence MUST NOT
+query or reconstruct either value after commit and MUST NOT require `track_commit_timestamp`.
+Rollback means neither value is exposed as a created resource. Equivalent replay loads the
+original `PersistedInvoiceDraft`, returns the original identifier and both timestamps, and performs
+no clock invocation, persisted-canonical-value rebuild, identifier allocation, or aggregate
+creation. The incoming retry's Stage-6 normalization is completed before lookup solely to produce
+the comparison fingerprint.
 
 ## Concurrency Arbitration
 
@@ -177,7 +202,7 @@ effective-date keys and their tables contain no Company column.
 
 | Structure | Required persistence evidence |
 |-----------|-------------------------------|
-| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; type-conditional case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` for buyer codes 06/08; fixed status/currency; immutable `created_at`; non-negative totals |
+| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; type-conditional case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` for buyer codes 06/08; fixed status/currency; non-null `created_at`/`updated_at` with V3's defensive `updated_at >= created_at` guard and application creation invariant `updated_at = created_at`; non-negative totals |
 | `invoice_line` | Local FK; `UNIQUE (invoice_draft_id,position)`; locale-independent case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` product code; `numeric(12,6)` quantity/unit-price and `numeric(17,2)` money checks; FK index |
 | `invoice_line_tax` | Local FK; `UNIQUE (invoice_line_id)`; IVA treatment/rate checks |
 | `invoice_tax_total` | Local FK; unique complete grouping key; non-negative totals |
@@ -272,11 +297,16 @@ Liveness remains independent of PostgreSQL availability.
   never surface as PostgreSQL errors.
 - product/passport/foreign-identification database checks use the same locale-independent ASCII
   expressions as OpenAPI/Java/domain tests, never POSIX `[[:alnum:]]`;
-- `createdAt` capture occurs once at the defined in-transaction point, persists/returns unchanged,
-  is absent from rolled-back resources, replays unchanged, uses no physical commit timestamp, and
-  proves T076 is the sole persistence-clock caller while T063 never supplies/overwrites it;
-- general Unicode display values and application-produced `canonicalName` use identical shared
-  vectors; PostgreSQL enforces stored barriers without claiming Java NFC/Locale.ROOT equivalence;
+- one T076 transactional-clock invocation occurs at the defined in-transaction point; its exact
+  Instant is assigned to both `createdAt` and `updatedAt`, persists/returns unchanged, is absent
+  from rolled-back resources, replays unchanged, and uses no physical commit timestamp; T063 and
+  mappers never supply/overwrite either value;
+- candidate/port evidence proves Application alone allocates final local root/child identifiers,
+  `InvoiceDraftCandidate` carries no timestamp, persistence preserves every supplied identifier,
+  and committed `PersistedInvoiceDraft` returns the original identifier plus both timestamps;
+- general Unicode display values and Application-produced `canonicalName` use identical shared
+  vectors, including 150/151 `U+0130` expansion and `CANONICAL_NAME_TOO_LONG`; PostgreSQL enforces
+  stored barriers without claiming Java NFC/Locale.ROOT equivalence;
 - payment lookup proves inclusive `emissionDate` effectiveness and never uses current/server/
   transaction/createdAt time.
 

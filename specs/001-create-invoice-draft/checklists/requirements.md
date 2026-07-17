@@ -8,9 +8,9 @@
 
 ## Content Quality
 
-- [x] No premature implementation choices beyond the constitutionally mandated Company-header API boundary
+- [ ] No premature implementation choices beyond the constitutionally mandated Company-header API boundary
 - [x] Focused on user value and business needs
-- [x] Written for non-technical stakeholders
+- [ ] Written for non-technical stakeholders
 - [x] All mandatory sections completed
 
 ## Requirement Completeness
@@ -26,7 +26,7 @@
 - [x] Target terminology is English and consistent with the terminology mapping
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
-- [x] Success criteria are technology-agnostic (no implementation details)
+- [ ] Success criteria are technology-agnostic (no implementation details)
 - [x] All acceptance scenarios are defined
 - [x] Edge cases are identified
 - [x] Scope is clearly bounded
@@ -37,11 +37,16 @@
 - [x] All functional requirements have clear acceptance criteria
 - [x] User scenarios cover primary flows
 - [x] Feature defines measurable outcomes for acceptance validation
-- [x] No plan-level framework, persistence, or deployment choices leak into the specification
+- [ ] No plan-level framework, persistence, or deployment choices leak into the specification
 
 ## Notes
 
-- After formal PATCH reconciliation with Constitution v2.0.1, 23 of 23 original quality items pass.
+- After the authoritative 2026-07-16 clarification, 19 of 23 quality items pass. Four items are
+  intentionally reopened because the supplied decisions require concrete layer ownership,
+  `java.time.Instant`, named application/persistence models, and transactional responsibilities in
+  requirements and success evidence. They are not unanswered feature semantics; the planning
+  workflow must reconcile these approved technical constraints or formally justify the checklist
+  exceptions.
 - The later governance retrospective, V5 correction tasks, Stage 10/11A/11B precedence,
   API-exclusive deadline ownership, exact Unicode/canonical-name policy, emissionDate payment
   validity, and T076-only persistence-clock ownership are documented in the planning checklist.
