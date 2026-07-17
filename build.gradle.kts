@@ -26,6 +26,7 @@ dependencies {
     implementation("io.quarkus:quarkus-micrometer")
     implementation("io.quarkus:quarkus-opentelemetry")
 
+    testImplementation("org.jspecify:jspecify:1.0.0")
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-test-vertx")
     testImplementation("io.quarkus:quarkus-test-hibernate-reactive-panache")
