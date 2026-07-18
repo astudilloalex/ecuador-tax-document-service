@@ -93,7 +93,7 @@ Logical persistence name: `invoice_draft`.
 | `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation; codes `06`/`08` use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` |
 | `buyerLegalName` | normalized text | `varchar(300)` | Yes | NFC once, surrounding `U+0020` trimmed, 1–300 code points, prohibited categories/separators rejected |
 | `buyerAddress` | optional normalized text | `varchar(300)` | No | Same general-text policy; 1–300 code points when supplied |
-| `buyerEmail` | optional text | `varchar(254)` | No | One syntactically valid address |
+| `buyerEmail` | optional normalized text | `varchar(254)` | No | Case-preserved value satisfying the exact ASCII dot-atom profile after the one general-text pass: local part 1–64, DNS-style labels 1–63 with at least one dot, total 254 code points; invalid profile returns value-free `EMAIL_INVALID` |
 | `buyerTelephone` | optional text | `varchar(20)` | No | Approved character and digit-count rules |
 | `status` | `DraftStatus` | `varchar(16)` | Yes | Exactly `DRAFT` |
 | `currency` | `CurrencyCode` | `char(3)` | Yes | Exactly `USD` |
@@ -399,6 +399,15 @@ accepted when field format/length permits. When a canonical name applies, the sa
 reuses that already NFC-normalized and trimmed display value, collapses internal `U+0020`,
 lowercases with Java `Locale.ROOT`, counts the derived result, and rejects values over 300 code
 points using `CANONICAL_NAME_TOO_LONG` without truncation. It never repeats NFC or trimming.
+
+After that single normalization pass, Stage 10 applies the exact buyer-email ASCII dot-atom rule
+``^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$``
+to `buyerEmail`. It performs no additional trim, normalization, lowercase conversion, or truncation;
+case is stored and compared exactly. Accepted values have a 1–64-character local part, 1–63-
+character DNS-style labels, at least one domain dot, and at most 254 ASCII code points. Quoted local
+parts, comments, domain literals, internationalized text, internal whitespace, and multiple
+addresses return value-free `EMAIL_INVALID` for `buyer.email`. Persistence stores only the accepted
+normalized value and does not reproduce the grammar.
 
 Domain receives normalized values and Infrastructure receives supplied normalized/canonical values;
 neither normalizes again. PostgreSQL enforces nullability, nonempty values, maximum stored length,

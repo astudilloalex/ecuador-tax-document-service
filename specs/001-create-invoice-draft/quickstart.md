@@ -125,6 +125,8 @@ Expected new result:
 - the valid supplied `X-Correlation-Id` is returned unchanged;
 - `Idempotency-Replayed: false`;
 - response `companyId` is canonical lowercase hyphenated UUID text;
+- response `emissionPointId` is the canonical lowercase-hyphenated non-nil UUID matching
+  `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`;
 - status is `DRAFT` and currency is exactly `USD`;
 - the response includes every captured and calculated field required by `FR-022`;
 - response `createdAt` and `updatedAt` are equal to the exact immutable UTC Instant captured by
@@ -222,20 +224,35 @@ and know nothing about HTTP headers, cardinality, trimming adapters, or HTTP err
 
 ## 7. Verify Strict Request Fields
 
-Add each prohibited property separately:
+Add every exhaustive recognized calculated path separately:
+
+- `/taxTotals`, `/subtotalBeforeTaxes`, `/totalDiscount`, and `/grandTotal`;
+- for each zero-based line index `{i}`: `/lines/{i}/grossAmount`, `/lines/{i}/netAmount`,
+  `/lines/{i}/lineTotal`, `/lines/{i}/tax`, `/lines/{i}/taxBase`, `/lines/{i}/taxAmount`,
+  `/lines/{i}/taxCode`, `/lines/{i}/taxRate`, `/lines/{i}/officialTaxCode`,
+  `/lines/{i}/officialPercentageCode`, and `/lines/{i}/rate`;
+- descendants below `/taxTotals` and `/lines/{i}/tax`, because both paths classify their entire
+  supplied subtree.
+
+For every path, cover `null`, a wrong JSON type, and a value equal to the eventual calculated
+result where meaningful. Also combine one or more calculated paths with unknown/prohibited,
+missing-required, and wrong-type ordinary properties. Every such mixed object must return one
+`422 PROHIBITED_CALCULATED_FIELD`, omit `violations`, expose no supplied value, and save no state.
+Only a decoded object with no calculated-path match may fall through to ordinary
+`400 INVALID_REQUEST` classification.
+
+Add each ordinary prohibited property separately:
 
 - `companyId`;
 - `issuerId`;
 - Issuer RUC/legal/trade/address/fiscal fields;
 - establishment or emission-point fiscal snapshot fields;
-- line gross/net/tax base/tax amount/line total;
-- grouped taxes, subtotal, discount total, or grand total;
-- direct tax code/rate instead of `taxRuleId`.
 
 Expected:
 
 - unknown Company/Issuer/snapshot fields produce `INVALID_REQUEST`;
-- recognized calculated fields produce `PROHIBITED_CALCULATED_FIELD`;
+- every recognized calculated path produces `PROHIBITED_CALCULATED_FIELD` with the precedence
+  above, regardless of supplied value or JSON type;
 - no state is persisted.
 
 A Company path or query value cannot substitute for the required header. Company identifiers are
@@ -342,8 +359,9 @@ Using the exact approved baseline identifiers, validate at least:
   past/future/impossible rejection, body consumption or commit crossing Guayaquil midnight, and
   later-date replay;
 - general human-readable text vectors shared across layers: prove API forwards decoded business
-  text unchanged, Application invokes `BusinessTextNormalizer` exactly once per supplied applicable
-  value at Stage 6, and Domain/Infrastructure invoke it zero times; cover NFC accented Latin;
+  text unchanged, Application first validates/canonicalizes `emissionPointId`, then invokes
+  `BusinessTextNormalizer` exactly once per supplied applicable value, and Domain/Infrastructure
+  invoke it zero times; cover NFC accented Latin;
   decomposed/composed equivalence; surrounding and repeated internal `U+0020`; tab, newline, NBSP,
   `U+2028`, `U+2029`, and zero-width `Cf` rejection; assigned emoji `So` acceptance when field
   format/length permits; case preservation; Unicode-code-point maximum/max+1. Verify
@@ -352,6 +370,12 @@ Using the exact approved baseline identifiers, validate at least:
   `CANONICAL_NAME_TOO_LONG` before fingerprint/persistence, is persisted when accepted, and is not
   recalculated by PostgreSQL locale. Include 150 occurrences of `U+0130` as exactly 300 canonical
   code points and 151 occurrences as 302/rejected;
+- buyer-email vectors after the single general-text pass: accept one case-preserved ASCII dot-atom
+  address with local part 1–64, DNS-style labels 1–63, at least one domain dot, and total length at
+  most 254; reject leading/trailing/consecutive local dots, quoted local parts, comments, domain
+  literals, whitespace, non-ASCII local/domain text, multiple addresses, and 65/64/255 boundary
+  violations with value-free `EMAIL_INVALID` for `buyer.email`; verify no email-specific trim,
+  case fold, normalization, or truncation occurs;
 - text and collection maxima plus maximum-plus-one rejection;
 - a body exactly `2,097,152` bytes proceeding to the next validation stage;
 - a larger body conclusively detected before deadline expiry returning

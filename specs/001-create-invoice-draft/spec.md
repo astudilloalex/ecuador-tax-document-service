@@ -133,6 +133,25 @@ any fiscal identifier allocation or SRI interaction.
   `UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`. Approved vectors include `U+0130` lowercase
   expansion.
 
+### Session 2026-07-17
+
+- Q: Which operation begins Stage 6? → A: The service first trims, validates, and canonicalizes
+  `emissionPointId`. General business-text normalization begins only after that identifier succeeds;
+  therefore an emission-point failure always precedes any general-text failure.
+- Q: How are calculated request properties distinguished from ordinary unknown properties? → A: A
+  well-formed request object is inspected against the exhaustive calculated-property paths defined
+  below. Presence of any such path returns `PROHIBITED_CALCULATED_FIELD`, regardless of its value or
+  JSON type, and takes precedence over ordinary unknown/prohibited properties and other Stage-5
+  structural failures. Malformed JSON cannot be inspected and returns `INVALID_REQUEST`.
+- Q: What response representation is used for `emissionPointId`? → A: Every successful new or replay
+  response contains the same canonical lowercase-hyphenated UUID representation required for the
+  saved draft.
+- Q: Which buyer-email syntax is accepted? → A: After the approved general-text normalization, one
+  ASCII dot-atom address with a 1–64-character local part, DNS-style domain labels, at least one
+  domain dot, and no more than 254 total code points is accepted. Case is preserved and comparison
+  is case-sensitive. Quoted local parts, comments, domain literals, internationalized addresses,
+  whitespace, and multiple-address forms are rejected with safe violation `EMAIL_INVALID`.
+
 ## Scope and Evidence *(mandatory)*
 
 ### Bounded Outcome
@@ -307,8 +326,11 @@ Company-master-data, identity, and external side effect remains absent.
     accepted.
 27. **Given** `emissionDate` differs from that fixed Ecuadorian civil date, **when** creation is
     attempted, **then** it is rejected and no draft is saved.
-28. **Given** a request contains any client-supplied calculated monetary field, **when** creation is
-    attempted, **then** a stable calculated-field error is returned and no draft is saved.
+28. **Given** a well-formed request contains any exhaustive recognized calculated-property path,
+    including one whose value is null, incorrectly typed, or equal to the service result, **when**
+    creation is attempted, **then** `PROHIBITED_CALCULATED_FIELD` is returned and no draft is saved;
+    **and given** the same request also contains ordinary unknown/prohibited properties or another
+    Stage-5 structural failure, **then** the calculated-field result retains precedence.
 29. **Given** exactly 500 lines, 8 positive payments, and 15 additional-information entries, **when**
     all other rules pass, **then** those boundary counts are accepted.
 30. **Given** more than 500 lines, 8 payments, or 15 additional-information entries, **when**
@@ -323,8 +345,10 @@ Company-master-data, identity, and external side effect remains absent.
     applicable stable error is returned—`IDEMPOTENCY_KEY_INVALID` for that header—and no state is
     created.
 33. **Given** required general text becomes empty after trimming, contains a prohibited code point
-    or whitespace, has invalid email or telephone form, or duplicates an additional-information
-    canonical name, **when** creation is attempted, **then** it is rejected and no draft is saved.
+    or whitespace, has invalid telephone form, violates the exact buyer-email profile, or duplicates
+    an additional-information canonical name, **when** creation is attempted, **then** it is rejected
+    and no draft is saved; an email-profile failure returns `BUSINESS_VALIDATION_FAILED` with safe
+    value-free violation `EMAIL_INVALID` for `buyer.email`.
 34. **Given** valid Company and emission-point identifiers, including an emission-point UUID with
     surrounding ASCII SP or HTAB, **when** creation succeeds, **then** the draft is owned by the
     immutable Company UUID and retains the trimmed canonical emission-point identifier without
@@ -476,13 +500,19 @@ Company-master-data, identity, and external side effect remains absent.
 - A successful idempotency association does not expire while its draft exists.
 - Missing, repeated, blank, malformed, or nil Company context is rejected before creation. No body,
   path, query, token, or session value may substitute for the header.
-- Client-supplied calculated fields are rejected rather than ignored or compared.
+- The exhaustive calculated-property paths are rejected rather than ignored or compared. For a
+  well-formed object, their presence wins over ordinary unknown/prohibited properties, missing
+  properties, and other representation failures in the same Stage-5 classification. Malformed JSON
+  remains `INVALID_REQUEST` because no property classification is possible.
 - Identification `05` is exactly 10 ASCII digits; `04` is exactly 13 ASCII digits. No checksum is
   applied.
 - Identification `06` and `08` match `^[A-Za-z0-9]{1,20}$` after one SP/HTAB trim. Valid examples:
   `A1234567`, `EC9Z`. Invalid: `A-123`, `A 123`, `Á123`, empty, or 21 characters.
 - `productCode` matches `^[A-Za-z0-9]{1,25}$` after one SP/HTAB trim. Valid: `ABC123`, `sku9`.
   Invalid: `ABC-123`, `ABC 123`, `ÁBC1`, empty, or 26 characters.
+- Buyer email uses the exact post-normalization ASCII dot-atom profile below. Surrounding `U+0020`
+  may be removed only by FR-035; internal whitespace, non-ASCII text, multiple addresses, comments,
+  quoted local parts, and domain literals remain invalid. Case is preserved and compared exactly.
 - Identification `07` requires value `9999999999999`, name `CONSUMIDOR FINAL`, and total no greater
   than USD `50.00` under SRI Technical Sheet v2.32.
 - Buyer identifiers and contact data never appear in safe errors or operational observations.
@@ -532,9 +562,13 @@ Company-master-data, identity, and external side effect remains absent.
   effective on `emissionDate`; the value MUST follow the approved type rule. Types `06` and `08`
   MUST match case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` after one surrounding SP/HTAB trim.
 - **FR-008**: Buyer address, email, and telephone MAY be supplied. After FR-035 normalization,
-  address MUST contain 1–300 code points, email MUST be one valid address of at most 254 code
-  points, and telephone MUST contain 7–15 ASCII digits, at most 20 total code points, and only
-  digits, `+`, `U+0020`, hyphen, and parentheses.
+  address MUST contain 1–300 code points; email MUST satisfy the exact case-sensitive ASCII
+  dot-atom profile in **Executable Buyer Email Profile**, including a 1–64-character local part,
+  1–63-character DNS-style domain labels, at least one domain dot, and at most 254 total code points;
+  and telephone MUST contain 7–15 ASCII digits, at most 20 total code points, and only digits, `+`,
+  `U+0020`, hyphen, and parentheses. Email case MUST be preserved, no email-specific normalization
+  or case folding is allowed, and failure MUST return `BUSINESS_VALIDATION_FAILED` (`422`) with safe
+  value-free violation `EMAIL_INVALID` identifying `buyer.email`.
 - **FR-009**: A draft MUST contain 1–500 invoice lines.
 - **FR-010**: Each line MUST contain a product code, description, quantity greater than zero and at
   most `999999.999999`, unit price from `0` through `999999.999999`, absolute discount from `0.00`
@@ -546,9 +580,13 @@ Company-master-data, identity, and external side effect remains absent.
   IVA, and exempt. Other or simultaneous taxes MUST be rejected. The caller supplies only
   `taxRuleId`; tax code, rate, and product classification MUST NOT be supplied or inferred here.
 - **FR-012**: The service MUST calculate line gross, line net, tax base, tax amount, grouped tax
-  totals, subtotal before taxes, total discount, and grand total. Any client-supplied calculated
-  field MUST be rejected. Every monetary input and result MUST stay within `0.00` through
-  `999999999999999.99`.
+  totals, subtotal before taxes, total discount, grand total, and line total. The caller MUST NOT
+  supply the exhaustive paths in **Executable Stage-5 Request Property Classification**. Presence of
+  any recognized path MUST return `PROHIBITED_CALCULATED_FIELD` even when its value is null, has the
+  wrong JSON type, or matches the service result. For a well-formed request object, this result MUST
+  take precedence over ordinary unknown/prohibited properties and every other Stage-5 structural
+  failure; the response MUST expose no rejected value and MUST omit field-level violations. Every
+  monetary input and result MUST stay within `0.00` through `999999999999999.99`.
 - **FR-013**: A draft MUST contain at least one payment. Each payment method MUST exist, be active,
   and satisfy `effectiveFrom <= emissionDate` and (`effectiveTo` absent or
   `emissionDate <= effectiveTo`). No other date may substitute. Positive-total drafts allow at
@@ -578,7 +616,8 @@ Company-master-data, identity, and external side effect remains absent.
   be made while a save outcome is unresolved or after a successful save; FR-032, FR-033, and
   FR-043 govern those cases.
 - **FR-022**: A successful response MUST include identifier, `DRAFT`, canonical `companyId`, opaque
-  emission-point identifier, buyer, emission date, lines, payments, additional information,
+  emission-point identifier in FR-004's canonical lowercase-hyphenated UUID form, buyer, emission
+  date, lines, payments, additional information,
   calculated line amounts, grouped taxes, totals, `createdAt`, and `updatedAt`. It MUST include no
   Company, Issuer, establishment, or emission-point master-data snapshot.
 - **FR-023**: Creation MUST NOT reserve a sequence; generate access key, XML, signature, PDF, or
@@ -657,8 +696,11 @@ Company-master-data, identity, and external side effect remains absent.
   2. validate `X-Company-Id` presence, cardinality, trim, UUID syntax, and non-nil value;
   3. validate `X-Correlation-Id`;
   4. validate `Idempotency-Key` presence, cardinality, trim, grammar, and stable errors;
-  5. validate request representation and reject unknown or prohibited properties, including a
-     missing or non-string `emissionPointId`, with `INVALID_REQUEST`;
+  5. decode one JSON object; malformed JSON, an unsupported/non-object representation, ordinary
+     unknown/prohibited properties, and missing or incorrectly typed required properties use
+     `INVALID_REQUEST`, while any exhaustive recognized calculated-property path uses
+     `PROHIBITED_CALCULATED_FIELD` and, for a well-formed object, takes precedence over all other
+     outcomes within this stage;
   6. first trim and validate `emissionPointId` according to FR-004, returning
      `BUSINESS_VALIDATION_FAILED` with `EMISSION_POINT_INVALID` when invalid; then normalize
      applicable business text according to FR-035 and DR-019, including canonical length;
@@ -736,7 +778,9 @@ Company-master-data, identity, and external side effect remains absent.
   is rounded `HALF_UP`. Aggregates sum those rounded values and use two decimals. Payment comparison
   uses the exact sum of two-decimal amounts. Overflow returns `MONETARY_RANGE_EXCEEDED`.
 - **DR-011**: The service calculates and reconciles; the caller supplies only commercial inputs and
-  payment allocations. Caller-supplied calculated fields are rejected.
+  payment allocations. The exhaustive calculated-property paths are rejected through the
+  deterministic Stage-5 classification in FR-012 and FR-041; no recognized path is ignored,
+  compared with a calculated result, or downgraded to an ordinary unknown-property outcome.
 - **DR-012**: The expected emission date is the one `America/Guayaquil` civil date fixed at the
   initial service boundary before body consumption and remains unchanged across midnight. A
   successful new draft returns equal UTC
@@ -772,7 +816,8 @@ Company-master-data, identity, and external side effect remains absent.
   truncation. Accepted canonical values govern name uniqueness and applicable idempotency
   comparison. Overflow returns `CANONICAL_NAME_TOO_LONG` with the original field, maximum `300`,
   counting unit `UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`. ASCII fields retain their
-  stricter rules.
+  stricter rules. Buyer email then applies the exact ASCII profile below without case folding,
+  additional trimming, or any other email-specific normalization.
 - **DR-020**: Every draft has one immutable canonical Company UUID. Lines, payments, tax selections,
   tax totals, and additional information belong only to that draft; cross-Company mixing is
   prohibited.
@@ -801,6 +846,38 @@ Surrounding SP or HTAB is accepted only because it is removed before validation.
 HTAB remains invalid. Trim-to-empty and over-maximum normalized values are invalid. Directly stored
 representations containing surrounding or internal whitespace are not approved representations.
 
+### Executable Stage-5 Request Property Classification
+
+For the templates below, `{i}` is any zero-based invoice-line array position. A property is
+recognized by its exact case-sensitive path. The set is exhaustive:
+
+| Recognized calculated path | Classification scope |
+|----------------------------|----------------------|
+| `/taxTotals` | The property and every descendant, regardless of supplied JSON type |
+| `/subtotalBeforeTaxes` | Exact top-level property |
+| `/totalDiscount` | Exact top-level property |
+| `/grandTotal` | Exact top-level property |
+| `/lines/{i}/grossAmount` | Exact line property |
+| `/lines/{i}/netAmount` | Exact line property |
+| `/lines/{i}/lineTotal` | Exact line property |
+| `/lines/{i}/tax` | The property and every descendant, regardless of supplied JSON type |
+| `/lines/{i}/taxBase` | Exact direct line property |
+| `/lines/{i}/taxAmount` | Exact direct line property |
+| `/lines/{i}/taxCode` | Exact direct line property |
+| `/lines/{i}/taxRate` | Exact direct line property |
+| `/lines/{i}/officialTaxCode` | Exact direct line property |
+| `/lines/{i}/officialPercentageCode` | Exact direct line property |
+| `/lines/{i}/rate` | Exact direct line property |
+
+Stage 5 first determines whether the representation is a decodable JSON object. Malformed JSON,
+unsupported media, or a non-object representation returns `INVALID_REQUEST`. For a decoded object,
+the entire object is inspected before ordinary schema binding: if any recognized path exists,
+`PROHIBITED_CALCULATED_FIELD` is returned even when its value is null, wrongly typed, or equal to a
+service result. That result precedes ordinary unknown/prohibited properties, missing required
+properties, and property-type errors. Multiple recognized paths produce the same single top-level
+outcome. Its `violations` member is omitted and no supplied value is exposed. Only when no recognized
+path exists may ordinary unknown/property/type classification produce `INVALID_REQUEST`.
+
 ### Executable General Text Policy and Vectors
 
 | Vector | Observable normalized or canonical result | Accepted | Reason |
@@ -820,6 +897,38 @@ representations containing surrounding or internal whitespace are not approved r
 | Exactly a field maximum | unchanged | Yes | Maximum is inclusive |
 | Field maximum plus one code point | none | No | Code-point maximum exceeded |
 | Empty or only `U+0020` | empty | No when required or supplied | Empty after approved trim |
+
+### Executable Buyer Email Profile
+
+After the one FR-035 general-text pass, a supplied buyer email MUST match this exact ASCII pattern:
+
+```regex
+^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$
+```
+
+The accepted local part contains 1–64 ASCII letters, digits, or ``!#$%&'*+/=?^_`{|}~-``, with `.`
+only between nonempty atoms. The domain contains at least two dot-separated labels; every label is
+1–63 ASCII letters/digits/hyphens, begins and ends with a letter or digit, and the complete address
+contains at most 254 ASCII code points. Exactly one `@` is present. Case is preserved and comparison
+is case-sensitive. No additional normalization, lowercase conversion, or truncation occurs.
+
+| Vector | Accepted | Observable result |
+|--------|----------|-------------------|
+| `buyer@example.com` | Yes | Preserved unchanged |
+| ` O'Connor+tax@sub.example.ec ` | Yes | FR-035 produces `O'Connor+tax@sub.example.ec` |
+| `Buyer@Example.COM` | Yes | Case preserved; distinct from a differently cased value |
+| `.buyer@example.com`, `buyer.@example.com`, or `buyer..name@example.com` | No | `EMAIL_INVALID` |
+| `buyer@example`, `buyer@-example.com`, or `buyer@example-.com` | No | `EMAIL_INVALID` |
+| `"buyer"@example.com`, `buyer@[127.0.0.1]`, or `buyer(comment)@example.com` | No | `EMAIL_INVALID` |
+| `buyer name@example.com`, tab/newline/NBSP, or trim-to-empty | No | General-text or `EMAIL_INVALID` rejection, as applicable |
+| `búyer@example.com` or `buyer@exámple.com` | No | `EMAIL_INVALID`; the email profile is ASCII |
+| `buyer@example.com,other@example.com` | No | `EMAIL_INVALID`; multiple addresses are forbidden |
+| Local part of 64 characters and total length 254 | Yes when the remaining grammar holds | Inclusive boundaries |
+| Local part of 65 characters, one 64-character domain label, or total length 255 | No | `EMAIL_INVALID` |
+
+An email-profile failure occurs during independent business validation after normalization and
+returns top-level `BUSINESS_VALIDATION_FAILED` with exactly one safe violation: `code` is
+`EMAIL_INVALID`, `field` is `buyer.email`, and the rejected value is absent.
 
 ## Key Entities
 
@@ -881,15 +990,20 @@ representations containing surrounding or internal whitespace are not approved r
   midnight. Every successful creation returns equal UTC `createdAt` and
   `updatedAt`; equivalent replay returns those values unchanged; failed saves expose no created
   draft. No physical save-completion timestamp is part of the contract.
-- **SC-014**: Every request containing any calculated monetary field is rejected consistently and
-  creates no state, even when the supplied value matches the service result.
+- **SC-014**: Every exhaustive recognized calculated-property path returns
+  `PROHIBITED_CALCULATED_FIELD` and creates no state, including null, wrongly typed, equal-result,
+  nested, and multiple-path vectors. For every well-formed mixed request, that result wins over
+  ordinary unknown/prohibited properties and other Stage-5 structural failures; malformed JSON
+  remains `INVALID_REQUEST` because it cannot be classified by property.
 - **SC-015**: Valid drafts at 500 lines, 8 positive payments, and 15 additional-information entries
   are accepted; any request above a limit is rejected with no state.
 - **SC-016**: Every approved Unicode vector produces its specified accepted or rejected result.
   Canonically equivalent input produces the same normalized value; prohibited whitespace and code
   points are rejected; assigned emoji is accepted where field limits allow; display case is
   preserved; canonical overflow returns `CANONICAL_NAME_TOO_LONG`; accepted values are never
-  truncated; and stricter ASCII fields follow their exact repertoires.
+  truncated; stricter ASCII fields follow their exact repertoires; and every buyer-email vector
+  follows the exact post-normalization ASCII profile, preserves case, enforces 64/63/254 boundaries,
+  and returns value-free `EMAIL_INVALID` when its email grammar fails.
 - **SC-017**: Every accepted draft retains exactly one immutable canonical Company UUID, every child
   belongs to that draft, and no cross-Company child mixing occurs.
 - **SC-018**: Every equivalent replay returns the original draft while it exists regardless of

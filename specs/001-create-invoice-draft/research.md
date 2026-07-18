@@ -288,8 +288,9 @@ and replayed unchanged; rollback exposes neither. They are not physical PostgreS
 timestamps, use no post-commit reconstruction or `track_commit_timestamp`, and the injectable clock
 stays deterministic for tests. Equivalent replay does not invoke the clock or revalidate the date.
 
-At Stage 6, Application alone invokes `BusinessTextNormalizer` once per supplied applicable
-business-text value. General human-readable text uses one NFC pass, rejects
+Stage 6 first trims, validates, and canonicalizes `emissionPointId`; only after that succeeds does
+Application alone invoke `BusinessTextNormalizer` once per supplied applicable business-text
+value. General human-readable text uses one NFC pass, rejects
 `Cc`/`Cf`/`Cs`/`Co`/`Cn` and
 `U+2028`/`U+2029`, permits only `U+0020` spacing, trims surrounding `U+0020`, preserves internal
 punctuation/case, and counts Unicode code points. Assigned emoji `So` is allowed within field
@@ -298,6 +299,11 @@ format/length. Additional `canonicalName` uses NFC → trim → collapse U+0020 
 overflow returns `CANONICAL_NAME_TOO_LONG` before fingerprinting/persistence and is never
 truncated. PostgreSQL never recalculates Java normalization. API only decodes/forwards business
 text; Domain and Infrastructure receive accepted normalized values and never normalize again.
+After that pass, buyer email is checked in Stage 10 against the exact case-sensitive ASCII
+dot-atom profile in `spec.md` and OpenAPI: local part 1–64, DNS-style labels 1–63 with at least one
+dot, total length at most 254, case preserved, and no quoted/comment/domain-literal,
+internationalized, whitespace, or multiple-address form. Failure is value-free `EMAIL_INVALID` for
+`buyer.email`; no extra trim, case fold, normalization, or truncation occurs.
 
 Payment lookup receives `(paymentMethodId, emissionDate)` and requires existence, activity,
 inclusive `effectiveFrom <= emissionDate`, and null-or-inclusive `effectiveTo`. It never uses

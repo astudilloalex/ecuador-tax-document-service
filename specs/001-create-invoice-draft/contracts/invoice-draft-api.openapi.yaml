@@ -210,6 +210,36 @@ components:
           - DISPLAY_CODE_POINT_LENGTH_VALIDATION
           - CANONICAL_NAME_DERIVATION_WHEN_APPLICABLE
           - CANONICAL_NAME_CODE_POINT_LENGTH_VALIDATION_WHEN_APPLICABLE
+      x-stage-5-property-classification:
+        owner: API
+        decodedRepresentation: one JSON object
+        malformedUnsupportedOrNonObjectOutcome: INVALID_REQUEST
+        inspectionPoint: before ordinary schema binding
+        recognizedCalculatedPaths:
+          - /taxTotals
+          - /subtotalBeforeTaxes
+          - /totalDiscount
+          - /grandTotal
+          - /lines/{i}/grossAmount
+          - /lines/{i}/netAmount
+          - /lines/{i}/lineTotal
+          - /lines/{i}/tax
+          - /lines/{i}/taxBase
+          - /lines/{i}/taxAmount
+          - /lines/{i}/taxCode
+          - /lines/{i}/taxRate
+          - /lines/{i}/officialTaxCode
+          - /lines/{i}/officialPercentageCode
+          - /lines/{i}/rate
+        subtreePaths: ['/taxTotals', '/lines/{i}/tax']
+        lineIndexPlaceholder: '{i} is any zero-based lines array position'
+        matchOutcome: PROHIBITED_CALCULATED_FIELD
+        matchIgnoresSuppliedValueAndType: true
+        matchPrecedesOrdinaryUnknownMissingAndTypeErrors: true
+        multipleMatchesProduceOneTopLevelOutcome: true
+        violationsMember: omitted
+        rejectedValueExposed: false
+        noMatchOrdinaryUnknownOutcome: INVALID_REQUEST
       required:
         - emissionPointId
         - emissionDate
@@ -354,13 +384,33 @@ components:
             owner: Application
             unicodeNormalization: NFC
             trim: U+0020
-            normalizedFormat: email
+            normalizedProfile: ASCII_DOT_ATOM_WITH_DNS_DOMAIN
+            normalizedPattern: '^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+            localPartMinCharacters: 1
+            localPartMaxCharacters: 64
+            domainLabelMinCharacters: 1
+            domainLabelMaxCharacters: 63
+            domainRequiresAtLeastOneDot: true
             normalizedMaxCodePoints: 254
             countingUnit: UNICODE_CODE_POINTS
+            acceptedRepertoire: ASCII
+            casePreserved: true
+            comparison: CASE_SENSITIVE
+            additionalEmailNormalization: none
+            failureOutcome:
+              topLevelCode: BUSINESS_VALIDATION_FAILED
+              httpStatus: 422
+              violationCode: EMAIL_INVALID
+              field: buyer.email
+              rejectedValueExposed: false
           description: >-
-            Optional email after the one Application-owned Stage 6 general-text NFC/U+0020 pass;
-            prohibited Unicode categories/separators are rejected and length is Unicode code
-            points. The API forwards the decoded value unchanged.
+            Optional email forwarded unchanged by API. After the one Application-owned Stage-6
+            general-text NFC/U+0020 pass, Stage 10 accepts exactly one case-preserved ASCII dot-atom
+            address with a 1-64-character local part, DNS-style 1-63-character labels, at least one
+            domain dot, and at most 254 code points. Quoted local parts, comments, domain literals,
+            internationalized addresses, internal whitespace, and multiple-address forms are
+            rejected with value-free EMAIL_INVALID. The standard wire schema intentionally does
+            not apply the normalized pattern before Stage 6.
         telephone:
           type: string
           x-application-stage-6:
@@ -523,6 +573,7 @@ components:
         emissionPointId:
           type: string
           format: uuid
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
           description: Canonical opaque external reference captured in the draft.
         emissionDate:
           type: string
@@ -616,8 +667,9 @@ components:
           maxLength: 300
         email:
           type: string
-          format: email
+          pattern: '^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
           maxLength: 254
+          description: Persisted case-preserved email satisfying the exact ASCII dot-atom profile.
         telephone:
           type: string
           minLength: 7
@@ -872,12 +924,25 @@ components:
           type: array
           description: >-
             Safe validation details. BUSINESS_VALIDATION_FAILED uses EMISSION_POINT_INVALID for a
-            decoded emission-point string rejected at Stage 6, MONETARY_RANGE_EXCEEDED for quantity,
-            unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow, and
-            CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code points.
+            decoded emission-point string rejected at Stage 6, EMAIL_INVALID for normalized buyer
+            email rejected by the exact Stage-10 ASCII profile, MONETARY_RANGE_EXCEEDED for
+            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow,
+            and CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code
+            points. PROHIBITED_CALCULATED_FIELD omits this member entirely.
           items:
             $ref: '#/components/schemas/Violation'
       allOf:
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: PROHIBITED_CALCULATED_FIELD
+          then:
+            properties:
+              status:
+                const: 422
+            not:
+              required: [violations]
         - if:
             required: [code]
             properties:
@@ -915,6 +980,22 @@ components:
                   required: [code]
                   properties:
                     code:
+                      const: EMAIL_INVALID
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
                       const: EMISSION_POINT_INVALID
           then:
             properties:
@@ -937,7 +1018,8 @@ components:
           description: >-
             Safe original request field path; never contains the rejected value. For
             CANONICAL_NAME_TOO_LONG this identifies the additional-information name that produced
-            the canonical value; for EMISSION_POINT_INVALID it is exactly emissionPointId.
+            the canonical value; for EMISSION_POINT_INVALID it is exactly emissionPointId; for
+            EMAIL_INVALID it is exactly buyer.email.
         maximum:
           type: integer
           minimum: 1
@@ -979,6 +1061,15 @@ components:
                 const: emissionPointId
               validationStage:
                 const: NORMALIZATION
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: EMAIL_INVALID
+          then:
+            properties:
+              field:
+                const: buyer.email
 
   responses:
     BadRequest:
@@ -1022,13 +1113,17 @@ components:
             $ref: '#/components/schemas/ProblemDetails'
     ValidationFailure:
       description: >-
-        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. A decoded emissionPointId string
-        that becomes blank after the approved trim, is malformed, or is nil uses
+        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. For a decoded request object, any
+        exhaustive recognized calculated-property path produces PROHIBITED_CALCULATED_FIELD before
+        ordinary unknown/prohibited, missing-property, or property-type outcomes, regardless of the
+        supplied value/type; the response omits violations and never exposes a supplied value. A
+        decoded emissionPointId string that becomes blank after the approved trim, is malformed, or is nil uses
         BUSINESS_VALIDATION_FAILED with safe violation EMISSION_POINT_INVALID. Numeric-envelope
         breaches use BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Application
         Stage 6 post-canonicalization overflow uses nested CANONICAL_NAME_TOO_LONG and reports the
         original request field, maximum 300, Unicode-code-point counting, and canonicalization
-        stage. Stage 10 contains only calculation-independent validation; Stage 11A calculates
+        stage. A normalized buyer email outside the exact ASCII dot-atom profile uses value-free
+        EMAIL_INVALID for buyer.email. Stage 10 contains only calculation-independent validation; Stage 11A calculates
         monetary values; Stage 11B then checks range/overflow, discount-over-gross, final-consumer
         calculated-total limit, total-dependent payment shape/positivity, and exact reconciliation
         in that order.

@@ -32,31 +32,44 @@ paths, stack traces, tokens, certificate data, Company lookup results, or extern
 | `IDEMPOTENCY_KEY_INVALID` | 400 | Exactly one value is blank/whitespace-only after one ASCII SP/HTAB trim, longer than 128 normalized characters, or fails the approved non-comma ASCII grammar | Supply one valid normalized value | No lookup, draft, children, or binding |
 | `IDEMPOTENCY_KEY_MULTIPLE` | 400 | Repeated fields, a parser result with multiple values, or any comma-containing/comma-combined ambiguous value is present | Supply exactly one unambiguous field value; no first value is selected | No lookup, draft, children, or binding |
 | `INVALID_REQUEST` | 400 | Blank, repeated, over-length, or unsafe correlation input; malformed JSON; unsupported media representation; missing required `emissionPointId`; a non-string `emissionPointId` representation; or unknown/prohibited non-calculated property such as request `companyId` or `issuerId` | Correct representation; invalid correlation input is replaced and never echoed | No draft, children, or binding |
-| `PROHIBITED_CALCULATED_FIELD` | 422 | A recognized system-calculated field is present anywhere in the create body | Remove every calculated field | No draft, children, or binding |
+| `PROHIBITED_CALCULATED_FIELD` | 422 | A path from the exhaustive calculated-property set is present anywhere in a decoded create object, regardless of its supplied value or JSON type | Remove every calculated property | No draft, children, or binding |
 | `IDEMPOTENCY_CONFLICT` | 409 | Same Company/key binding exists with a different fingerprint/version outcome | Use original content or a new key | Existing draft unchanged; no new draft |
 | `REQUEST_PAYLOAD_TOO_LARGE` | 413 | Body is conclusively observed to exceed `2,097,152` bytes before deadline expiry | Reduce request size | Rejected before Company evaluation; valid correlation is preserved, absent/invalid correlation receives a safe generated replacement without emitting `400`; no later processing, database operation, or state |
-| `BUSINESS_VALIDATION_FAILED` | 422 | Application-owned Stage 6 emission-point or text/canonical validation, Stage 10 independent buyer/line/catalog/text/payment-reference rules (including payment activity/effectiveness on emissionDate), or ordered Stage 11B calculated-value rules fail; nested stable violations include `EMISSION_POINT_INVALID`, `CANONICAL_NAME_TOO_LONG`, and `MONETARY_RANGE_EXCEEDED` | Correct business content | No fingerprint lookup, draft, children, or binding when rejected in Stage 6; otherwise no draft, children, or binding |
+| `BUSINESS_VALIDATION_FAILED` | 422 | Application-owned Stage 6 emission-point or text/canonical validation, Stage 10 independent buyer/line/catalog/text/payment-reference rules (including the exact buyer-email profile and payment activity/effectiveness on emissionDate), or ordered Stage 11B calculated-value rules fail; nested stable violations include `EMISSION_POINT_INVALID`, `EMAIL_INVALID`, `CANONICAL_NAME_TOO_LONG`, and `MONETARY_RANGE_EXCEEDED` | Correct business content | No fingerprint lookup, draft, children, or binding when rejected in Stage 6; otherwise no draft, children, or binding |
 | `PERSISTENCE_UNAVAILABLE` | 503 | Local PostgreSQL is unavailable, or its configured operation timeout/failure becomes conclusive while shared request-deadline budget remains | Retry same Company/key/content; `Retry-After` MAY be returned | No partial state when pre-commit or complete rollback is confirmed |
 | `REQUEST_TIMEOUT` | 504 | The one earliest-boundary monotonic 10-second request deadline expires before the current FR-041 stage or persistence outcome becomes conclusive | Retry same Company/key/content | No state when expiry is confirmed before persistence; no zero-state claim when commit is unresolved; replay resolves uncertain or completed commit state |
 | `INTERNAL_ERROR` | 500 | Unexpected unclassified service failure | Follow operational guidance; same key prevents duplication | No known partial state; committed binding remains authoritative |
 
 ## Recognized Prohibited Calculated Fields
 
-The API maintains a stable set derived from the response/calculation model, including at least:
+The API uses this exhaustive case-sensitive path set. `{i}` means any zero-based `lines` array
+position:
 
-- line gross amount;
-- line net amount;
-- line tax base;
-- line tax amount;
-- line total;
-- grouped tax totals;
-- subtotal before taxes;
-- total discount;
-- grand total;
-- server-derived tax code or rate when supplied instead of `taxRuleId`.
+- `/taxTotals` and every descendant;
+- `/subtotalBeforeTaxes`;
+- `/totalDiscount`;
+- `/grandTotal`;
+- `/lines/{i}/grossAmount`;
+- `/lines/{i}/netAmount`;
+- `/lines/{i}/lineTotal`;
+- `/lines/{i}/tax` and every descendant;
+- `/lines/{i}/taxBase`;
+- `/lines/{i}/taxAmount`;
+- `/lines/{i}/taxCode`;
+- `/lines/{i}/taxRate`;
+- `/lines/{i}/officialTaxCode`;
+- `/lines/{i}/officialPercentageCode`;
+- `/lines/{i}/rate`.
 
-Presence produces `PROHIBITED_CALCULATED_FIELD` even when the supplied value equals the service
-calculation. Other unknown fields produce `INVALID_REQUEST`.
+Stage 5 first decodes one JSON object. Malformed JSON, unsupported media, and non-object
+representations return `INVALID_REQUEST` because property classification is impossible. For a
+decoded object, the API inspects the complete object before ordinary schema binding. Presence of any
+recognized path produces `PROHIBITED_CALCULATED_FIELD` even when its value is null, wrongly typed, or
+equal to the service calculation. It takes precedence over ordinary unknown/prohibited properties,
+missing required properties, and property-type errors in that same object. Multiple recognized
+paths produce the same response. The response omits `violations` and never exposes a supplied value.
+Only when no recognized path exists may ordinary unknown or prohibited properties produce
+`INVALID_REQUEST`.
 
 ## Idempotency Header Classification
 
@@ -90,6 +103,26 @@ A value that becomes blank, is malformed, or is the nil UUID returns top-level
 The violation never contains the raw, trimmed, or canonical candidate value. It becomes conclusive
 before general business-text normalization, fingerprinting, idempotency lookup, Domain entry, or
 persistence and creates no state.
+
+## Buyer Email Violation
+
+After the one approved general-text normalization pass, Stage 10 validates `buyer.email` against
+the exact case-sensitive ASCII dot-atom pattern recorded in `spec.md` and the OpenAPI
+`x-application-stage-6.normalizedPattern` metadata. The profile permits a 1–64-character local
+part, 1–63-character DNS-style labels, at least one domain dot, and at most 254 total ASCII code
+points. It preserves case and accepts no quoted local part, comment, domain literal,
+internationalized address, internal whitespace, or multiple-address representation.
+
+A supplied normalized value that fails that profile returns top-level
+`BUSINESS_VALIDATION_FAILED` (`422`) with exactly one safe violation:
+
+- `code`: `EMAIL_INVALID`;
+- `field`: `buyer.email`.
+
+The violation contains no raw or normalized email value. Normalization failures such as prohibited
+control or separator code points remain the earlier Stage-6 business-text outcome; `EMAIL_INVALID`
+is selected only after normalization succeeds and the normalized value fails the email profile.
+Either outcome creates no state.
 
 ## Numeric Envelope Violation
 
@@ -157,9 +190,13 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
 4. `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_KEY_INVALID`, or
    `IDEMPOTENCY_KEY_MULTIPLE` for idempotency-header presence, parsed cardinality, one-time ASCII
    SP/HTAB trim, or normalized grammar;
-5. API-owned `INVALID_REQUEST` or `PROHIBITED_CALCULATED_FIELD` for malformed
-   representation/unknown or prohibited properties; a missing or non-string `emissionPointId` is
-   `INVALID_REQUEST`; API forwards every decoded string unchanged;
+5. API first decodes one JSON object. Malformed JSON, unsupported/non-object representation,
+   ordinary unknown/prohibited properties, and missing or wrongly typed required properties use
+   `INVALID_REQUEST`. For a decoded object, the exhaustive recognized calculated-path scan occurs
+   before ordinary schema binding; any match uses `PROHIBITED_CALCULATED_FIELD` and wins over every
+   other Stage-5 result in that object. A missing or non-string `emissionPointId` is therefore
+   `INVALID_REQUEST` only when no recognized calculated path exists; API forwards every decoded
+   `emissionPointId` string unchanged;
 6. Application first performs the one approved `emissionPointId` trim/UUID validation and returns
    `BUSINESS_VALIDATION_FAILED` with nested `EMISSION_POINT_INVALID` for a blank-after-trim,
    malformed, or nil value. Only after it passes does Application perform business-text
@@ -169,8 +206,9 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
 7. local Company-scoped binding lookup infrastructure outcome;
 8. equivalent binding success (`200`, not an error);
 9. `IDEMPOTENCY_CONFLICT`;
-10. Stage 10 independent validation only: buyer/identification syntax; line/cardinality;
-    product/description; quantity/unit-price sign/scale; tax existence/applicability; payment-method
+10. Stage 10 independent validation only: buyer/identification syntax and the exact normalized
+    buyer-email profile (`EMAIL_INVALID`); line/cardinality; product/description;
+    quantity/unit-price sign/scale; tax existence/applicability; payment-method
     existence/activity/inclusive effectiveness on `emissionDate`; payment structure/basic amount;
     text/catalog/structural rules;
 11. Stage 11A calculates monetary values, then Stage 11B returns

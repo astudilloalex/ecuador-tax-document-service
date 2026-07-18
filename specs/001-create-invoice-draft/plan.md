@@ -207,8 +207,9 @@ HTTP request
     request deadline before body consumption; parse/validate headers and transport DTOs; forward
     decoded business and identifier values unchanged
   → application: CreateInvoiceDraftCommand(CompanyId, fixed request instant, mapped business
-    inputs, idempotency/correlation, fixed RequestDeadline); invoke BusinessTextNormalizer at
-    Stage 6; orchestrate ordered validation and invoke Domain operations; construct
+    inputs, idempotency/correlation, fixed RequestDeadline); begin Stage 6 with emission-point
+    validation and invoke BusinessTextNormalizer only after that validation succeeds; orchestrate
+    ordered validation and invoke Domain operations; construct
     InvoiceDraftCandidate with final local identifiers
   → domain: enforce fiscal/commercial invariants and perform deterministic monetary calculation
   → application outbound persistence port: persist(InvoiceDraftCandidate)
@@ -221,7 +222,7 @@ HTTP request
 | Boundary | Responsibility | Allowed dependencies | Prohibited inputs/types |
 |----------|----------------|----------------------|-------------------------|
 | `api` | At the earliest boundary, before body consumption, capture one request instant, start the monotonic 10-second race, and initialize request state; exclusively own terminal-result arbitration, the one-response guard, HTTP status/Problem Details mapping, and late-result discard; enforce stages 1–5, including exact Idempotency-Key rules; decode JSON and validate transport representation; forward decoded business and identifier values unchanged | `application` | NFC normalization, business or identifier trimming, UUID canonicalization, space collapse, lowercase text conversion, `canonicalName` construction, persistence entities, Company/security clients, or deadline/HTTP/header responsibilities delegated below API |
-| `application` | Receive mapped CompanyId, the fixed request instant, raw decoded business/identifier values, and a neutral RequestDeadline only for cooperative budget checks; at the beginning of Stage 6 trim/validate/canonicalize `emissionPointId` once and invoke `BusinessTextNormalizer` exactly once for every supplied applicable business-text value; derive/validate canonical values; orchestrate the approved validation sequence and invoke Domain invariants/calculation without reimplementing them; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | Independent implementation or recalculation of Domain fiscal/commercial invariants or monetary rules; HTTP headers/requests/status/exceptions/envelopes; terminal arbitration; request- or persistence-clock invocation; timestamp construction; `SecurityIdentity`; `JsonWebToken`; thread-local/Gateway objects |
+| `application` | Receive mapped CompanyId, the fixed request instant, raw decoded business/identifier values, and a neutral RequestDeadline only for cooperative budget checks; begin Stage 6 by trimming/validating/canonicalizing `emissionPointId` once and, only after that succeeds, invoke `BusinessTextNormalizer` exactly once for every supplied applicable business-text value; derive/validate canonical values; orchestrate the approved validation sequence and invoke Domain invariants/calculation without reimplementing them; allocate all local draft/child identifiers through `DraftIdentifierGenerator`; construct `InvoiceDraftCandidate`; call the persistence port; return transport-neutral outcomes | `domain`, Mutiny, application ports | Independent implementation or recalculation of Domain fiscal/commercial invariants or monetary rules; HTTP headers/requests/status/exceptions/envelopes; terminal arbitration; request- or persistence-clock invocation; timestamp construction; `SecurityIdentity`; `JsonWebToken`; thread-local/Gateway objects |
 | `domain` | Receive normalized values; own immutable CompanyId on Invoice Draft; exclusively enforce buyer/line/tax/payment fiscal and commercial invariants and perform exact deterministic monetary calculation when invoked by Application | Java/approved domain libraries | Unicode normalization mechanics, use-case orchestration, HTTP/JSON/Quarkus/Panache/PostgreSQL/Mutiny/security types |
 | `infrastructure` | Persist exactly the supplied normalized/canonical values and final local identifiers; implement transport-neutral local repository/catalog/clock/identifier ports with reactive PostgreSQL/Panache; clamp work to remaining budget; let the T076 transaction own the sole persistence-clock invocation and return committed state as `PersistedInvoiceDraft` | application ports/domain types | Independent NFC/trim/collapse/lowercase/canonical derivation, identifier replacement, HTTP status/exception/envelope/arbiter, Company/SRI/security adapter, shared database, cache |
 
@@ -318,8 +319,15 @@ semantics. FR-041 stages 1–5 use one explicit pre-application pipeline:
    grammar in exactly that order. Only this gate emits
    `INVALID_REQUEST` for correlation invalidity, and only after Company validation passes. It stores
    only the accepted mapped values in request-local API state.
-3. Jackson deserialization and Bean Validation perform representation validation only after that
-   gate passes. `quarkus.jackson.fail-on-unknown-properties=true` enforces strict bodies, and the
+3. After that gate passes, the API decodes one JSON object and an API-owned
+   `InvoiceDraftRequestPropertyClassifier` inspects its complete tree before DTO binding. Malformed,
+   unsupported, or non-object input returns `INVALID_REQUEST`. For a decoded object, the classifier
+   recognizes exactly the calculated-property path set from FR-012: any match returns
+   `PROHIBITED_CALCULATED_FIELD` before ordinary unknown/prohibited, missing-property, or type
+   classification, regardless of supplied value/type and without a `violations` array. Only after
+   the scan finds no calculated path do Jackson DTO binding and Bean Validation complete ordinary
+   representation validation. `quarkus.jackson.fail-on-unknown-properties=true` remains a defensive
+   strict-body barrier, and the
    built-in Jackson mismatched-input mapper is disabled with
    `quarkus.rest.exception-mapping.disable-mapper-for=io.quarkus.resteasy.reactive.jackson.runtime.mappers.BuiltinMismatchedInputExceptionMapper`
    so the feature mapper returns the approved stable response.
@@ -380,8 +388,9 @@ before body consumption, derives the immutable request instant, and stores it in
 state. The resource and mapper consume that captured value after stage 5 without another clock
 read; it is carried by `CreateInvoiceDraftCommand` and is not reused as either persistence
 timestamp. Application orchestration begins at Stage 6 by trimming, validating, and canonicalizing
-the raw `emissionPointId` exactly once and invoking `BusinessTextNormalizer` exactly once for each
-supplied applicable business-text value; API has not normalized either category. It continues
+the raw `emissionPointId` exactly once. Only after that validation succeeds does it invoke
+`BusinessTextNormalizer` exactly once for each supplied applicable business-text value; API has not
+normalized either category. It continues
 through replay/conflict, Stage 10 independent
 validation, Stage 11A calculation, exact Stage 11B calculated-value validation, Application-owned
 local identifier allocation, timestamp-free candidate construction, and persistence delegation.
@@ -489,13 +498,25 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Optional `X-Correlation-Id`: preserve one valid supplied value; generate a UUID when absent; for
   invalid input, never echo it, generate a safe replacement UUID, and return `INVALID_REQUEST` when
   that validation step governs.
-- Strict request/input schemas reject `companyId`, `issuerId`, fiscal/snapshot data, unknown
-  properties, and calculated fields. The response's explicitly contracted canonical `companyId`
-  does not weaken the input prohibition.
+- Stage 5 first decodes one JSON object. Malformed/unsupported/non-object representations use
+  `INVALID_REQUEST`; an API-owned pre-binding classifier then scans the exhaustive case-sensitive
+  calculated-property paths from FR-012. Any match uses `PROHIBITED_CALCULATED_FIELD`, regardless of
+  value/type, and precedes ordinary unknown/prohibited, missing-property, and property-type outcomes.
+  Multiple matches produce the same top-level result with no `violations` array. Only a decoded
+  object with no calculated-path match proceeds to strict request/input-schema rejection of
+  `companyId`, `issuerId`, fiscal/snapshot data, and other unknown properties as `INVALID_REQUEST`.
+  The response's explicitly contracted canonical `companyId` does not weaken the input prohibition.
+- The exhaustive calculated paths are `/taxTotals`, `/subtotalBeforeTaxes`, `/totalDiscount`,
+  `/grandTotal`; and, for every zero-based line index `{i}`, `/lines/{i}/grossAmount`,
+  `/lines/{i}/netAmount`, `/lines/{i}/lineTotal`, `/lines/{i}/tax`, `/lines/{i}/taxBase`,
+  `/lines/{i}/taxAmount`, `/lines/{i}/taxCode`, `/lines/{i}/taxRate`,
+  `/lines/{i}/officialTaxCode`, `/lines/{i}/officialPercentageCode`, and `/lines/{i}/rate`.
+  `/taxTotals` and `/lines/{i}/tax` classify their complete supplied subtrees.
 - Request `emissionPointId` is a decoded string without a wire-level UUID pattern that could
   preempt Stage 6. API forwards it unchanged; Application trims surrounding ASCII SP/HTAB once,
   rejects blank/malformed/nil UUIDs, and supplies the canonical lowercase hyphenated value. The
-  response schema enforces the canonical UUID representation.
+  response schema enforces
+  `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` for every new and replay result.
 - Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
   commercial/calculated draft, `createdAt`, and `updatedAt`.
 - New commit returns `201`; equivalent replay returns `200`; both identify replay state.
@@ -588,9 +609,10 @@ structure/red PostgreSQL evidence, T018 owns final PostgreSQL/Flyway behavior ov
 values, T030 owns request-contract metadata, T045 owns buyer-validator behavior over
 `applicationNormalizedValue`, and T050 owns product-validator behavior over that same stage value.
 
-General human-readable single-line text reaches Application exactly as API decoded it. At the
-beginning of Stage 6, Application alone invokes `BusinessTextNormalizer` exactly once for each
-supplied applicable value. The invocation normalizes to NFC; trims surrounding `U+0020`; rejects
+General human-readable single-line text reaches Application exactly as API decoded it. Stage 6
+begins with the emission-point trim/validation/canonicalization defined above. Only after that
+succeeds, Application alone invokes `BusinessTextNormalizer` exactly once for each supplied
+applicable value. The invocation normalizes to NFC; trims surrounding `U+0020`; rejects
 categories `Cc`, `Cf`, `Cs`, `Co`, `Cn`, `U+2028`, and `U+2029`; accepts only `U+0020` as spacing;
 rejects tab, CR, LF, NBSP, and all other separators; preserves internal punctuation, internal
 `U+0020` runs, and display case; and counts display length in Unicode code points. Comparison is
@@ -641,6 +663,27 @@ create `idempotency-v1-vectors.json`, but those vectors reference or consume thi
 instead of redefining normalization cases; T028 is therefore an indirect consumer through T020.
 Independent layer-specific suites establish equivalence by selecting the stage-appropriate fixture
 value and responsibility, not by validating the same literal or repeating transformations.
+
+Buyer email uses a stricter post-normalization ASCII profile. `BusinessTextNormalizer` performs the
+one ordinary NFC and surrounding-`U+0020` pass; then Stage 10 validates the normalized value against
+the exact specification/OpenAPI pattern
+``^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$``.
+The local part is a 1–64-character dot-atom over ASCII
+letters, digits, and ``!#$%&'*+/=?^_`{|}~-``; dots separate nonempty atoms. The domain has at least two
+labels, each 1–63 ASCII letters/digits/hyphens with alphanumeric ends, and the complete address is at
+most 254 ASCII code points. Case is preserved and compared case-sensitively; no component folds case,
+re-normalizes, trims again, or truncates. Quoted local parts, comments, domain literals,
+internationalized addresses, internal whitespace, and multiple-address forms return transport-
+neutral `BUSINESS_VALIDATION_FAILED` with value-free `EMAIL_INVALID` for `buyer.email`.
+
+T020 owns the email entries in `unicode-text-validation-vectors.json`. T033 proves raw API forwarding;
+T029 proves the single general-text normalization and passes only its result onward; T030 proves the
+OpenAPI metadata; T026 consumes accepted normalized Domain inputs; T045 tests the actual production
+buyer-email validator against the same expected outcomes; T036 persists only accepted stored values
+and does not claim to reproduce the email grammar. Required vectors cover valid dot-atoms, preserved
+case, surrounding `U+0020`, leading/trailing/consecutive local dots, quoted/comment/domain-literal
+forms, internal whitespace and prohibited separators, non-ASCII local/domain text, multiple
+addresses, local-part 64/65, domain-label 63/64, and total-length 254/255.
 
 **Payment-Method Effectiveness**: Reference lookup receives `(paymentMethodId, emissionDate)` and
 requires existence, activity, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
@@ -776,8 +819,8 @@ The established feature test-resource convention is
 T017, T018, T030, T045, and T050 with the stage-specific fields and responsibilities defined above.
 The authoritative Unicode fixture is
 `src/test/resources/invoicedraft/unicode-text-validation-vectors.json`, owned by T020 and consumed
-directly by T026, T029, T030, T033, and T036, with T028 consuming it indirectly through T020's
-idempotency vectors. Both fixtures are planned here and are not created by this documentary
+directly by T026, T029, T030, T033, T036, and T045—including its exact buyer-email vectors—with
+T028 consuming it indirectly through T020's idempotency vectors. Both fixtures are planned here and are not created by this documentary
 reconciliation.
 
 Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
@@ -791,8 +834,9 @@ is planned.
 | Clean layer handoff | Architecture + application | Command has explicit CompanyId and earliest-boundary request instant; API forwards decoded business text and `emissionPointId` unchanged; Application alone normalizes at Stage 6 and constructs the timestamp-free candidate; aggregate has immutable CompanyId | no HTTP/security/thread-local/Gateway types below API; no API normalization or UUID parsing; no Domain/Infrastructure re-normalization |
 | No Company/security integration | Architecture/config/runtime trace | zero Company/auth calls/dependencies/spans | no Company existence/status/tenant/emission ownership tests |
 | Draft business rules | Domain/application | exact Stage 6 emission-point SP/HTAB trim/UUID canonicalization plus general-text normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned normalization and local identifiers; Domain consumes only accepted normalized inputs | one normalization pass/value; emission-point surrounded/malformed/nil vectors; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
+| Stage-5 calculated-property classification | API contract/integration | decoded-object scan uses the exhaustive path set and selects `PROHIBITED_CALCULATED_FIELD` before generic schema binding; malformed/non-object input remains `INVALID_REQUEST` | every exact path; null/wrong-type/equal-value; multiple calculated paths; calculated plus unknown/prohibited/missing/wrong-type; no match plus unknown; no rejected value or violations array |
 | ASCII request-to-storage equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every suite consumes `ascii-validation-vectors.json` but selects its stage value: raw/normalized contract metadata, `applicationNormalizedValue`, `expectedStoredValue`, or `storedProbeValue`; no domain suite imports transport/database infrastructure | surrounding SP/HTAB trim accepted in Application; internal whitespace, Unicode, punctuation, empty, trim-to-empty, min/max and over-limit vectors; direct invalid storage probes; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
-| Unicode text ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, accepted `expectedDomainInput`, Application/canonical expectations, or stored/probe values according to their boundary | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; no truncation or repeated normalization |
+| Unicode text and buyer-email ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL, T045 production buyer validator | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, accepted `expectedDomainInput`, Application/canonical expectations, or stored/probe values according to their boundary; T045 alone proves the production email grammar | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; exact email dot-atom, ASCII, case, quoted/comment/literal/multiple-address and 64/63/254 boundaries; `EMAIL_INVALID`; no truncation or repeated normalization |
 | Persistence/Flyway | Real PostgreSQL from empty | immutable V3; T017 red evidence; T018-only V5 and green exact ASCII constraints; local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, timestamp-free candidate, Application-owned final IDs, T076-only one-call equal `createdAt`/`updatedAt`, and committed `PersistedInvoiceDraft` | T017 failure specificity and unrelated-behavior stability; T018 V3→V5/Flyway validation and final absence of locale-dependent POSIX classes; no prohibited fields/catalog Company columns; rollback; no identifier replacement, placeholder timestamp, physical commit timestamp, or second clock call |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner; replay loads `PersistedInvoiceDraft` | property/collection order, line order, response loss, no normalized payload storage, no new aggregate/identifier/clock call/canonical rebuild, original identifier and both timestamps unchanged |
 | API errors/correlation/deadline | Contract/integration with controlled deadline and wall-clock signals | API captures request time once at the earliest boundary before body consumption, owns the Uni/deadline race, emits exactly one terminal response, enforces the ordered upload/header/entity gate, and accepts exactly one normalized Idempotency-Key | body crossing Guayaquil midnight retains the entry date; resource/mapper make no later request-time read; raw emission point is forwarded; missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |
