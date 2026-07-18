@@ -240,6 +240,42 @@ components:
         violationsMember: omitted
         rejectedValueExposed: false
         noMatchOrdinaryUnknownOutcome: INVALID_REQUEST
+      x-validation-precedence-examples:
+        terminalResponseCardinality: exactly one
+        lateOutcomeHandling: discarded
+        pairs:
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: INVALID_EMISSION_POINT_STRING
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            competingFact: INVALID_EMISSION_POINT_STRING
+            preDeadlineOutcome: INVALID_REQUEST
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: INVALID_REQUEST
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: INVALID_EMISSION_POINT_STRING
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: EMISSION_POINT_INVALID
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            competingFact: STAGE_10_EMAIL_INVALID
+            preDeadlineOutcome: CANONICAL_NAME_TOO_LONG
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: STAGE_10_EMAIL_INVALID
+            competingFact: DEADLINE
+            preDeadlineOutcome: EMAIL_INVALID
+            deadlineFirstOutcome: REQUEST_TIMEOUT
       required:
         - emissionPointId
         - emissionDate
@@ -267,10 +303,64 @@ components:
               - LOWERCASE_HYPHENATED_UUID_CANONICALIZATION
             normalizedPattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
             normalizedFormat: uuid
-            rawExamples:
-              - ' 123e4567-e89b-12d3-a456-426614174000 '
-              - "\t123E4567-E89B-12D3-A456-426614174000\t"
-            canonicalExample: '123e4567-e89b-12d3-a456-426614174000'
+            validExamples:
+              - id: already-canonical
+                rawValue: '123e4567-e89b-12d3-a456-426614174000'
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: uppercase
+                rawValue: '123E4567-E89B-12D3-A456-426614174000'
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: surrounding-ascii-sp
+                rawValue: ' 123e4567-e89b-12d3-a456-426614174000 '
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: surrounding-ascii-htab
+                rawValue: "\t123E4567-E89B-12D3-A456-426614174000\t"
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+            invalidExamples:
+              - id: missing-property
+                representation: PROPERTY_ABSENT
+                failureStage: 5
+                outcome: INVALID_REQUEST
+              - id: non-string-property
+                representation: JSON_NON_STRING_INCLUDING_NULL
+                failureStage: 5
+                outcome: INVALID_REQUEST
+              - id: empty-string
+                rawValue: ''
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: trim-to-empty-ascii-sp
+                rawValue: '   '
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: trim-to-empty-ascii-htab
+                rawValue: "\t\t"
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: malformed
+                rawValue: not-a-uuid
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: nil-uuid
+                rawValue: '00000000-0000-0000-0000-000000000000'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: internal-ascii-sp
+                rawValue: '123e4567-e89b-12d3-a456-4266141740 00'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: internal-ascii-htab
+                rawValue: "123e4567-e89b-12d3-a456-4266141740\t00"
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: braced
+                rawValue: '{123e4567-e89b-12d3-a456-426614174000}'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: non-hyphenated
+                rawValue: '123e4567e89b12d3a456426614174000'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
             failureOutcome:
               topLevelCode: BUSINESS_VALIDATION_FAILED
               httpStatus: 422
@@ -397,6 +487,33 @@ components:
             casePreserved: true
             comparison: CASE_SENSITIVE
             additionalEmailNormalization: none
+            stageOutcomeSemantics:
+              stage6Accepted: normalized value is forwarded unchanged to Stage 10
+              stage6Rejected: no Domain input and the email grammar does not run
+              stage10Rejected: EMAIL_INVALID with a non-null Stage-6-normalized Domain input
+            requiredExamples:
+              accepted:
+                - 'a@b.c'
+                - "a!#$%&'*+/=?^_`{|}~-z@example.com"
+                - 'buyer@example.com'
+                - 'O''Connor+tax@sub.example.ec'
+                - 'Buyer@Example.COM'
+              rejectedAtStage6:
+                - TAB_CR_LF_NBSP_U+2028_U+2029_OR_CF
+                - EMPTY_AFTER_U+0020_TRIM
+              rejectedAtStage10:
+                - '@b.c'
+                - 'a@.c'
+                - 'a@b..c'
+                - '.buyer@example.com'
+                - 'buyer.@example.com'
+                - 'buyer..name@example.com'
+                - 'buyer@example.com.'
+                - '"buyer"@example.com'
+                - 'buyer@[127.0.0.1]'
+                - 'buyer(comment)@example.com'
+                - 'buyer@example.com,other@example.com'
+                - 'búyer@example.com'
             failureOutcome:
               topLevelCode: BUSINESS_VALIDATION_FAILED
               httpStatus: 422

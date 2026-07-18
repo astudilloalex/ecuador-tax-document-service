@@ -123,7 +123,7 @@ complete normalized requests. Fingerprints are SHA-256 values with normalization
 |-----------|------------------------------------|-------------------------------------|
 | Ecuadorian legislation/SRI | SRI Electronic Tax Documents Offline Scheme Technical Sheet v2.32 and SRI electronic-invoicing resources referenced by the spec | Buyer types, IVA treatments, final-consumer threshold, fiscal vocabulary |
 | Constitution | `.specify/memory/constitution.md` v2.0.1 | Company request/input prohibition and contracted response allowance; Company-owned aggregate scope/global-catalog exclusion; no identity/Company dependency; architecture, persistence, testing, operations |
-| Specification | `specs/001-create-invoice-draft/spec.md`, clarification sessions through 2026-07-16 | Stakeholder goal, external contract, calculations, observable normalization results, all-or-nothing save behavior, timestamp results, failure precedence, and acceptance outcomes |
+| Specification | `specs/001-create-invoice-draft/spec.md`, clarification sessions through 2026-07-17 | Stakeholder goal, external contract, calculations, observable normalization results, all-or-nothing save behavior, timestamp results, failure precedence, and acceptance outcomes |
 | Reference baseline | `specs/001-create-invoice-draft/reference-data-baseline.md` | Approved buyer-type, IVA-rule, and payment-method rows; official evidence; target decisions; deterministic UUIDv5 mappings |
 | Architecture decisions | This plan and supporting Phase 0/1 artifacts; no separate ADR | Feature-local technical choices |
 | Technology authorities | Quarkus release/Java 25 guidance; PostgreSQL 18.4 release/versioning guidance linked in `research.md` | Runtime/database versions |
@@ -517,6 +517,11 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
   rejects blank/malformed/nil UUIDs, and supplies the canonical lowercase hyphenated value. The
   response schema enforces
   `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` for every new and replay result.
+  Contract metadata and tests enumerate four accepted request forms—already canonical, uppercase,
+  surrounding SP, and surrounding HTAB—and bind each to its exact lowercase-hyphenated response.
+  They also enumerate absent/non-string Stage-5 failures and empty, SP/HTAB trim-to-empty,
+  malformed, nil, internal-SP, internal-HTAB, braced, and non-hyphenated Stage-6 failures. No
+  request-schema UUID pattern may preempt these Stage-6 cases.
 - Response includes canonical `companyId`, local draft `id`, opaque `emissionPointId`, complete
   commercial/calculated draft, `createdAt`, and `updatedAt`.
 - New commit returns `201`; equivalent replay returns `200`; both identify replay state.
@@ -526,6 +531,15 @@ Certificate lifecycle is not applicable: certificate use/management is explicitl
 - Failure evaluation follows FR-041 exactly, with `REQUEST_TIMEOUT` as a cross-cutting arbiter:
   conclusive stage outcome before expiry wins, otherwise `504` wins, and no later signal replaces
   the selected result.
+- Pairwise evidence covers calculated-path and ordinary unknown-property Stage-5 outcomes against
+  both emission-point failure and the concrete Stage-6 general-text outcome
+  `CANONICAL_NAME_TOO_LONG`. Calculated-path classification wins every decoded-object competition
+  in which such a path exists; otherwise the ordinary Stage-5 outcome wins before Stage 6. Within
+  Stage 6, emission-point rejection wins before canonical overflow. Controlled deadline vectors
+  race each of those outcomes, Stage-10
+  `EMAIL_INVALID`, and Stage-11B calculated failures independently: the stage result wins only
+  when accepted before expiry; otherwise `REQUEST_TIMEOUT` wins. Exactly one terminal response is
+  observable in every row.
 - T085 defines and accepts exactly one terminal outcome after deadline arbitration. T087 depends on
   T085 and maps only that already accepted transport-neutral outcome to HTTP; T087 neither races
   outcomes nor reopens terminal arbitration.
@@ -638,8 +652,9 @@ occurrences.
 T020 owns the one authoritative general-text fixture at
 `src/test/resources/invoicedraft/unicode-text-validation-vectors.json`. Each entry contains `id`,
 `fieldCategory`, `rawValue`, `applicationNormalizedValue`, `canonicalValue` when applicable,
-`expectedApplicationOutcome`, `expectedDomainInput`, `expectedStoredValue`, `expectedErrorCode`,
-`failureStage`, `rationale`, and `consumers`; `failureStage` is `NONE`,
+`expectedStage6Outcome`, `expectedBusinessValidationOutcome`, `expectedApplicationOutcome`,
+`expectedDomainInput`, `expectedStoredValue`, `expectedErrorCode`, `failureStage`, `rationale`, and
+`consumers`; `failureStage` is `NONE`,
 `TRANSPORT_REPRESENTATION`, `APPLICATION_STAGE_6`, or `PERSISTENCE_DEFENSE`. Dedicated
 persistence-defense entries also contain `storedProbeValue` and `expectedPersistenceOutcome`.
 API consumers use `rawValue` only for Unicode/JSON
@@ -647,7 +662,12 @@ decoding, malformed-representation rejection, and unchanged forwarding; they per
 normalization or length validation. Application consumers perform exactly one NFC pass, surrounding
 `U+0020` trim, prohibited-code-point checks, display limits, canonical derivation, `Locale.ROOT`
 canonical-length validation, `CANONICAL_NAME_TOO_LONG`, and no truncation. Domain consumers receive
-only `expectedDomainInput` from accepted vectors and never normalize. Infrastructure/PostgreSQL
+only entries whose `expectedStage6Outcome` is `ACCEPTED`; `expectedDomainInput` is the resulting
+normalized value and is `null` for every Stage-6 rejection. A Stage-6-accepted buyer email can still
+have `expectedBusinessValidationOutcome: EMAIL_INVALID` and final
+`expectedApplicationOutcome: REJECTED`; Domain/T045 then apply only the Stage-10 email grammar to
+that non-null input and never repeat normalization. `expectedApplicationOutcome` is the final
+ordered Application result, not a synonym for Stage-6 acceptance. Infrastructure/PostgreSQL
 consumers use only `expectedStoredValue` and dedicated persistence-defense probes for stored length,
 nonempty, required canonical, relational, and uniqueness defenses; PostgreSQL does not claim Java
 NFC, `Locale.ROOT`, or prohibited-code-point validation.
@@ -656,7 +676,8 @@ The fixture covers NFC accented Latin text; decomposed/composed equivalence; sur
 repeated internal `U+0020`; tab, CR, LF, NBSP, `U+2028`, `U+2029`, and zero-width `Cf`; accepted
 assigned `So` emoji; preserved display case; code-point boundaries; and `U+0130` canonical
 expansion at 150 accepted and 151 rejected occurrences with `CANONICAL_NAME_TOO_LONG` and no
-truncation. T026 consumes accepted `expectedDomainInput`; T029 consumes Application-stage values;
+truncation. T026 consumes Stage-6-accepted `expectedDomainInput`, including email values that Stage
+10 is expected to accept or reject; T029 consumes and proves Stage-6 values/outcomes;
 T030 verifies OpenAPI ownership/metadata; T033 consumes `rawValue` for decoding and unchanged
 forwarding; and T036 consumes stored/probe values for defensive persistence evidence. T020 may also
 create `idempotency-v1-vectors.json`, but those vectors reference or consume this Unicode fixture
@@ -678,12 +699,19 @@ neutral `BUSINESS_VALIDATION_FAILED` with value-free `EMAIL_INVALID` for `buyer.
 
 T020 owns the email entries in `unicode-text-validation-vectors.json`. T033 proves raw API forwarding;
 T029 proves the single general-text normalization and passes only its result onward; T030 proves the
-OpenAPI metadata; T026 consumes accepted normalized Domain inputs; T045 tests the actual production
-buyer-email validator against the same expected outcomes; T036 persists only accepted stored values
+OpenAPI metadata; T026 consumes Stage-6-accepted normalized Domain inputs and applies the Stage-10
+expected result; T045 tests the actual production buyer-email validator against the same expected
+Stage-10 outcomes; T036 persists only finally accepted stored values
 and does not claim to reproduce the email grammar. Required vectors cover valid dot-atoms, preserved
-case, surrounding `U+0020`, leading/trailing/consecutive local dots, quoted/comment/domain-literal
-forms, internal whitespace and prohibited separators, non-ASCII local/domain text, multiple
-addresses, local-part 64/65, domain-label 63/64, and total-length 254/255.
+case, the one-character local/domain-label minima and explicit empty-local/empty-label rejection,
+every permitted local punctuation character,
+surrounding `U+0020`, leading/trailing/consecutive local dots, a trailing domain dot,
+quoted/comment/domain-literal forms, internal whitespace and prohibited separators, decomposed input
+that NFC converts to non-ASCII, non-ASCII local/domain text, multiple addresses, local-part 64/65,
+domain-label 63/64, and total-length 254/255. For an email rejected only by the Stage-10 grammar,
+`expectedStage6Outcome` is `ACCEPTED`, `expectedDomainInput` contains the normalized value,
+`expectedBusinessValidationOutcome` is `EMAIL_INVALID`, and `expectedApplicationOutcome` is
+`REJECTED`; a Stage-6 text rejection has no Domain input and never reaches the email grammar.
 
 **Payment-Method Effectiveness**: Reference lookup receives `(paymentMethodId, emissionDate)` and
 requires existence, activity, `effectiveFrom <= emissionDate`, and `effectiveTo IS NULL OR
@@ -836,7 +864,7 @@ is planned.
 | Draft business rules | Domain/application | exact Stage 6 emission-point SP/HTAB trim/UUID canonicalization plus general-text normalization → Stage 10 → Stage 11A → ordered Stage 11B; payment effective on emissionDate; Application-owned normalization and local identifiers; Domain consumes only accepted normalized inputs | one normalization pass/value; emission-point surrounded/malformed/nil vectors; pre/post-calculation competing failures; payment inclusive/open/inactive/ineffective vectors; exact Unicode/`U+0130` vectors; 300-code-point canonical limit; numeric maxima/overflow and midnight/replay |
 | Stage-5 calculated-property classification | API contract/integration | decoded-object scan uses the exhaustive path set and selects `PROHIBITED_CALCULATED_FIELD` before generic schema binding; malformed/non-object input remains `INVALID_REQUEST` | every exact path; null/wrong-type/equal-value; multiple calculated paths; calculated plus unknown/prohibited/missing/wrong-type; no match plus unknown; no rejected value or violations array |
 | ASCII request-to-storage equivalence | Independent fixture consumers: T017/T018 PostgreSQL/Flyway, T030 OpenAPI, T045/T050 production Java | Every suite consumes `ascii-validation-vectors.json` but selects its stage value: raw/normalized contract metadata, `applicationNormalizedValue`, `expectedStoredValue`, or `storedProbeValue`; no domain suite imports transport/database infrastructure | surrounding SP/HTAB trim accepted in Application; internal whitespace, Unicode, punctuation, empty, trim-to-empty, min/max and over-limit vectors; direct invalid storage probes; standalone `Pattern` in T017 limited to literal-regex/fixture verification; no productive Java claim in T017/T018 |
-| Unicode text and buyer-email ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL, T045 production buyer validator | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, accepted `expectedDomainInput`, Application/canonical expectations, or stored/probe values according to their boundary; T045 alone proves the production email grammar | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; exact email dot-atom, ASCII, case, quoted/comment/literal/multiple-address and 64/63/254 boundaries; `EMAIL_INVALID`; no truncation or repeated normalization |
+| Unicode text and buyer-email ownership | T020 fixture ownership; T026 Domain, T029 Application, T030 OpenAPI, T033 API, T036 PostgreSQL, T045 production buyer validator | Independent suites consume `unicode-text-validation-vectors.json` and select `rawValue`, `expectedStage6Outcome`, non-null Stage-6-accepted `expectedDomainInput`, `expectedBusinessValidationOutcome`, final `expectedApplicationOutcome`, or stored/probe values according to their boundary; T045 alone proves the production email grammar and never receives a Stage-6-rejected input | malformed representation; NFC composition; spaces/separators/prohibited categories; emoji; case; code-point limits; `U+0130` 150/151 expansion; `CANONICAL_NAME_TOO_LONG`; exact email dot-atom, one-character minima, every permitted punctuation character, trailing domain dot, decomposed-to-non-ASCII, quoted/comment/literal/multiple-address and 64/63/254 boundaries; `EMAIL_INVALID`; no truncation or repeated normalization |
 | Persistence/Flyway | Real PostgreSQL from empty | immutable V3; T017 red evidence; T018-only V5 and green exact ASCII constraints; local child ownership, authoritative Company on aggregate/binding operations, unscoped global catalogs, timestamp-free candidate, Application-owned final IDs, T076-only one-call equal `createdAt`/`updatedAt`, and committed `PersistedInvoiceDraft` | T017 failure specificity and unrelated-behavior stability; T018 V3→V5/Flyway validation and final absence of locale-dependent POSIX classes; no prohibited fields/catalog Company columns; rollback; no identifier replacement, placeholder timestamp, physical commit timestamp, or second clock call |
 | Idempotency | Real PostgreSQL concurrency | replay/conflict/cross-Company independence/one winner; replay loads `PersistedInvoiceDraft` | property/collection order, line order, response loss, no normalized payload storage, no new aggregate/identifier/clock call/canonical rebuild, original identifier and both timestamps unchanged |
 | API errors/correlation/deadline | Contract/integration with controlled deadline and wall-clock signals | API captures request time once at the earliest boundary before body consumption, owns the Uni/deadline race, emits exactly one terminal response, enforces the ordered upload/header/entity gate, and accepts exactly one normalized Idempotency-Key | body crossing Guayaquil midnight retains the entry date; resource/mapper make no later request-time read; raw emission point is forwarded; missing/blank/SP-HTAB-only/repeated/comma/over-length/grammar key vectors never select first; late app/DB results discarded; deadline-first/stage-first vectors; application/repositories have no HTTP types/mapping; malformed JSON/earlier failure; 400/409/413/422/503/504/500; no sleeps, 401, or 403 |

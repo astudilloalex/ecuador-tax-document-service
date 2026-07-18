@@ -71,6 +71,13 @@ paths produce the same response. The response omits `violations` and never expos
 Only when no recognized path exists may ordinary unknown or prohibited properties produce
 `INVALID_REQUEST`.
 
+The calculated-property response is exactly top-level code `PROHIBITED_CALCULATED_FIELD`, HTTP
+status `422`, the catalog's safe English title/detail, request-URI `instance`, and the safe
+`correlationId` also returned in `X-Correlation-Id`. It intentionally contains no calculated path
+or field location: multiple paths collapse to the same terminal outcome, `violations` is omitted,
+and no supplied property name or value is reflected. It creates no draft, child, or idempotency
+binding and performs no later validation, calculation, lookup, or save.
+
 ## Idempotency Header Classification
 
 After HTTP parsing, exactly one `Idempotency-Key` field value is mandatory. The API trims only
@@ -101,8 +108,9 @@ A value that becomes blank, is malformed, or is the nil UUID returns top-level
 - `validationStage`: `NORMALIZATION`.
 
 The violation never contains the raw, trimmed, or canonical candidate value. It becomes conclusive
-before general business-text normalization, fingerprinting, idempotency lookup, Domain entry, or
-persistence and creates no state.
+before general business-text normalization, fingerprinting, idempotency lookup, Domain entry,
+reference lookup, later business validation, monetary calculation, or persistence and creates no
+state.
 
 ## Buyer Email Violation
 
@@ -122,7 +130,10 @@ A supplied normalized value that fails that profile returns top-level
 The violation contains no raw or normalized email value. Normalization failures such as prohibited
 control or separator code points remain the earlier Stage-6 business-text outcome; `EMAIL_INVALID`
 is selected only after normalization succeeds and the normalized value fails the email profile.
-Either outcome creates no state.
+Accordingly, an email vector rejected by Stage 6 has no Domain input. An email accepted by Stage 6
+has a non-null normalized Domain input and is then independently accepted or rejected at Stage 10;
+its final Application result is not used as a synonym for Stage-6 acceptance. Either rejection
+creates no state.
 
 ## Numeric Envelope Violation
 
@@ -216,6 +227,26 @@ FR-041 orders stage outcomes that become conclusive before deadline expiry:
     aggregate order; (b) discount-over-gross by line; (c) final-consumer calculated-total limit;
     (d) total-dependent payment shape/positivity; (e) exact payment reconciliation;
 12. persistence outcome (`PERSISTENCE_UNAVAILABLE` or `INTERNAL_ERROR`) or successful commit.
+
+### Pairwise Stage and Deadline Outcomes
+
+For a decoded request object, the following matrix is normative. “First” means the listed outcome
+becomes conclusive and is accepted before deadline expiry. When expiry is accepted first, every row
+returns `REQUEST_TIMEOUT` (`504`). Exactly one terminal response is produced and every late result
+is discarded.
+
+| Competing facts | Pre-deadline governing outcome |
+|-----------------|--------------------------------|
+| Recognized calculated path plus any ordinary unknown/prohibited, missing, or wrong-type property | `PROHIBITED_CALCULATED_FIELD` |
+| Recognized calculated path plus invalid-string `emissionPointId` | `PROHIBITED_CALCULATED_FIELD` |
+| Recognized calculated path plus Stage-6 `CANONICAL_NAME_TOO_LONG` | `PROHIBITED_CALCULATED_FIELD` |
+| Ordinary unknown/prohibited property plus invalid-string `emissionPointId` | `INVALID_REQUEST` |
+| Ordinary unknown/prohibited property plus Stage-6 `CANONICAL_NAME_TOO_LONG` | `INVALID_REQUEST` |
+| Invalid-string `emissionPointId` plus Stage-6 `CANONICAL_NAME_TOO_LONG` | `BUSINESS_VALIDATION_FAILED` / `EMISSION_POINT_INVALID` |
+| Stage-6 `CANONICAL_NAME_TOO_LONG` plus a normalized email that would fail Stage 10 | `BUSINESS_VALIDATION_FAILED` / `CANONICAL_NAME_TOO_LONG` |
+| Stage-6-accepted email outside the exact Stage-10 grammar | `BUSINESS_VALIDATION_FAILED` / `EMAIL_INVALID` |
+
+Malformed JSON remains `INVALID_REQUEST` because no property-path classification is possible.
 
 Correlation initialization always produces a safe response identifier. When payload size is
 conclusively over limit first, `REQUEST_PAYLOAD_TOO_LARGE` remains terminal: the 413 handler

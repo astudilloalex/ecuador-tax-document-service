@@ -458,6 +458,57 @@ Company-master-data, identity, and external side effect remains absent.
     final identifier, business values, and equal timestamps; a confirmed failed save exposes no
     provisional draft, association, or timestamps.
 
+#### Acceptance Evidence Matrix — Emission-Point Representation
+
+The following rows are explicit subcases of acceptance scenario 34 and SC-022. `Raw value` is the
+decoded request string; `\t` denotes one ASCII HTAB. Every accepted value produces the same
+canonical response representation on new creation and equivalent replay.
+
+| Case | Raw value or representation | Governing stage | Observable outcome |
+|------|-----------------------------|-----------------|--------------------|
+| Already canonical | `123e4567-e89b-12d3-a456-426614174000` | Stage 6 | Accepted as `123e4567-e89b-12d3-a456-426614174000` |
+| Uppercase input | `123E4567-E89B-12D3-A456-426614174000` | Stage 6 | Accepted as `123e4567-e89b-12d3-a456-426614174000` |
+| Surrounding ASCII SP | ` 123e4567-e89b-12d3-a456-426614174000 ` | Stage 6 | Accepted as `123e4567-e89b-12d3-a456-426614174000` |
+| Surrounding ASCII HTAB | `\t123E4567-E89B-12D3-A456-426614174000\t` | Stage 6 | Accepted as `123e4567-e89b-12d3-a456-426614174000` |
+| Missing property | property absent | Stage 5 | `INVALID_REQUEST` (`400`) |
+| Non-string property | JSON number, object, array, boolean, or `null` | Stage 5 | `INVALID_REQUEST` (`400`) |
+| Empty string | `""` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Trim-to-empty SP | `"   "` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Trim-to-empty HTAB | `"\t\t"` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Malformed UUID | `not-a-uuid` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Nil UUID | `00000000-0000-0000-0000-000000000000` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Internal ASCII SP | `123e4567-e89b-12d3-a456-4266141740 00` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Internal ASCII HTAB | `123e4567-e89b-12d3-a456-4266141740\t00` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Braced UUID | `{123e4567-e89b-12d3-a456-426614174000}` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+| Non-hyphenated UUID | `123e4567e89b12d3a456426614174000` | Stage 6 | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` |
+
+Every Stage-6 emission-point rejection is safe and correlated, identifies only
+`field=emissionPointId` and `validationStage=NORMALIZATION`, exposes no rejected value, and occurs
+before general-text normalization, fingerprinting, idempotency lookup, business validation,
+calculation, or save. It therefore creates no draft or idempotency association.
+
+#### Acceptance Evidence Matrix — Validation and Deadline Competition
+
+The following rows are explicit subcases of acceptance scenarios 28, 33, 34, 45, and 46 and make
+FR-041/SC-026 pairwise precedence executable. In every row exactly one safe correlated response is
+returned; a later outcome is discarded and cannot replace it.
+
+| Competing request facts | Outcome when classification/validation is conclusive before the deadline | Outcome when deadline is conclusive first |
+|-------------------------|------------------------------------------------------------------------|-------------------------------------------|
+| Recognized calculated path plus ordinary unknown/prohibited property | `PROHIBITED_CALCULATED_FIELD` (`422`) | `REQUEST_TIMEOUT` (`504`) |
+| Recognized calculated path plus missing/non-string or invalid-string `emissionPointId` | `PROHIBITED_CALCULATED_FIELD` (`422`) | `REQUEST_TIMEOUT` (`504`) |
+| Recognized calculated path plus an additional-information name that would produce Stage-6 `CANONICAL_NAME_TOO_LONG` | `PROHIBITED_CALCULATED_FIELD` (`422`) | `REQUEST_TIMEOUT` (`504`) |
+| Ordinary unknown/prohibited property plus invalid-string `emissionPointId` | `INVALID_REQUEST` (`400`) | `REQUEST_TIMEOUT` (`504`) |
+| Ordinary unknown/prohibited property plus an additional-information name that would produce Stage-6 `CANONICAL_NAME_TOO_LONG` | `INVALID_REQUEST` (`400`) | `REQUEST_TIMEOUT` (`504`) |
+| Valid Stage 5 plus invalid `emissionPointId` and a name that would produce `CANONICAL_NAME_TOO_LONG` | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMISSION_POINT_INVALID` | `REQUEST_TIMEOUT` (`504`) |
+| Valid emission point plus Stage-6 `CANONICAL_NAME_TOO_LONG` and a normalized email that would fail Stage 10 | `BUSINESS_VALIDATION_FAILED` (`422`) / `CANONICAL_NAME_TOO_LONG`; Stage 10 does not run | `REQUEST_TIMEOUT` (`504`) |
+| Valid Stage 6 plus normalized buyer email outside the approved grammar | `BUSINESS_VALIDATION_FAILED` (`422`) / `EMAIL_INVALID` | `REQUEST_TIMEOUT` (`504`) |
+| Valid independent rules plus a Stage-11B calculated-value violation | The first FR-041 Stage-11B violation | `REQUEST_TIMEOUT` (`504`) |
+
+Malformed JSON remains `INVALID_REQUEST` because its properties cannot be classified. Once any
+Stage-5 or Stage-6 result in the table is selected, no fingerprint, idempotency lookup, later
+validation, calculation, or save occurs, so no state is created.
+
 ### Edge Cases
 
 - A syntactically valid noncanonical Company UUID is normalized to lowercase hyphenated form. Nil
@@ -915,15 +966,21 @@ is case-sensitive. No additional normalization, lowercase conversion, or truncat
 | Vector | Accepted | Observable result |
 |--------|----------|-------------------|
 | `buyer@example.com` | Yes | Preserved unchanged |
+| `a@b.c` | Yes | Inclusive minimum: one-character local part and one-character domain labels |
+| ``a!#$%&'*+/=?^_`{|}~-z@example.com`` | Yes | Every permitted local-part punctuation character is accepted inside one nonempty atom |
 | ` O'Connor+tax@sub.example.ec ` | Yes | FR-035 produces `O'Connor+tax@sub.example.ec` |
 | `Buyer@Example.COM` | Yes | Case preserved; distinct from a differently cased value |
+| `@b.c`, `a@.c`, or `a@b..c` | No | Empty local part or domain label violates the inclusive minimum |
 | `.buyer@example.com`, `buyer.@example.com`, or `buyer..name@example.com` | No | `EMAIL_INVALID` |
-| `buyer@example`, `buyer@-example.com`, or `buyer@example-.com` | No | `EMAIL_INVALID` |
+| `buyer@example`, `buyer@example.com.`, `buyer@-example.com`, or `buyer@example-.com` | No | `EMAIL_INVALID` |
 | `"buyer"@example.com`, `buyer@[127.0.0.1]`, or `buyer(comment)@example.com` | No | `EMAIL_INVALID` |
-| `buyer name@example.com`, tab/newline/NBSP, or trim-to-empty | No | General-text or `EMAIL_INVALID` rejection, as applicable |
+| `buyer name@example.com` | No | Internal ASCII SP survives normalization and produces `EMAIL_INVALID` |
+| Tab, CR, LF, NBSP, `U+2028`, `U+2029`, or zero-width `Cf` in the address | No | Rejected during Stage 6 before the email grammar runs |
+| Empty or only surrounding `U+0020` | No | Rejected during Stage 6 as supplied optional text empty after normalization |
+| `bu\u0301yer@example.com` | No | NFC produces non-ASCII `búyer@example.com`, then Stage 10 returns `EMAIL_INVALID` |
 | `búyer@example.com` or `buyer@exámple.com` | No | `EMAIL_INVALID`; the email profile is ASCII |
 | `buyer@example.com,other@example.com` | No | `EMAIL_INVALID`; multiple addresses are forbidden |
-| Local part of 64 characters and total length 254 | Yes when the remaining grammar holds | Inclusive boundaries |
+| Local part of 64 characters, one 63-character domain label, or total length 254 | Yes when the remaining grammar holds | Inclusive upper boundaries |
 | Local part of 65 characters, one 64-character domain label, or total length 255 | No | `EMAIL_INVALID` |
 
 An email-profile failure occurs during independent business validation after normalization and
