@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.output.MigrateResult;
+import org.flywaydb.core.api.output.ValidateResult;
 
 /** Shared access to the Quarkus-managed PostgreSQL Dev Service used by persistence tests. */
 @ApplicationScoped
@@ -37,6 +38,17 @@ public class PostgreSqlTestResource {
 
   public synchronized MigrateResult migrate() {
     return flyway.migrate();
+  }
+
+  public synchronized MigrateResult resetSchemaTo(String targetVersion) {
+    flyway.clean();
+    Flyway target =
+        Flyway.configure().configuration(flyway.getConfiguration()).target(targetVersion).load();
+    return target.migrate();
+  }
+
+  public ValidateResult validate() {
+    return flyway.validateWithResult();
   }
 
   public List<MigrationInfo> appliedMigrations() {

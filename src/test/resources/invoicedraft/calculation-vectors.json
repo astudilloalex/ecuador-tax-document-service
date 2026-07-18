@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "roundingMode": "HALF_UP",
+  "moneyScale": 2,
+  "vectors": [
+    {
+      "id": "approved-fifteen-percent-example",
+      "lines": [
+        {
+          "position": 1,
+          "quantity": "2.000000",
+          "unitPrice": "10.000000",
+          "discount": "5.00",
+          "treatment": "PERCENTAGE_RATE",
+          "rate": "15.00",
+          "expectedGross": "20.00",
+          "expectedNet": "15.00",
+          "expectedTaxBase": "15.00",
+          "expectedTax": "2.25",
+          "expectedLineTotal": "17.25"
+        }
+      ],
+      "payments": ["17.25"],
+      "expectedSubtotalBeforeTaxes": "15.00",
+      "expectedTotalDiscount": "5.00",
+      "expectedTaxTotal": "2.25",
+      "expectedGrandTotal": "17.25",
+      "expectedStage11BViolation": null
+    },
+    {
+      "id": "half-up-cent-boundary",
+      "lines": [
+        {
+          "position": 1,
+          "quantity": "1.000000",
+          "unitPrice": "0.100000",
+          "discount": "0.00",
+          "treatment": "PERCENTAGE_RATE",
+          "rate": "5.00",
+          "expectedGross": "0.10",
+          "expectedNet": "0.10",
+          "expectedTaxBase": "0.10",
+          "expectedTax": "0.01",
+          "expectedLineTotal": "0.11"
+        }
+      ],
+      "payments": ["0.11"],
+      "expectedSubtotalBeforeTaxes": "0.10",
+      "expectedTotalDiscount": "0.00",
+      "expectedTaxTotal": "0.01",
+      "expectedGrandTotal": "0.11",
+      "expectedStage11BViolation": null
+    },
+    {
+      "id": "valid-zero-total",
+      "lines": [
+        {
+          "position": 1,
+          "quantity": "1.000000",
+          "unitPrice": "0.000000",
+          "discount": "0.00",
+          "treatment": "ZERO_RATE",
+          "rate": "0.00",
+          "expectedGross": "0.00",
+          "expectedNet": "0.00",
+          "expectedTaxBase": "0.00",
+          "expectedTax": "0.00",
+          "expectedLineTotal": "0.00"
+        }
+      ],
+      "payments": ["0.00"],
+      "expectedSubtotalBeforeTaxes": "0.00",
+      "expectedTotalDiscount": "0.00",
+      "expectedTaxTotal": "0.00",
+      "expectedGrandTotal": "0.00",
+      "expectedStage11BViolation": null
+    },
+    {
+      "id": "discount-over-gross-precedes-payment",
+      "lines": [
+        {
+          "position": 1,
+          "quantity": "1.000000",
+          "unitPrice": "1.000000",
+          "discount": "1.01",
+          "treatment": "ZERO_RATE",
+          "rate": "0.00",
+          "expectedGross": "1.00"
+        }
+      ],
+      "payments": ["999.00"],
+      "expectedStage11BViolation": "DISCOUNT_EXCEEDS_GROSS"
+    },
+    {
+      "id": "calculated-overflow-precedes-other-stage-11b-rules",
+      "syntheticCalculatedGrandTotal": "1000000000000000.00",
+      "payments": ["0.00"],
+      "expectedStage11BViolation": "MONETARY_RANGE_EXCEEDED"
+    },
+    {
+      "id": "payment-reconciliation-is-last",
+      "lines": [
+        {
+          "position": 1,
+          "quantity": "1.000000",
+          "unitPrice": "10.000000",
+          "discount": "0.00",
+          "treatment": "ZERO_RATE",
+          "rate": "0.00",
+          "expectedGross": "10.00",
+          "expectedNet": "10.00",
+          "expectedTaxBase": "10.00",
+          "expectedTax": "0.00",
+          "expectedLineTotal": "10.00"
+        }
+      ],
+      "payments": ["9.99"],
+      "expectedSubtotalBeforeTaxes": "10.00",
+      "expectedTotalDiscount": "0.00",
+      "expectedTaxTotal": "0.00",
+      "expectedGrandTotal": "10.00",
+      "expectedStage11BViolation": "PAYMENT_TOTAL_MISMATCH"
+    }
+  ]
+}

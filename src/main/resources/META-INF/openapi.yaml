@@ -1,0 +1,1319 @@
+openapi: 3.1.0
+info:
+  title: Ecuador Tax Document Service - Invoice Draft API
+  version: 1.0.0
+  description: >-
+    Internal target API for creating and immediately reviewing an Invoice Draft. It performs no
+    Company lookup, authentication, authorization, fiscal issuance, or SRI operation.
+servers:
+  - url: /api/v1
+tags:
+  - name: Invoice Drafts
+
+paths:
+  /invoice-drafts:
+    post:
+      tags: [Invoice Drafts]
+      operationId: createInvoiceDraft
+      summary: Create and return a complete Invoice Draft
+      description: >-
+        Accepts authoritative Company ownership context only through X-Company-Id. Company
+        identifiers are forbidden in request bodies and input schemas and are not path/query
+        inputs; canonical companyId appears in the response because this feature contract
+        explicitly requires it. The request contains client-controlled commercial inputs only;
+        Company, Issuer, fiscal-snapshot, and system-calculated properties are prohibited. The
+        service captures one requestCreationInstant at the initial request boundary before body
+        consumption and derives the expected emission date from that instant in America/Guayaquil;
+        that expected date remains fixed even when body consumption, validation, or commit crosses
+        midnight. The upstream billing workflow
+        selects the published IVA rule appropriate to the product or transaction; this service
+        does not classify products or determine legal eligibility. Observable processing precedence
+        is payload size, Company context, correlation, idempotency-key presence/cardinality/
+        normalization/grammar, representation, Application-owned Stage 6 emission-point
+        normalization/validation followed by business-text normalization, local Company-scoped
+        binding lookup, equivalent replay, idempotency
+        conflict, Stage 10 independent business validation, Stage 11A deterministic monetary
+        calculation, the exact Stage 11B order (range/overflow; discount-over-gross;
+        final-consumer calculated-total limit; total-dependent payment shape/positivity; exact
+        payment reconciliation), and atomic persistence. The API adapter alone races the
+        application Uni against one monotonic 10-second deadline, accepts exactly one terminal
+        result, discards every late application/database outcome, and then selects/maps HTTP.
+        Timeout wins when expiry becomes terminal before the application result is accepted; only
+        the API maps REQUEST_TIMEOUT to 504 or any other transport-neutral failure to HTTP. An
+        unresolved commit is reconciled by retrying the same CompanyId, idempotency key, and
+        equivalent content.
+      parameters:
+        - $ref: '#/components/parameters/CompanyContext'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceDraftRequest'
+      responses:
+        '201':
+          description: >-
+            A new Invoice Draft and idempotency binding were committed. The Application-created,
+            timestamp-free InvoiceDraftCandidate was accepted by persistence; the persistence port
+            returned an internal PersistedInvoiceDraft, which the API mapped to the declared
+            InvoiceDraftResponse. Neither internal model is an HTTP representation. The response's
+            createdAt and updatedAt are the exact same Instant obtained from one
+            transactional-clock invocation.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/NewResult'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDraftResponse'
+        '200':
+          description: >-
+            An equivalent request returned the original committed Invoice Draft without
+            revalidating its emission date against the current Ecuadorian date or invoking the
+            transactional clock. The originally persisted createdAt and updatedAt are returned
+            unchanged.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Idempotency-Replayed:
+              $ref: '#/components/headers/ReplayedResult'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDraftResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          $ref: '#/components/responses/ValidationFailure'
+        '500':
+          $ref: '#/components/responses/InternalFailure'
+        '503':
+          $ref: '#/components/responses/PersistenceUnavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+
+components:
+  parameters:
+    CompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        Exactly one value is accepted. Surrounding ASCII SP/HTAB is trimmed once; the result is a
+        syntactically valid non-nil UUID. The service normalizes it to canonical lowercase
+        hyphenated form. The value identifies the Invoice Draft ownership and idempotency
+        partition. It is business context, not an authentication or authorization credential.
+      schema:
+        type: string
+        format: uuid
+        pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Mandatory single-valued caller-generated request header. Exactly one field value must
+        remain after HTTP header parsing. The API trims leading and trailing ASCII SP (U+0020) and
+        HTAB (U+0009) once, changes no internal character or case, validates the normalized value,
+        and uses that identical value for lookup, hashing, and persistence in the canonical
+        CompanyId scope. Missing returns IDEMPOTENCY_KEY_REQUIRED. A single blank,
+        SP/HTAB-only after that trim, over-128, control, non-ASCII, or otherwise grammar-invalid value returns
+        IDEMPOTENCY_KEY_INVALID. Repeated fields, a parser result containing multiple values, or
+        any comma-containing/comma-combined ambiguous value returns IDEMPOTENCY_KEY_MULTIPLE; the
+        service never chooses the first value. The schema pattern describes the normalized value,
+        permits internal ASCII spaces, and excludes comma. A valid binding remains for the
+        lifetime of the created draft.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+        pattern: '^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$'
+        examples:
+          - invoice-draft-e2e-001
+          - Draft Key 42
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: >-
+        Optional caller correlation identifier. When supplied, exactly one value is accepted and
+        surrounding ASCII SP/HTAB is trimmed once. A valid value contains 1 to 64 ASCII characters, begins with
+        an ASCII letter or digit, and contains only ASCII letters, digits, period, underscore,
+        colon, or hyphen. A valid supplied value is preserved and returned. When absent, the
+        service generates and returns a safe UUID. A blank, repeated, over-length, or otherwise
+        unsafe supplied value is never echoed: the service generates a replacement UUID and
+        returns INVALID_REQUEST when correlation validation is the governing failure. If payload
+        size is already conclusively over limit, classification only chooses the safe correlation
+        returned with REQUEST_PAYLOAD_TOO_LARGE; invalid input does not replace 413 with 400.
+      schema:
+        $ref: '#/components/schemas/CorrelationIdentifier'
+
+  headers:
+    CorrelationId:
+      description: Correlates this attempt and its safe operational evidence.
+      required: true
+      schema:
+        $ref: '#/components/schemas/CorrelationIdentifier'
+    NewResult:
+      description: Indicates that this response represents a new committed draft.
+      required: true
+      schema:
+        type: boolean
+        const: false
+    ReplayedResult:
+      description: >-
+        Indicates that this response represents an equivalent replay. Both originally persisted
+        timestamps are returned unchanged and the transactional clock is not invoked.
+      required: true
+      schema:
+        type: boolean
+        const: true
+
+  schemas:
+    CorrelationIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+
+    CreateInvoiceDraftRequest:
+      type: object
+      additionalProperties: false
+      description: >-
+        Client-controlled inputs only. Company identifiers, including companyId, are forbidden in
+        this request schema and are accepted only through X-Company-Id. The API decodes HTTP/JSON,
+        rejects malformed representations, validates transport structure, and forwards decoded
+        business and identifier values unchanged. It does not normalize NFC, trim business or
+        identifier values, collapse business spaces, lowercase text, or derive canonicalName. At
+        Stage 6, Application first validates and canonicalizes emissionPointId, then invokes
+        BusinessTextNormalizer exactly once for each supplied applicable value and zero times for
+        an absent optional value. canonicalName, createdAt, and updatedAt are server-derived and
+        are not request properties.
+      x-business-text-processing:
+        owner: Application
+        stage: 6
+        invocationCardinality: exactly once for each supplied applicable value; zero for absent optional values
+        wireSchemaScope: standard JSON Schema facets validate decoded JSON type and structure only
+        postNormalizationRules: documented by each field's x-application-stage-6 extension
+        generalTextOperationOrder:
+          - NFC_NORMALIZATION
+          - LEADING_TRAILING_U+0020_TRIM
+          - PROHIBITED_CODE_POINT_AND_WHITESPACE_VALIDATION
+          - DISPLAY_CODE_POINT_LENGTH_VALIDATION
+          - CANONICAL_NAME_DERIVATION_WHEN_APPLICABLE
+          - CANONICAL_NAME_CODE_POINT_LENGTH_VALIDATION_WHEN_APPLICABLE
+      x-stage-5-property-classification:
+        owner: API
+        decodedRepresentation: one JSON object
+        malformedUnsupportedOrNonObjectOutcome: INVALID_REQUEST
+        inspectionPoint: before ordinary schema binding
+        recognizedCalculatedPaths:
+          - /taxTotals
+          - /subtotalBeforeTaxes
+          - /totalDiscount
+          - /grandTotal
+          - /lines/{i}/grossAmount
+          - /lines/{i}/netAmount
+          - /lines/{i}/lineTotal
+          - /lines/{i}/tax
+          - /lines/{i}/taxBase
+          - /lines/{i}/taxAmount
+          - /lines/{i}/taxCode
+          - /lines/{i}/taxRate
+          - /lines/{i}/officialTaxCode
+          - /lines/{i}/officialPercentageCode
+          - /lines/{i}/rate
+        subtreePaths: ['/taxTotals', '/lines/{i}/tax']
+        lineIndexPlaceholder: '{i} is any zero-based lines array position'
+        matchOutcome: PROHIBITED_CALCULATED_FIELD
+        matchIgnoresSuppliedValueAndType: true
+        matchPrecedesOrdinaryUnknownMissingAndTypeErrors: true
+        multipleMatchesProduceOneTopLevelOutcome: true
+        violationsMember: omitted
+        rejectedValueExposed: false
+        noMatchOrdinaryUnknownOutcome: INVALID_REQUEST
+      x-validation-precedence-examples:
+        terminalResponseCardinality: exactly one
+        lateOutcomeHandling: discarded
+        pairs:
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: INVALID_EMISSION_POINT_STRING
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: RECOGNIZED_CALCULATED_PATH
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: PROHIBITED_CALCULATED_FIELD
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            competingFact: INVALID_EMISSION_POINT_STRING
+            preDeadlineOutcome: INVALID_REQUEST
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: ORDINARY_UNKNOWN_OR_PROHIBITED_PROPERTY
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: INVALID_REQUEST
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: INVALID_EMISSION_POINT_STRING
+            competingFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            preDeadlineOutcome: EMISSION_POINT_INVALID
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: APPLICATION_STAGE_6_CANONICAL_NAME_TOO_LONG
+            competingFact: STAGE_10_EMAIL_INVALID
+            preDeadlineOutcome: CANONICAL_NAME_TOO_LONG
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+          - firstFact: STAGE_10_EMAIL_INVALID
+            competingFact: DEADLINE
+            preDeadlineOutcome: EMAIL_INVALID
+            deadlineFirstOutcome: REQUEST_TIMEOUT
+      required:
+        - emissionPointId
+        - emissionDate
+        - buyer
+        - lines
+        - payments
+      properties:
+        emissionPointId:
+          type: string
+          description: >-
+            Required opaque identifier. The wire schema accepts the decoded string unchanged so
+            transport validation does not preempt the permitted Application transformation. At
+            Stage 6, Application trims surrounding ASCII SP/HTAB exactly once, requires the result
+            to be a non-nil UUID, and canonicalizes it to lowercase hyphenated form. A missing
+            property or non-string JSON representation is Stage-5 INVALID_REQUEST. A decoded string
+            that becomes blank, is malformed, or is nil is Stage-6 BUSINESS_VALIDATION_FAILED with
+            safe violation EMISSION_POINT_INVALID. This service does not validate Company
+            ownership, active state, Issuer, or establishment relationships.
+          x-application-stage-6:
+            owner: Application
+            operationOrder:
+              - LEADING_TRAILING_ASCII_SP_HTAB_TRIM_ONCE
+              - NONBLANK_VALIDATION
+              - NON_NIL_UUID_VALIDATION
+              - LOWERCASE_HYPHENATED_UUID_CANONICALIZATION
+            normalizedPattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+            normalizedFormat: uuid
+            validExamples:
+              - id: already-canonical
+                rawValue: '123e4567-e89b-12d3-a456-426614174000'
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: uppercase
+                rawValue: '123E4567-E89B-12D3-A456-426614174000'
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: surrounding-ascii-sp
+                rawValue: ' 123e4567-e89b-12d3-a456-426614174000 '
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+              - id: surrounding-ascii-htab
+                rawValue: "\t123E4567-E89B-12D3-A456-426614174000\t"
+                canonicalResponseValue: '123e4567-e89b-12d3-a456-426614174000'
+            invalidExamples:
+              - id: missing-property
+                representation: PROPERTY_ABSENT
+                failureStage: 5
+                outcome: INVALID_REQUEST
+              - id: non-string-property
+                representation: JSON_NON_STRING_INCLUDING_NULL
+                failureStage: 5
+                outcome: INVALID_REQUEST
+              - id: empty-string
+                rawValue: ''
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: trim-to-empty-ascii-sp
+                rawValue: '   '
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: trim-to-empty-ascii-htab
+                rawValue: "\t\t"
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: malformed
+                rawValue: not-a-uuid
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: nil-uuid
+                rawValue: '00000000-0000-0000-0000-000000000000'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: internal-ascii-sp
+                rawValue: '123e4567-e89b-12d3-a456-4266141740 00'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: internal-ascii-htab
+                rawValue: "123e4567-e89b-12d3-a456-4266141740\t00"
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: braced
+                rawValue: '{123e4567-e89b-12d3-a456-426614174000}'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+              - id: non-hyphenated
+                rawValue: '123e4567e89b12d3a456426614174000'
+                failureStage: 6
+                outcome: EMISSION_POINT_INVALID
+            failureOutcome:
+              topLevelCode: BUSINESS_VALIDATION_FAILED
+              httpStatus: 422
+              violationCode: EMISSION_POINT_INVALID
+              field: emissionPointId
+              validationStage: NORMALIZATION
+              rejectedValueExposed: false
+        emissionDate:
+          type: string
+          format: date
+          description: >-
+            Must equal the Ecuadorian civil date derived in America/Guayaquil from the single
+            requestCreationInstant captured at the initial request boundary before body
+            consumption. That expected date is fixed across body consumption, midnight, and
+            commit; requestCreationInstant is not a request property.
+        buyer:
+          $ref: '#/components/schemas/BuyerInput'
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          description: Order is business-significant and preserved.
+          items:
+            $ref: '#/components/schemas/InvoiceLineInput'
+        payments:
+          type: array
+          minItems: 1
+          maxItems: 8
+          description: >-
+            Order is representation-only; payment-method identity must be unique. Each method must
+            exist, be active, and satisfy effectiveFrom <= emissionDate and (effectiveTo is null or
+            emissionDate <= effectiveTo), inclusively, using this request's emissionDate only.
+          items:
+            $ref: '#/components/schemas/PaymentInput'
+        additionalInformation:
+          type: array
+          maxItems: 15
+          default: []
+          description: >-
+            Order is representation-only; persisted canonical names must be unique. At Stage 6,
+            the Application normalizes and trims each supplied name once; within that same
+            per-name invocation, canonical derivation reuses the normalized display value,
+            collapses U+0020 runs, and lowercases with Java Locale.ROOT without a second NFC or
+            trim. The result must contain at most 300 Unicode code points and is never truncated.
+          items:
+            $ref: '#/components/schemas/AdditionalInformationInput'
+
+    BuyerInput:
+      type: object
+      additionalProperties: false
+      required: [identificationType, identification, legalName]
+      properties:
+        identificationType:
+          type: string
+          enum: ['04', '05', '06', '07', '08']
+          description: Official SRI buyer-identification code from SRI-OFFLINE-2.32-TARGET-1.
+        identification:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            trim: ASCII_SP_HTAB
+            unicodeNormalization: none
+            normalizedPatternForTypes06And08: '^[A-Za-z0-9]{1,20}$'
+            normalizedMinLength: 1
+            normalizedMaxLength: 20
+            countingUnit: ASCII_CHARACTERS
+          description: >-
+            Validated by the selected approved baseline strategy: 04 is exactly 13 ASCII digits,
+            05 is exactly 10 ASCII digits, 06 and 08 match case-sensitive ASCII
+            ^[A-Za-z0-9]{1,20}$, and 07 is exactly 9999999999999. For 06/08, the Application trims
+            leading/trailing ASCII SP/HTAB once before validation; internal characters and case
+            are preserved, with no case folding or Unicode normalization. The API forwards the
+            decoded value unchanged. The standard wire schema intentionally constrains only the
+            decoded string type; x-application-stage-6 documents the post-trim executable rule so
+            Stage 5 cannot preempt Application validation. Valid examples include A1234567 and
+            EC9Z; invalid examples include A-123, A 123, Á123, empty, and 21 characters. This
+            feature applies no RUC or identity-card checksum.
+        legalName:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            General single-line Unicode text. At Application Stage 6 only, normalize to NFC once,
+            trim surrounding U+0020, reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP,
+            and every separator other than U+0020, then validate 1-300 Unicode code points while
+            preserving internal punctuation/U+0020 and case. Assigned emoji category So is allowed
+            within the length/format boundary. The API forwards the decoded value unchanged; standard
+            wire-schema length facets are deliberately absent because length is evaluated only
+            after the Application transformation.
+        address:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            Optional general single-line Unicode text governed by the Application-owned legalName
+            normalization, prohibited-code-point, U+0020, case, and Unicode-code-point length
+            policy. The API forwards the decoded value unchanged.
+        email:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedProfile: ASCII_DOT_ATOM_WITH_DNS_DOMAIN
+            normalizedPattern: '^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+            localPartMinCharacters: 1
+            localPartMaxCharacters: 64
+            domainLabelMinCharacters: 1
+            domainLabelMaxCharacters: 63
+            domainRequiresAtLeastOneDot: true
+            normalizedMaxCodePoints: 254
+            countingUnit: UNICODE_CODE_POINTS
+            acceptedRepertoire: ASCII
+            casePreserved: true
+            comparison: CASE_SENSITIVE
+            additionalEmailNormalization: none
+            stageOutcomeSemantics:
+              stage6Accepted: normalized value is forwarded unchanged to Stage 10
+              stage6Rejected: no Domain input and the email grammar does not run
+              stage10Rejected: EMAIL_INVALID with a non-null Stage-6-normalized Domain input
+            requiredExamples:
+              accepted:
+                - 'a@b.c'
+                - "a!#$%&'*+/=?^_`{|}~-z@example.com"
+                - 'buyer@example.com'
+                - 'O''Connor+tax@sub.example.ec'
+                - 'Buyer@Example.COM'
+              rejectedAtStage6:
+                - TAB_CR_LF_NBSP_U+2028_U+2029_OR_CF
+                - EMPTY_AFTER_U+0020_TRIM
+              rejectedAtStage10:
+                - '@b.c'
+                - 'a@.c'
+                - 'a@b..c'
+                - '.buyer@example.com'
+                - 'buyer.@example.com'
+                - 'buyer..name@example.com'
+                - 'buyer@example.com.'
+                - '"buyer"@example.com'
+                - 'buyer@[127.0.0.1]'
+                - 'buyer(comment)@example.com'
+                - 'buyer@example.com,other@example.com'
+                - 'búyer@example.com'
+            failureOutcome:
+              topLevelCode: BUSINESS_VALIDATION_FAILED
+              httpStatus: 422
+              violationCode: EMAIL_INVALID
+              field: buyer.email
+              rejectedValueExposed: false
+          description: >-
+            Optional email forwarded unchanged by API. After the one Application-owned Stage-6
+            general-text NFC/U+0020 pass, Stage 10 accepts exactly one case-preserved ASCII dot-atom
+            address with a 1-64-character local part, DNS-style 1-63-character labels, at least one
+            domain dot, and at most 254 code points. Quoted local parts, comments, domain literals,
+            internationalized addresses, internal whitespace, and multiple-address forms are
+            rejected with value-free EMAIL_INVALID. The standard wire schema intentionally does
+            not apply the normalized pattern before Stage 6.
+        telephone:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedPattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+            normalizedMinCodePoints: 7
+            normalizedMaxCodePoints: 20
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            Optional value after the Application-owned Stage 6 general-text pass; only ASCII
+            digits, plus, parentheses, hyphen, and U+0020 remain valid, with 7-15 digits and at
+            most 20 code points. The API forwards the decoded value unchanged.
+
+    InvoiceLineInput:
+      type: object
+      additionalProperties: false
+      required: [productCode, description, quantity, unitPrice, discount, taxRuleId]
+      properties:
+        productCode:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            trim: ASCII_SP_HTAB
+            unicodeNormalization: none
+            normalizedPattern: '^[A-Za-z0-9]{1,25}$'
+            normalizedMinLength: 1
+            normalizedMaxLength: 25
+            countingUnit: ASCII_CHARACTERS
+          description: >-
+            Case-sensitive ASCII letters and digits only. The Application trims leading/trailing
+            ASCII SP/HTAB once before validation; internal characters and case are preserved, with
+            no case folding or Unicode normalization. The API forwards the decoded value unchanged.
+            The standard wire schema intentionally constrains only the decoded string type;
+            x-application-stage-6 carries the exact post-trim pattern and bounds. ABC123 and sku9
+            are valid; ABC-123, ABC 123, ÁBC1, empty, and 26 characters are invalid.
+        description:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            General single-line Unicode text. At Application Stage 6 only, normalize to NFC once,
+            trim surrounding U+0020, reject Cc/Cf/Cs/Co/Cn, U+2028/U+2029, tab, CR, LF, NBSP,
+            and separators other than U+0020, then validate 1-300 Unicode code points while
+            preserving internal punctuation/U+0020 and case. Assigned emoji So is allowed within
+            that boundary. The API forwards the decoded value unchanged.
+        quantity:
+          $ref: '#/components/schemas/PositiveSixScaleDecimal'
+        unitPrice:
+          $ref: '#/components/schemas/NonNegativeSixScaleDecimal'
+        discount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        taxRuleId:
+          type: string
+          format: uuid
+          description: >-
+            Selects exactly one active, emission-date-effective IVA rule published by
+            SRI-OFFLINE-2.32-TARGET-1. The caller owns product/transaction classification.
+          examples:
+            - 84cb3f03-574b-54de-9e73-efb8d485476a
+            - 5b34b038-931c-50e3-a84c-10af272fdcd4
+
+    PaymentInput:
+      type: object
+      additionalProperties: false
+      required: [paymentMethodId, amount]
+      properties:
+        paymentMethodId:
+          type: string
+          format: uuid
+          description: >-
+            Stable UUID published by SRI-OFFLINE-2.32-TARGET-1. It must exist, be active, and be
+            inclusively effective on invoice emissionDate: effectiveFrom <= emissionDate and
+            (effectiveTo is null or emissionDate <= effectiveTo). Server current date, request
+            arrival, transaction time, and createdAt are not validity inputs.
+          example: 639f2b7e-10a3-5d92-a1a3-28223896f5b5
+        amount:
+          $ref: '#/components/schemas/MoneyDecimal'
+
+    AdditionalInformationInput:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            canonicalCollapse: consecutive U+0020 to one U+0020
+            canonicalCaseMapping: Java Locale.ROOT lowercase
+            canonicalMaxCodePoints: 300
+            canonicalOverflowCode: CANONICAL_NAME_TOO_LONG
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            General single-line Unicode display text. At Application Stage 6,
+            BusinessTextNormalizer is invoked exactly once for this supplied value: NFC normalization,
+            surrounding U+0020 trim, prohibited-category/whitespace validation, and display length
+            validation precede canonicalName derivation. From that already NFC-normalized and
+            trimmed display value—without a second NFC or trim—canonicalName collapses U+0020 runs,
+            lowercases with Java Locale.ROOT, and must contain at most 300 Unicode code points. It
+            is never truncated and the database does not recalculate it. Lowercase expansion can
+            therefore reject an otherwise valid display value; 150 repetitions of U+0130 produce
+            300 canonical code points and are valid, while 151 produce 302 and yield nested
+            CANONICAL_NAME_TOO_LONG with field, maximum 300, counting unit Unicode code points,
+            and validation stage canonicalization. The API forwards the decoded name unchanged.
+        value:
+          type: string
+          x-application-stage-6:
+            owner: Application
+            unicodeNormalization: NFC
+            trim: U+0020
+            normalizedMinCodePoints: 1
+            normalizedMaxCodePoints: 300
+            countingUnit: UNICODE_CODE_POINTS
+          description: >-
+            General single-line Unicode display text normalized exactly once by Application Stage
+            6 under the NFC/U+0020/prohibited-category, case-sensitive, Unicode-code-point length
+            policy; assigned emoji So is allowed. The API forwards the decoded value unchanged.
+
+    InvoiceDraftResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - companyId
+        - emissionPointId
+        - emissionDate
+        - status
+        - currency
+        - buyer
+        - lines
+        - taxTotals
+        - payments
+        - additionalInformation
+        - subtotalBeforeTaxes
+        - totalDiscount
+        - grandTotal
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Local Invoice Draft identifier; not a fiscal identifier.
+        companyId:
+          type: string
+          format: uuid
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          description: Canonical normalized immutable Company ownership reference.
+        emissionPointId:
+          type: string
+          format: uuid
+          pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+          description: Canonical opaque external reference captured in the draft.
+        emissionDate:
+          type: string
+          format: date
+        status:
+          type: string
+          const: DRAFT
+        currency:
+          type: string
+          const: USD
+        buyer:
+          $ref: '#/components/schemas/BuyerResult'
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/InvoiceLineResult'
+        taxTotals:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/TaxTotalResult'
+        payments:
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/PaymentResult'
+        additionalInformation:
+          type: array
+          maxItems: 15
+          items:
+            $ref: '#/components/schemas/AdditionalInformationResult'
+        subtotalBeforeTaxes:
+          $ref: '#/components/schemas/MoneyDecimal'
+        totalDiscount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        grandTotal:
+          $ref: '#/components/schemas/MoneyDecimal'
+        createdAt:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$'
+          description: >-
+            UTC instant captured exactly once inside the persistence transaction, after all
+            business validations succeed and immediately before the new Invoice Draft is
+            persisted. This same immutable value is persisted and returned, becomes externally
+            observable only after commit confirmation, and is returned unchanged on replay. It is
+            not PostgreSQL's physical commit timestamp, is not queried or reconstructed after
+            commit, requires no track_commit_timestamp, and does not determine the emission date.
+            Rollback never exposes it as a created resource. The transactional persistence
+            operation is the sole persistence-clock caller and the application use case neither
+            supplies nor overwrites this value. On initial creation, updatedAt is assigned this
+            exact same java.time.Instant.
+          examples: ['2026-07-15T23:45:12.345Z']
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$'
+          description: >-
+            On initial creation, this is the exact same immutable java.time.Instant as createdAt,
+            assigned from the persistence adapter's single clock invocation and persisted
+            atomically. Application, Domain, API, and mappers do not generate it. Equivalent
+            replay returns the originally persisted value without invoking the clock; rollback
+            exposes neither timestamp as a created resource.
+          examples: ['2026-07-15T23:45:12.345Z']
+
+    BuyerResult:
+      type: object
+      additionalProperties: false
+      required: [identificationType, identification, legalName]
+      properties:
+        identificationType:
+          type: string
+          enum: ['04', '05', '06', '07', '08']
+        identification:
+          type: string
+          minLength: 1
+          maxLength: 20
+          pattern: '^[A-Za-z0-9]{1,20}$'
+          description: Persisted type-valid identification value after Application validation.
+        legalName:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
+        address:
+          type: string
+          minLength: 1
+          maxLength: 300
+        email:
+          type: string
+          pattern: '^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&''*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+          maxLength: 254
+          description: Persisted case-preserved email satisfying the exact ASCII dot-atom profile.
+        telephone:
+          type: string
+          minLength: 7
+          maxLength: 20
+          pattern: '^(?=(?:\D*\d){7,15}\D*$)[0-9+() -]+$'
+
+    AdditionalInformationResult:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: >-
+            Persisted NFC/U+0020-normalized display name whose server-side canonicalName is at most
+            300 Unicode code points; canonicalName is not exposed.
+        value:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
+
+    InvoiceLineResult:
+      type: object
+      additionalProperties: false
+      required:
+        - position
+        - productCode
+        - description
+        - quantity
+        - unitPrice
+        - discount
+        - grossAmount
+        - netAmount
+        - tax
+        - lineTotal
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          maximum: 500
+        productCode:
+          type: string
+          minLength: 1
+          maxLength: 25
+          pattern: '^[A-Za-z0-9]{1,25}$'
+          description: Persisted case-sensitive ASCII product code returned unchanged.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: Persisted NFC/U+0020-normalized, case-preserved Unicode display text.
+        quantity:
+          $ref: '#/components/schemas/PositiveSixScaleDecimal'
+        unitPrice:
+          $ref: '#/components/schemas/NonNegativeSixScaleDecimal'
+        discount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        grossAmount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        netAmount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        tax:
+          $ref: '#/components/schemas/LineTaxResult'
+        lineTotal:
+          $ref: '#/components/schemas/MoneyDecimal'
+
+    LineTaxResult:
+      type: object
+      additionalProperties: false
+      required:
+        - taxRuleId
+        - family
+        - treatment
+        - officialTaxCode
+        - officialPercentageCode
+        - rate
+        - base
+        - amount
+        - catalogVersion
+      properties:
+        taxRuleId:
+          type: string
+          format: uuid
+        family:
+          type: string
+          const: IVA
+        treatment:
+          $ref: '#/components/schemas/TaxTreatment'
+        officialTaxCode:
+          type: string
+          maxLength: 8
+        officialPercentageCode:
+          type: string
+          maxLength: 8
+        rate:
+          $ref: '#/components/schemas/PercentageDecimal'
+        base:
+          $ref: '#/components/schemas/MoneyDecimal'
+        amount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        catalogVersion:
+          type: string
+          maxLength: 64
+
+    TaxTotalResult:
+      type: object
+      additionalProperties: false
+      required:
+        - family
+        - treatment
+        - officialTaxCode
+        - officialPercentageCode
+        - rate
+        - base
+        - amount
+        - catalogVersion
+      properties:
+        family:
+          type: string
+          const: IVA
+        treatment:
+          $ref: '#/components/schemas/TaxTreatment'
+        officialTaxCode:
+          type: string
+          maxLength: 8
+        officialPercentageCode:
+          type: string
+          maxLength: 8
+        rate:
+          $ref: '#/components/schemas/PercentageDecimal'
+        base:
+          $ref: '#/components/schemas/MoneyDecimal'
+        amount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        catalogVersion:
+          type: string
+          maxLength: 64
+
+    PaymentResult:
+      type: object
+      additionalProperties: false
+      required: [paymentMethodId, officialCode, name, amount, catalogVersion]
+      properties:
+        paymentMethodId:
+          type: string
+          format: uuid
+        officialCode:
+          type: string
+          maxLength: 8
+        name:
+          type: string
+          maxLength: 100
+        amount:
+          $ref: '#/components/schemas/MoneyDecimal'
+        catalogVersion:
+          type: string
+          maxLength: 64
+
+    TaxTreatment:
+      type: string
+      enum: [PERCENTAGE_RATE, ZERO_RATE, NOT_SUBJECT, EXEMPT]
+
+    PositiveSixScaleDecimal:
+      type: string
+      minLength: 1
+      maxLength: 13
+      pattern: '^(?=.*[1-9])(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,6})?$'
+      description: >-
+        Exact positive decimal from 0.000001 through 999999.999999 with at most six fractional
+        digits. A syntactically numeric value outside this envelope produces
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0.000001', '2', '999999.999999']
+
+    NonNegativeSixScaleDecimal:
+      type: string
+      minLength: 1
+      maxLength: 13
+      pattern: '^(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,6})?$'
+      description: >-
+        Exact decimal from 0 through 999999.999999 with at most six fractional digits. A
+        syntactically numeric value outside this envelope produces BUSINESS_VALIDATION_FAILED with
+        violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0', '10.000000', '999999.999999']
+
+    MoneyDecimal:
+      type: string
+      minLength: 4
+      maxLength: 18
+      pattern: '^(?:0|[1-9][0-9]{0,14})\.[0-9]{2}$'
+      description: >-
+        Exact non-negative USD amount from 0.00 through 999999999999999.99 with exactly two
+        fractional digits. A syntactically numeric value outside this envelope produces
+        BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED.
+      examples: ['0.00', '17.25', '999999999999999.99']
+
+    PercentageDecimal:
+      type: string
+      minLength: 4
+      maxLength: 6
+      pattern: '^(?:(?:0|[1-9][0-9]?)\.[0-9]{2}|100\.00)$'
+      description: >-
+        Exact percentage from 0.00 through 100.00 with exactly two fractional digits. An
+        out-of-envelope catalog rate produces BUSINESS_VALIDATION_FAILED with violation
+        MONETARY_RANGE_EXCEEDED.
+      examples: ['0.00', '15.00', '100.00']
+
+    ErrorCode:
+      type: string
+      enum:
+        - COMPANY_CONTEXT_REQUIRED
+        - COMPANY_CONTEXT_INVALID
+        - IDEMPOTENCY_KEY_REQUIRED
+        - IDEMPOTENCY_KEY_INVALID
+        - IDEMPOTENCY_KEY_MULTIPLE
+        - INVALID_REQUEST
+        - PROHIBITED_CALCULATED_FIELD
+        - IDEMPOTENCY_CONFLICT
+        - REQUEST_PAYLOAD_TOO_LARGE
+        - BUSINESS_VALIDATION_FAILED
+        - PERSISTENCE_UNAVAILABLE
+        - REQUEST_TIMEOUT
+        - INTERNAL_ERROR
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          $ref: '#/components/schemas/ErrorCode'
+        detail:
+          type: string
+          description: Safe English detail without rejected values or implementation internals.
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          $ref: '#/components/schemas/CorrelationIdentifier'
+        violations:
+          type: array
+          description: >-
+            Safe validation details. BUSINESS_VALIDATION_FAILED uses EMISSION_POINT_INVALID for a
+            decoded emission-point string rejected at Stage 6, EMAIL_INVALID for normalized buyer
+            email rejected by the exact Stage-10 ASCII profile, MONETARY_RANGE_EXCEEDED for
+            quantity, unit-price, monetary, intermediate, aggregate, payment-sum, or rate overflow,
+            and CANONICAL_NAME_TOO_LONG for a post-canonicalization result over 300 Unicode code
+            points. PROHIBITED_CALCULATED_FIELD omits this member entirely.
+          items:
+            $ref: '#/components/schemas/Violation'
+      allOf:
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: PROHIBITED_CALCULATED_FIELD
+          then:
+            properties:
+              status:
+                const: 422
+            not:
+              required: [violations]
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+          then:
+            required: [violations]
+            properties:
+              status:
+                const: 422
+              violations:
+                minItems: 1
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      const: CANONICAL_NAME_TOO_LONG
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      const: EMAIL_INVALID
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
+        - if:
+            required: [violations]
+            properties:
+              violations:
+                contains:
+                  type: object
+                  required: [code]
+                  properties:
+                    code:
+                      const: EMISSION_POINT_INVALID
+          then:
+            properties:
+              code:
+                const: BUSINESS_VALIDATION_FAILED
+              status:
+                const: 422
+
+    Violation:
+      type: object
+      additionalProperties: false
+      required: [code, field]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z][A-Z0-9_]*$'
+        field:
+          type: string
+          minLength: 1
+          description: >-
+            Safe original request field path; never contains the rejected value. For
+            CANONICAL_NAME_TOO_LONG this identifies the additional-information name that produced
+            the canonical value; for EMISSION_POINT_INVALID it is exactly emissionPointId; for
+            EMAIL_INVALID it is exactly buyer.email.
+        maximum:
+          type: integer
+          minimum: 1
+          description: Maximum permitted length when the violation is length-related.
+        countingUnit:
+          type: string
+          enum: [UNICODE_CODE_POINTS]
+          description: Unit used for a Unicode length violation.
+        validationStage:
+          type: string
+          enum: [NORMALIZATION, CANONICALIZATION]
+          description: Deterministic validation stage that produced the violation.
+      allOf:
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: CANONICAL_NAME_TOO_LONG
+          then:
+            required: [maximum, countingUnit, validationStage]
+            properties:
+              field:
+                pattern: '^additionalInformation\[[0-9]+\]\.name$'
+              maximum:
+                const: 300
+              countingUnit:
+                const: UNICODE_CODE_POINTS
+              validationStage:
+                const: CANONICALIZATION
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: EMISSION_POINT_INVALID
+          then:
+            required: [validationStage]
+            properties:
+              field:
+                const: emissionPointId
+              validationStage:
+                const: NORMALIZATION
+        - if:
+            required: [code]
+            properties:
+              code:
+                const: EMAIL_INVALID
+          then:
+            properties:
+              field:
+                const: buyer.email
+
+  responses:
+    BadRequest:
+      description: >-
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, IDEMPOTENCY_KEY_REQUIRED,
+        IDEMPOTENCY_KEY_INVALID, IDEMPOTENCY_KEY_MULTIPLE, or INVALID_REQUEST. Repeated or
+        comma-combined Idempotency-Key input is never accepted by selecting the first value.
+        Invalid supplied correlation input is never echoed; a safe replacement UUID is returned.
+        Missing or non-string emissionPointId representation also uses INVALID_REQUEST; decoded
+        emission-point strings are handled by Stage 6 instead. Payload-size, Company-context, and
+        correlation outcomes follow the defined precedence. No draft, child, or idempotency binding
+        is created.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    IdempotencyConflict:
+      description: IDEMPOTENCY_CONFLICT; the scoped key is bound to different content.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PayloadTooLarge:
+      description: >-
+        REQUEST_PAYLOAD_TOO_LARGE; body is conclusively observed to exceed 2,097,152 bytes before
+        deadline expiry. One valid correlation value is preserved; absent or invalid input receives
+        a safe generated replacement and never changes 413 to 400. No later processing or database
+        operation occurs.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationFailure:
+      description: >-
+        PROHIBITED_CALCULATED_FIELD or BUSINESS_VALIDATION_FAILED. For a decoded request object, any
+        exhaustive recognized calculated-property path produces PROHIBITED_CALCULATED_FIELD before
+        ordinary unknown/prohibited, missing-property, or property-type outcomes, regardless of the
+        supplied value/type; the response omits violations and never exposes a supplied value. A
+        decoded emissionPointId string that becomes blank after the approved trim, is malformed, or is nil uses
+        BUSINESS_VALIDATION_FAILED with safe violation EMISSION_POINT_INVALID. Numeric-envelope
+        breaches use BUSINESS_VALIDATION_FAILED with violation MONETARY_RANGE_EXCEEDED. Application
+        Stage 6 post-canonicalization overflow uses nested CANONICAL_NAME_TOO_LONG and reports the
+        original request field, maximum 300, Unicode-code-point counting, and canonicalization
+        stage. A normalized buyer email outside the exact ASCII dot-atom profile uses value-free
+        EMAIL_INVALID for buyer.email. Stage 10 contains only calculation-independent validation; Stage 11A calculates
+        monetary values; Stage 11B then checks range/overflow, discount-over-gross, final-consumer
+        calculated-total limit, total-dependent payment shape/positivity, and exact reconciliation
+        in that order.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          examples:
+            emissionPointInvalid:
+              summary: Decoded emission-point string fails Stage-6 normalization
+              value:
+                type: https://ecuador-tax-document-service.invalid/problems/business-validation-failed
+                title: Business validation failed
+                status: 422
+                code: BUSINESS_VALIDATION_FAILED
+                detail: One or more business fields are invalid.
+                instance: https://ecuador-tax-document-service.invalid/api/v1/invoice-drafts
+                correlationId: 6c45d352-1ac4-4cb8-84d3-2634611e7cb7
+                violations:
+                  - code: EMISSION_POINT_INVALID
+                    field: emissionPointId
+                    validationStage: NORMALIZATION
+            canonicalNameTooLong:
+              summary: Locale.ROOT lowercase expansion exceeds the canonical-name limit
+              value:
+                type: https://ecuador-tax-document-service.invalid/problems/business-validation-failed
+                title: Business validation failed
+                status: 422
+                code: BUSINESS_VALIDATION_FAILED
+                detail: One or more business fields are invalid.
+                instance: https://ecuador-tax-document-service.invalid/api/v1/invoice-drafts
+                correlationId: 6c45d352-1ac4-4cb8-84d3-2634611e7cb7
+                violations:
+                  - code: CANONICAL_NAME_TOO_LONG
+                    field: additionalInformation[0].name
+                    maximum: 300
+                    countingUnit: UNICODE_CODE_POINTS
+                    validationStage: CANONICALIZATION
+    PersistenceUnavailable:
+      description: PERSISTENCE_UNAVAILABLE; retry with the same Company, key, and content.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Retry-After:
+          description: Optional safe retry delay when known.
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    RequestTimeout:
+      description: >-
+        REQUEST_TIMEOUT; the API-owned deadline became terminal before an application outcome was
+        accepted. The API adapter alone maps this transport-neutral outcome to 504, emits one
+        terminal response, and discards late results. Retry with the same Company, key, and content;
+        unresolved commit state makes no zero-state guarantee and is reconciled by replay.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    InternalFailure:
+      description: INTERNAL_ERROR; safe unexpected failure.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

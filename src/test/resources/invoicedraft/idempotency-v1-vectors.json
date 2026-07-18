@@ -1,0 +1,60 @@
+{
+  "normalizationVersion": 1,
+  "keyHashDomain": "invoice-draft-idempotency-key:v1\n",
+  "requestFingerprintDomain": "invoice-draft-request:v1\n",
+  "keyHashVectors": [
+    {
+      "id": "simple-key",
+      "normalizedKey": "create-001",
+      "expectedSha256Hex": "0d9a6e4deaa645f497abb38ce52b647ab526f0cb348282e334d8442f79e6ac2c"
+    },
+    {
+      "id": "case-and-internal-space-preserved",
+      "normalizedKey": "Case Sensitive Key",
+      "expectedSha256Hex": "f2cc09f06449ba54236d4062eedefee9394b6b5476c23d4701195c425fe7a6af"
+    }
+  ],
+  "fingerprintVectors": [
+    {
+      "id": "unicode-reference-vector",
+      "unicodeFixtureReferences": ["decomposed-to-composed"],
+      "canonicalBusinessContent": "v1|emissionPointId=123e4567-e89b-12d3-a456-426614174000|emissionDate=2026-07-17|buyerLegalName=Café|lines=[]|payments=[]|additionalInformation=[]",
+      "expectedSha256Hex": "7969d47ddd1431d914b309d082842a7a68af42da30f4da35e65c0e630ceee2a9",
+      "equivalentInputs": {
+        "buyerLegalName": ["Café", "Café"],
+        "decimalRepresentations": ["1", "1.0", "1.000000"],
+        "emptyOptionalCollections": ["ABSENT", "EMPTY"],
+        "objectPropertyOrder": ["IGNORED"]
+      },
+      "significantOrdering": {
+        "invoiceLines": "PRESERVED",
+        "payments": "SORT_BY_METHOD_AND_AMOUNT",
+        "additionalInformation": "SORT_BY_CANONICAL_NAME_AND_VALUE"
+      },
+      "excludedFromFingerprint": [
+        "companyId",
+        "idempotencyKey",
+        "correlationId",
+        "requestCreationInstant",
+        "calculatedAmounts",
+        "timestamps",
+        "generatedIdentifiers"
+      ]
+    }
+  ],
+  "scopeVectors": [
+    {
+      "id": "same-key-different-company",
+      "companyA": "11111111-1111-1111-1111-111111111111",
+      "companyB": "22222222-2222-2222-2222-222222222222",
+      "normalizedKey": "create-001",
+      "expectedBindingRelationship": "INDEPENDENT"
+    },
+    {
+      "id": "correlation-does-not-affect-equivalence",
+      "correlationA": "request-a",
+      "correlationB": "request-b",
+      "expectedFingerprintRelationship": "EQUAL"
+    }
+  ]
+}
