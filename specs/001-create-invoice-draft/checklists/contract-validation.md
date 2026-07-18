@@ -159,7 +159,7 @@ cited artifacts provide objective textual evidence.
 | CHK021 | FR-008 and `Executable Buyer Email Profile` publish one exact regular expression rather than an undefined “valid email” rule. |
 | CHK022 | The profile defines the full ASCII local repertoire, dot placement, DNS-label repertoire, and rejects internationalized addresses. |
 | CHK023 | FR-008/FR-035 and the contract require preserved case, case-sensitive comparison, one general-text pass, and no email-specific normalization. |
-| CHK024 | The profile fixes local 1–64, label 1–63, at least one domain dot, exactly one `@`, nonempty atoms, and total 1–254 boundaries. |
+| CHK024 | The profile fixes local 1–64, label 1–63, at least one domain dot, exactly one `@`, nonempty atoms, and a maximum total length of 254; `a@b.c` is the explicit minimum valid address. |
 | CHK025 | The email vector table explicitly covers quoted forms, all local-dot positions, literals, subdomains, trailing domain dot, comments, and multiple addresses. |
 | CHK026 | The table and fixture plan distinguish Stage-6 whitespace/control/Unicode rejection from decomposed-to-NFC non-ASCII Stage-10 `EMAIL_INVALID` and trim-to-empty rejection. |
 | CHK027 | Explicit vectors cover the one-character minima, every permitted punctuation character, valid upper bounds, each plus-one rejection, and all prohibited forms. |

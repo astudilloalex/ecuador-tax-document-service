@@ -1,9 +1,10 @@
 # Implementation Plan: Create Invoice Draft
 
-**Branch**: `001-create-invoice-draft` | **Date**: 2026-07-16 | **Spec**: `specs/001-create-invoice-draft/spec.md`
+**Branch**: `001-create-invoice-draft` | **Date**: 2026-07-17 | **Spec**: `specs/001-create-invoice-draft/spec.md`
 
-**Input**: Reconciled feature specification with Constitution v2.0.1 and the approved 2026-07-16
-normalization, persistence-boundary, timestamp, and canonical-name clarifications
+**Input**: Reconciled feature specification with Constitution v2.0.1 and approved clarification
+sessions through 2026-07-17, including normalization, persistence-boundary, timestamp,
+canonical-name, emission-point, calculated-property, and buyer-email decisions
 
 **Implementation progression**: `GATE-GOV-001` retains its **RELEASED** governance status. The
 approved `governance-corrective-assignment-addendum.md` assigns red evidence to T017 and V5/green
@@ -657,6 +658,12 @@ T020 owns the one authoritative general-text fixture at
 `consumers`; `failureStage` is `NONE`,
 `TRANSPORT_REPRESENTATION`, `APPLICATION_STAGE_6`, or `PERSISTENCE_DEFENSE`. Dedicated
 persistence-defense entries also contain `storedProbeValue` and `expectedPersistenceOutcome`.
+`failureStage` classifies only transport-representation, Stage-6 normalization, or direct
+persistence-defense failure. Therefore a Stage-6-accepted email rejected later by the Stage-10
+grammar uses `failureStage: NONE`; its rejection is represented exclusively by
+`expectedBusinessValidationOutcome: EMAIL_INVALID` and final
+`expectedApplicationOutcome: REJECTED`, while `expectedStoredValue` is `null`. `NONE` does not mean
+that every later business validation accepted the value.
 API consumers use `rawValue` only for Unicode/JSON
 decoding, malformed-representation rejection, and unchanged forwarding; they perform no business
 normalization or length validation. Application consumers perform exactly one NFC pass, surrounding
