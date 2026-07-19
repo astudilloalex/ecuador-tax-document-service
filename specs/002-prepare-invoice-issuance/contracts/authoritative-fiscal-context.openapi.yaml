@@ -1,0 +1,268 @@
+openapi: 3.1.0
+info:
+  title: Authoritative Fiscal Context Consumer Contract
+  version: 1.0.0
+  description: >-
+    Consumer-side contract required from the approved external Company bounded-context fiscal
+    capability. The interaction is read-only and has no authentication or authorization contract
+    in this repository. Provider implementation and fiscal master-data administration are outside
+    Feature 002.
+servers:
+  - url: https://configured-authoritative-fiscal-context.invalid
+
+paths:
+  /fiscal-context-resolutions/invoice-issuance:
+    post:
+      operationId: resolveAuthoritativeInvoiceFiscalContext
+      summary: Resolve authoritative fiscal facts for one draft selection
+      description: >-
+        This POST carries a structured read-only selection and creates, changes, reserves, or
+        allocates nothing. The provider resolves exactly one current/effective Issuer,
+        Establishment, and Emission Point combination in the supplied Company business context.
+        The consumer performs no automatic retry and does not persist raw requests or responses.
+      parameters:
+        - $ref: '#/components/parameters/CompanyContext'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalContextSelection'
+      responses:
+        '200':
+          description: One complete, supported, effective, eligible, and versioned fiscal context.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoritativeFiscalContext'
+        '404':
+          description: >-
+            No authoritative context exists for the exact selection. The consumer maps this to
+            FISCAL_CONTEXT_INVALID, not Company-not-found or authentication behavior.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '409':
+          description: Ambiguous or internally inconsistent authoritative relationship.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '422':
+          description: Context is ineffective, ineligible, invalid, or unsupported for invoice issuance.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '503':
+          description: Provider is unavailable; consumer maps safely to FISCAL_CONTEXT_UNAVAILABLE.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '504':
+          description: Provider deadline expired; consumer maps safely to FISCAL_CONTEXT_UNAVAILABLE.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+
+components:
+  parameters:
+    CompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        The exact canonical non-nil Company UUID validated at the inbound boundary. It is selection
+        context, not an authentication credential, and is never copied into the JSON body.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: true
+      description: Safe request correlation only; it never changes the resolved business result.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+
+  schemas:
+    NonNilUuid:
+      type: string
+      format: uuid
+      pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+
+    FiscalContextSelection:
+      type: object
+      additionalProperties: false
+      required: [emissionPointId, emissionDate, documentTypeCode]
+      properties:
+        emissionPointId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionDate:
+          type: string
+          format: date
+          description: Exact unchanged Invoice Draft Ecuador civil date.
+        documentTypeCode:
+          type: string
+          const: '01'
+
+    AuthoritativeFiscalContext:
+      type: object
+      additionalProperties: false
+      required:
+        - issuerReference
+        - issuerRuc
+        - legalName
+        - headOfficeAddress
+        - accountingRequired
+        - rimpeClassification
+        - establishmentReference
+        - establishmentCode
+        - establishmentAddress
+        - emissionPointId
+        - emissionPointCode
+        - environmentCode
+        - documentTypeCode
+        - emissionTypeCode
+        - invoiceIssuanceEligible
+        - sourceEvidence
+      properties:
+        issuerReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        issuerRuc:
+          type: string
+          pattern: '^[0-9]{13}$'
+        legalName:
+          $ref: '#/components/schemas/FiscalText'
+        commercialName:
+          $ref: '#/components/schemas/FiscalText'
+        headOfficeAddress:
+          $ref: '#/components/schemas/FiscalText'
+        accountingRequired:
+          type: boolean
+        specialTaxpayer:
+          $ref: '#/components/schemas/ResolutionDesignation'
+        withholdingAgent:
+          $ref: '#/components/schemas/WithholdingAgentDesignation'
+        rimpeClassification:
+          type: string
+          enum: [NONE, RIMPE_CONTRIBUTOR, POPULAR_BUSINESS]
+        largeContributor:
+          $ref: '#/components/schemas/LargeContributorDesignation'
+        establishmentReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        establishmentCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        establishmentAddress:
+          $ref: '#/components/schemas/FiscalText'
+        emissionPointId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionPointCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        environmentCode:
+          type: string
+          enum: ['1', '2']
+        documentTypeCode:
+          type: string
+          const: '01'
+        emissionTypeCode:
+          type: string
+          const: '1'
+        invoiceIssuanceEligible:
+          type: boolean
+          const: true
+        sourceEvidence:
+          $ref: '#/components/schemas/SourceEvidence'
+
+    SourceEvidence:
+      type: object
+      additionalProperties: false
+      required: [authority, revision, effectiveFrom, observedAt]
+      properties:
+        authority:
+          type: string
+          minLength: 1
+          maxLength: 128
+        revision:
+          type: string
+          minLength: 1
+          maxLength: 128
+        effectiveFrom:
+          type: string
+          format: date
+          description: Inclusive Ecuador civil-date start.
+        effectiveThrough:
+          type: string
+          format: date
+          description: Inclusive end; omission means open-ended.
+        observedAt:
+          type: string
+          format: date-time
+
+    OpaqueReference:
+      type: string
+      minLength: 1
+      maxLength: 128
+
+    FiscalText:
+      type: string
+      minLength: 1
+      maxLength: 300
+
+    ResolutionDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    WithholdingAgentDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,7})$'
+
+    LargeContributorDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier, requiredLegend]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+        requiredLegend:
+          type: string
+          minLength: 1
+          maxLength: 300
+
+    ProviderProblem:
+      type: object
+      additionalProperties: true
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum:
+            - FISCAL_CONTEXT_NOT_FOUND
+            - FISCAL_CONTEXT_INEFFECTIVE
+            - FISCAL_CONTEXT_INELIGIBLE
+            - FISCAL_CONTEXT_AMBIGUOUS
+            - FISCAL_CONTEXT_INVALID
+            - FISCAL_CONTEXT_UNSUPPORTED
+            - FISCAL_CONTEXT_INCONSISTENT
+            - PROVIDER_UNAVAILABLE
+            - PROVIDER_TIMEOUT
