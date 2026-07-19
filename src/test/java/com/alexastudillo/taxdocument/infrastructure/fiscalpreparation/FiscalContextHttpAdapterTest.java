@@ -14,15 +14,17 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 
 @QuarkusTest
 class FiscalContextHttpAdapterTest {
-  private static AuthoritativeFiscalContextFixture fixture;
+  private static @Nullable AuthoritativeFiscalContextFixture fixture;
 
   @Inject FiscalContextHttpAdapter adapter;
 
@@ -33,26 +35,30 @@ class FiscalContextHttpAdapterTest {
 
   @AfterAll
   static void stopFixture() {
-    fixture.close();
+    fixture().close();
   }
 
   @BeforeEach
   void resetFixture() {
-    fixture.reset();
+    fixture().reset();
+  }
+
+  private static AuthoritativeFiscalContextFixture fixture() {
+    return Objects.requireNonNull(fixture);
   }
 
   @Test
   void sendsExactCompanyAndSelectionOnceAndMapsCompleteAuthoritativeEvidence() {
     FiscalContextResolution resolution =
-        adapter.resolve(request(Duration.ofSeconds(5))).await().indefinitely();
+        adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely();
 
     assertEquals("1790012345001", resolution.issuerRuc());
     assertEquals("001", resolution.establishmentCode());
     assertEquals("001", resolution.emissionPointCode());
     assertEquals("fixture-revision-1", resolution.sourceEvidence().revision());
-    assertEquals(1, fixture.callCount());
+    assertEquals(1, fixture().callCount());
     AuthoritativeFiscalContextFixture.CapturedRequest captured =
-        fixture.lastRequest().orElseThrow();
+        fixture().lastRequest().orElseThrow();
     assertEquals("11111111-1111-4111-8111-111111111111", captured.companyId());
     assertEquals("corr-1", captured.correlationId());
     assertFalse(captured.body().contains("company"));
@@ -62,12 +68,12 @@ class FiscalContextHttpAdapterTest {
   @Test
   void classifiesEveryProviderOutcomeWithoutRetryOrSensitiveEcho() {
     for (int status : new int[] {404, 409, 422, 503, 504}) {
-      fixture.reset();
-      fixture.providerStatus(status);
+      fixture().reset();
+      fixture().providerStatus(status);
       FiscalPreparationApplicationException failure =
           assertThrows(
               FiscalPreparationApplicationException.class,
-              () -> adapter.resolve(request(Duration.ofSeconds(5))).await().indefinitely());
+              () -> adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely());
       assertEquals(
           switch (status) {
             case 409 -> FiscalPreparationFailure.Code.FISCAL_CONTEXT_INCONSISTENT;
@@ -76,46 +82,46 @@ class FiscalContextHttpAdapterTest {
           },
           failure.failure().code());
       assertFalse(failure.failure().detail().contains("FIXTURE_PROVIDER_FAILURE"));
-      assertEquals(1, fixture.callCount());
+      assertEquals(1, fixture().callCount());
     }
 
-    fixture.reset();
-    fixture.providerProblem(422, "FISCAL_CONTEXT_UNSUPPORTED");
+    fixture().reset();
+    fixture().providerProblem(422, "FISCAL_CONTEXT_UNSUPPORTED");
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_UNSUPPORTED);
-    fixture.reset();
-    fixture.providerProblem(422, "FISCAL_CONTEXT_INCONSISTENT");
+    fixture().reset();
+    fixture().providerProblem(422, "FISCAL_CONTEXT_INCONSISTENT");
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_INCONSISTENT);
   }
 
   @Test
   void malformedPartialOversizedAndTimeoutResponsesFailBeforeAnyLocalTransaction() {
-    fixture.malformed();
+    fixture().malformed();
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_INVALID);
-    fixture.reset();
-    fixture.partial();
+    fixture().reset();
+    fixture().partial();
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_INVALID);
-    fixture.reset();
-    fixture.oversized(400_000);
+    fixture().reset();
+    fixture().oversized(400_000);
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_INVALID);
-    fixture.reset();
-    fixture.delayed(Duration.ofSeconds(3));
+    fixture().reset();
+    fixture().delayed(Objects.requireNonNull(Duration.ofSeconds(3)));
     assertCode(FiscalPreparationFailure.Code.FISCAL_CONTEXT_UNAVAILABLE);
-    assertEquals(1, fixture.callCount());
+    assertEquals(1, fixture().callCount());
   }
 
   private void assertCode(FiscalPreparationFailure.Code expected) {
     FiscalPreparationApplicationException failure =
         assertThrows(
             FiscalPreparationApplicationException.class,
-            () -> adapter.resolve(request(Duration.ofSeconds(5))).await().indefinitely());
+            () -> adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely());
     assertEquals(expected, failure.failure().code());
   }
 
   private static FiscalContextPort.Request request(Duration remaining) {
     return new FiscalContextPort.Request(
-        new CompanyId(UUID.fromString("11111111-1111-4111-8111-111111111111")),
-        UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
-        LocalDate.of(2026, 7, 18),
+        new CompanyId(Objects.requireNonNull(UUID.fromString("11111111-1111-4111-8111-111111111111"))),
+        Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000")),
+        Objects.requireNonNull(LocalDate.of(2026, 7, 18)),
         "01",
         "corr-1",
         remaining);

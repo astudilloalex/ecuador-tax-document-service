@@ -28,7 +28,8 @@ public final class IdempotencyKeyHeader {
           400, "IDEMPOTENCY_KEY_MULTIPLE", "Idempotency-Key must contain exactly one value");
     }
     String normalized =
-        BusinessTextNormalizer.trimAsciiSpaceAndTab(Objects.requireNonNull(values.getFirst()));
+        Objects.requireNonNull(
+            BusinessTextNormalizer.trimAsciiSpaceAndTab(Objects.requireNonNull(values.getFirst())));
     if (!VALID.matcher(normalized).matches()) {
       throw new ProblemDetails.ApiException(
           400, "IDEMPOTENCY_KEY_INVALID", "Idempotency-Key is invalid");

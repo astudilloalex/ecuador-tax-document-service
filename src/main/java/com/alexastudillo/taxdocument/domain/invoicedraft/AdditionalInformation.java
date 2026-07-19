@@ -3,9 +3,11 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Additional information after Application normalization and canonical-name derivation. */
+@NullMarked
 public record AdditionalInformation(
     UUID id, int position, String name, @Nullable String canonicalName, String value) {
   public AdditionalInformation {

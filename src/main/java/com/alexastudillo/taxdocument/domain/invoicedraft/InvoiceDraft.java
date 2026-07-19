@@ -8,7 +8,10 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+import org.jspecify.annotations.NullMarked;
+
 /** Complete validated and calculated USD Invoice Draft business aggregate. */
+@NullMarked
 public record InvoiceDraft(
     UUID id,
     CompanyId companyId,

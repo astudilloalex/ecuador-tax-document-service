@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Buyer data captured by an Invoice Draft after Application normalization. */
+@NullMarked
 public record Buyer(
     String identificationType,
     String identification,
@@ -82,7 +84,7 @@ public record Buyer(
     return value != null && EMAIL.matcher(value).matches();
   }
 
-  private static void validateOptionalText(String value, String field) {
+  private static void validateOptionalText(@Nullable String value, String field) {
     if (value != null && (value.isEmpty() || value.codePointCount(0, value.length()) > 300)) {
       throw invalid(field, "Optional buyer text is outside the approved length");
     }

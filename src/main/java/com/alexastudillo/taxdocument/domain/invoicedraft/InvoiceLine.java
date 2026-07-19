@@ -5,9 +5,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Ordered commercial line with one selected IVA rule and optional calculated values. */
+@NullMarked
 public record InvoiceLine(
     UUID id,
     int position,

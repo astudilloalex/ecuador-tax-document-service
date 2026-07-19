@@ -5,7 +5,10 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.jspecify.annotations.NullMarked;
+
 /** Immutable selected IVA rule and its versioned evidence. */
+@NullMarked
 public record TaxSelection(
     UUID taxRuleId,
     String family,

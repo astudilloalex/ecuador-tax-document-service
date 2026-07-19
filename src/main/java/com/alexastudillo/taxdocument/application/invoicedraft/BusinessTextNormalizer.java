@@ -4,9 +4,11 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.DraftValidationExceptio
 import java.text.Normalizer;
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** The sole business-text normalization policy owner. */
+@NullMarked
 public final class BusinessTextNormalizer {
   public NormalizedText normalizeDisplay(String field, String raw, int maximumCodePoints) {
     Objects.requireNonNull(field, "field");

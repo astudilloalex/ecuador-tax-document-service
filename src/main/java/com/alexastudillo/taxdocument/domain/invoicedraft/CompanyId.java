@@ -3,7 +3,10 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.jspecify.annotations.NullMarked;
+
 /** Immutable, opaque Company ownership identifier. */
+@NullMarked
 public record CompanyId(UUID value) {
   private static final UUID NIL = new UUID(0L, 0L);
 
