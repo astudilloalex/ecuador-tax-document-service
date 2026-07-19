@@ -1,13 +1,15 @@
 package com.alexastudillo.taxdocument.support;
 
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestClock;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestClock;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Singleton;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.NullMarked;
 
 /** Resettable deterministic test clock with separate invocation counters. */
+@NullMarked
 @Alternative
 @Priority(1)
 @Singleton

@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.application.invoicedraft;
 
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -7,8 +8,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Decoded request data passed from the API boundary without business-text normalization. */
+@NullMarked
 public record CreateInvoiceDraftCommand(
     CompanyId companyId,
     Instant requestCreationInstant,
@@ -40,9 +44,9 @@ public record CreateInvoiceDraftCommand(
       String identificationType,
       String identification,
       String legalName,
-      String address,
-      String email,
-      String telephone) {}
+      @Nullable String address,
+      @Nullable String email,
+      @Nullable String telephone) {}
 
   public record LineInput(
       String productCode,
@@ -54,7 +58,8 @@ public record CreateInvoiceDraftCommand(
 
   public record PaymentInput(UUID paymentMethodId, BigDecimal amount) {}
 
-  public record AdditionalInformationInput(String name, String canonicalName, String value) {
+  public record AdditionalInformationInput(
+      String name, @Nullable String canonicalName, String value) {
     public AdditionalInformationInput(String name, String value) {
       this(name, null, value);
     }

@@ -11,7 +11,7 @@ Add one `fiscalpreparation` capability that takes an existing Company-owned Invo
 returns one immutable Fiscal Preparation. The synchronous operation checks natural replay first,
 fixes Ecuador date eligibility once, resolves a minimal authoritative fiscal context through one
 read-only non-blocking boundary, and then uses one short reactive PostgreSQL transaction to lock the
-Company-scoped draft followed by its exact controlled sequence baseline. The winning transaction
+Company-scoped draft followed by its exact Official Sequence Baseline. The winning transaction
 allocates the next nine-digit number, creates an eight-digit Numeric Code under versioned policy,
 constructs and fully validates the SRI v2.33 Access Key, inserts the append-only preparation and
 snapshot, and advances the baseline atomically. Concurrent/retried equivalent requests return that
@@ -429,6 +429,44 @@ same configured PostgreSQL database, with JDBC used only by Flyway and reactive 
 runtime. Fiscal REST calls use one named configured base URL; no separate probe destination exists
 without an approved provider health contract. The planning `.invalid` URL is never a runtime
 destination, and this plan does not claim that target production destination evidence already exists.
+
+## Implementation and Definition of Done Evidence
+
+The mandatory JVM implementation is complete and was verified on Linux with Java 25, Quarkus
+3.33.2.1, PostgreSQL 18.4, Flyway migrations V1–V6, the approved provider contract fixture, and the
+configured reactive pool maximum of 20.
+
+| Gate | Actual evidence | Result |
+|------|-----------------|--------|
+| Formatting, compilation, static analysis, and regression | `./gradlew spotlessCheck test` executed 124 tests with 0 failures, 0 errors, and 0 skipped tests; `javac -Xlint:all -Werror`, Error Prone, JSpecify/NullAway generic inference, Spotless, Feature 001 regression, API, architecture, health, and PostgreSQL tests all passed | PASS |
+| PostgreSQL/Flyway invariants | PostgreSQL 18.4 empty-schema and V5-to-V6 coverage passed for immutable V1–V5 checksums, exactly the two Feature 002 tables, no baseline seed, no PostgreSQL sequence/identity allocation, named constraints, direct-mutation guards, one-step baseline advancement, rollback, and repeatability | PASS |
+| SRI v2.33 identity | Independent vectors, raw Modulo 11 `11→0` and `10→1` cases, the page-64 negative vector, component mutation, exact widths, leading zeroes, SQL verification-digit constraint, and persisted round-trip tests passed | PASS |
+| Company scope, ordering, idempotency, and atomicity | Company-scoped API/application/persistence tests passed; provider validation precedes transaction/baseline access; locks are draft first and exact baseline second; 100 equivalent requests converge on one preparation and increment; 100 drafts in one scope receive the exact next 100 values | PASS |
+| Commit and response uncertainty | The PostgreSQL TCP fault proxy dropped a real COMMIT acknowledgement and retry converged to exactly one database identity; packaged JVM response-loss and deferred-commit deadline scenarios returned safe replay guidance and retry converged without reallocation | PASS |
+| Packaged JVM smoke | `FiscalPreparationJvmSmokeIT` executed 5 tests with 0 failures or skips against PostgreSQL 18.4 and the provider fixture, covering first/replay, outage, provider-before-baseline timeout, discarded response, confirmed rollback, possible commit, telemetry redaction, and unchanged draft state | PASS |
+| Packaged JVM concurrency | `FiscalPreparationJvmPerformanceIT` executed 1 test with 0 failures or skips: 100 same-draft requests completed in 1,035 ms; 100 one-scope drafts completed in 604 ms; pool recovery passed; no blocked-thread signal was present | PASS |
+| Runtime contract, redaction, readiness, and exclusions | Served OpenAPI semantics, success-only sensitive fields, `Cache-Control: no-store`, bounded telemetry labels, safe audit/error content, PostgreSQL/Flyway-only readiness, Clean Architecture direction, and every explicit exclusion passed their automated assertions | PASS |
+
+Native compatibility remains deferred and unclaimed because the required JVM build and runtime
+evidence is complete and this feature does not claim native support. No native result is inferred
+from the JVM evidence.
+
+The Constitution v2.0.1 implementation Definition of Done review is PASS with no deviation and
+`Pending Functional Validation: None`. Provider availability, Official Sequence Baseline
+provisioning, and platform controls remain approved architecture/deployment dependencies with
+identified accountable roles and evidence paths; none requires a new material business decision.
+The implementation evidence above does not establish that the following production evidence
+exists:
+
+| Accountable role | Required production evidence | Actual status |
+|------------------|------------------------------|---------------|
+| `Fiscal Context Provider Owner` | Concrete provider destination and accountable operational-owner registration in deployment configuration | NOT EVIDENCED — production deployment remains blocked |
+| `Database Operations Owner` | Approved baseline record identifying requester, approver, execution time, Company ownership, exact scope, validated initial `lastAllocated`, and resulting baseline identifier | NOT EVIDENCED — first production use of each fiscal scope remains blocked |
+| `Platform Operations Owner` | TLS-enabled service/database connections, approved PostgreSQL encryption at rest, encrypted backup policy and successful restore, applicable Invoice retention policy, and linked Fiscal Preparation disposal confirmation | NOT EVIDENCED — production deployment remains blocked |
+
+These are release/deployment blocks, not unfinished Feature 002 business behavior and not
+authorization to add provider implementation, master-data administration, baseline administration,
+application encryption, deletion, scheduling, or another excluded capability.
 
 ## Complexity Tracking
 

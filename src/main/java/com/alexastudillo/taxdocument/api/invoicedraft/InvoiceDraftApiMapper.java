@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftCommand;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import com.alexastudillo.taxdocument.domain.invoicedraft.AdditionalInformation;
@@ -10,8 +11,10 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.TaxTotal;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 
 /** Explicit raw-transport-to-command and persisted-result-to-response mapping. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftApiMapper {
   public CreateInvoiceDraftCommand toCommand(

@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
+import com.alexastudillo.taxdocument.api.requestcontext.CorrelationHeader;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.vertx.http.runtime.RouteConstants;
@@ -11,8 +13,10 @@ import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import java.net.URI;
+import org.jspecify.annotations.NullMarked;
 
 /** Exclusive API construction of the payload-too-large outcome. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftPayloadSizeFailureHandler {
   private static final String PATH = "/api/v1/invoice-drafts";

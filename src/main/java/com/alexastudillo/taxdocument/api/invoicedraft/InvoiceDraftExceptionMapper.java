@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -11,9 +12,13 @@ import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
 import java.net.URI;
 import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Maps only an API-accepted terminal outcome to HTTP. */
+@NullMarked
 @Provider
 @ApplicationScoped
 public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwable> {
@@ -37,7 +42,9 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     List<ProblemDetails.Violation> violations = mapping.violations();
     ProblemDetails problem =
         new ProblemDetails(
-            URI.create("urn:ecuador-tax-document-service:problem:" + mapping.code().toLowerCase()),
+            URI.create(
+                "urn:ecuador-tax-document-service:problem:"
+                    + mapping.code().toLowerCase(Locale.ROOT)),
             mapping.title(),
             mapping.status(),
             mapping.code(),
@@ -64,7 +71,11 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
   private Mapping mapping(Throwable exception) {
     if (exception instanceof ProblemDetails.ApiException api) {
       return new Mapping(
-          api.status(), api.code(), title(api.code()), api.getMessage(), api.violations());
+          api.status(),
+          api.code(),
+          title(api.code()),
+          Objects.requireNonNullElse(api.getMessage(), "The request failed"),
+          api.violations());
     }
     if (exception instanceof InvoiceDraftApplicationException application) {
       InvoiceDraftFailure failure = application.failure();

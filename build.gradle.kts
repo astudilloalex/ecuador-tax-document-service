@@ -1,7 +1,10 @@
+import net.ltgt.gradle.errorprone.errorprone
+
 plugins {
     java
     id("io.quarkus")
     id("com.diffplug.spotless") version "8.8.0"
+    id("net.ltgt.errorprone") version "5.1.0"
 }
 
 repositories {
@@ -16,6 +19,7 @@ val quarkusPlatformVersion: String by project
 dependencies {
     implementation(enforcedPlatform("${quarkusPlatformGroupId}:${quarkusPlatformArtifactId}:${quarkusPlatformVersion}"))
     implementation("io.quarkus:quarkus-rest-jackson")
+    implementation("io.quarkus:quarkus-rest-client-jackson")
     implementation("io.quarkus:quarkus-hibernate-validator")
     implementation("io.quarkus:quarkus-hibernate-reactive-panache")
     implementation("io.quarkus:quarkus-reactive-pg-client")
@@ -26,7 +30,13 @@ dependencies {
     implementation("io.quarkus:quarkus-micrometer")
     implementation("io.quarkus:quarkus-opentelemetry")
 
+    compileOnly("org.jspecify:jspecify:1.0.0")
+    compileOnly("org.osgi:org.osgi.annotation.versioning:1.1.2")
+    errorprone("com.google.errorprone:error_prone_core:2.50.0")
+    errorprone("com.uber.nullaway:nullaway:0.13.7")
+
     testImplementation("org.jspecify:jspecify:1.0.0")
+    testCompileOnly("org.osgi:org.osgi.annotation.versioning:1.1.2")
     testImplementation("io.quarkus:quarkus-junit")
     testImplementation("io.quarkus:quarkus-test-vertx")
     testImplementation("io.quarkus:quarkus-test-hibernate-reactive-panache")
@@ -54,4 +64,9 @@ spotless {
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
     options.compilerArgs.addAll(listOf("-parameters", "-Xlint:all", "-Werror"))
+    options.errorprone {
+        error("NullAway")
+        option("NullAway:OnlyNullMarked", "true")
+        option("NullAway:JSpecifyMode", "true")
+    }
 }

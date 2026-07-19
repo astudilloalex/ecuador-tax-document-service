@@ -3,16 +3,18 @@ package com.alexastudillo.taxdocument.api.invoicedraft;
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestClock;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestClock;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
 
 /** Exclusive API request-time, deadline-race, and terminal-outcome owner. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftRequestDeadlineHandler {
   private final RequestClock clock;

@@ -7,7 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetry;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.support.FixedRequestClock;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.smallrye.mutiny.Uni;

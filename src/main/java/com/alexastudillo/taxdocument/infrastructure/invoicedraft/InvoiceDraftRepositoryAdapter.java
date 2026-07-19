@@ -5,8 +5,9 @@ import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftCandid
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftRepository;
 import com.alexastudillo.taxdocument.application.invoicedraft.PersistedInvoiceDraft;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestClock;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestClock;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
+import com.alexastudillo.taxdocument.infrastructure.persistence.ReactiveOperationBudget;
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import io.smallrye.mutiny.Uni;
@@ -20,8 +21,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
 
 /** Company-scoped reactive aggregate repository and sole transactional timestamp owner. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftRepository {
   private final RequestClock clock;

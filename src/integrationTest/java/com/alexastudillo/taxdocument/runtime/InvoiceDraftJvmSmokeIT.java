@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -43,7 +44,18 @@ class InvoiceDraftJvmSmokeIT {
     String canonical =
         Files.readString(
             Path.of("specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml"));
-    assertEquals(YAML.readTree(canonical), YAML.readTree(served));
+    JsonNode canonicalNode = YAML.readTree(canonical);
+    JsonNode servedNode = YAML.readTree(served);
+    assertEquals(
+        canonicalNode.required("paths").required("/invoice-drafts"),
+        servedNode.required("paths").required("/invoice-drafts"));
+    for (Map.Entry<String, JsonNode> group : canonicalNode.required("components").properties()) {
+      for (Map.Entry<String, JsonNode> entry : group.getValue().properties()) {
+        assertEquals(
+            entry.getValue(),
+            servedNode.required("components").required(group.getKey()).get(entry.getKey()));
+      }
+    }
     assertFalse(served.contains("securitySchemes:"));
     assertFalse(served.contains("security:"));
     assertFalse(served.contains("'401':"));

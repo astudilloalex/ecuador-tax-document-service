@@ -1,8 +1,10 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestClock;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
+import com.alexastudillo.taxdocument.api.requestcontext.CorrelationHeader;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestClock;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.vertx.http.runtime.RouteConstants;
@@ -18,8 +20,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Captures immutable request time, deadline, and safe correlation before body consumption. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftRequestBoundary {
   private static final String PATH = "/api/v1/invoice-drafts";
@@ -129,7 +134,7 @@ public final class InvoiceDraftRequestBoundary {
     private final long startedNanos;
     private final AtomicBoolean terminalAccepted = new AtomicBoolean();
     private long timerId = -1L;
-    private InvoiceDraftRequestState requestState;
+    private @Nullable InvoiceDraftRequestState requestState;
 
     private BoundaryState(
         Instant requestInstant,
@@ -174,7 +179,7 @@ public final class InvoiceDraftRequestBoundary {
       timerId = value;
     }
 
-    InvoiceDraftRequestState requestState() {
+    @Nullable InvoiceDraftRequestState requestState() {
       return requestState;
     }
 

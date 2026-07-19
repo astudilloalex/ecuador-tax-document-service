@@ -3,7 +3,7 @@ package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.Buyer;
 import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceDraftCalculator;
 import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceLine;

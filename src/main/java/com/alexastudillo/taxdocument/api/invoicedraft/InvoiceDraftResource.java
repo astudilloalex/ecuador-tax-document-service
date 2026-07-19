@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftUseCase;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,8 +14,10 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.jspecify.annotations.NullMarked;
 
 /** POST /api/v1/invoice-drafts transport adapter. */
+@NullMarked
 @Path("/api/v1/invoice-drafts")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)

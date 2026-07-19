@@ -202,6 +202,46 @@ unless the implementation elects to claim native support and supplies both build
 evidence for REST Client JSON mapping, Hibernate Reactive persistence, configuration, reflection,
 and resource loading. JVM support remains mandatory regardless.
 
+## Actual Verification Results
+
+The mandatory JVM verification completed on Linux with Java 25, Quarkus 3.33.2.1, PostgreSQL
+18.4, Flyway V1–V6, the approved `authoritative-fiscal-context` contract fixture, and reactive pool
+maximum 20.
+
+- `./gradlew spotlessCheck test`: PASS — 124 tests, 0 failures, 0 errors, 0 skipped; Spotless,
+  `javac -Xlint:all -Werror`, Error Prone, JSpecify/NullAway generic inference, Feature 001
+  regression, API, architecture, health, migration, concurrency, rollback, and redaction evidence
+  all passed.
+- `FiscalPreparationJvmSmokeIT`: PASS — 5 tests, 0 failures, 0 skipped. The packaged JVM proved
+  first preparation and outage replay, response-loss recovery, provider timeout before absent
+  baseline observation, confirmed rollback with no baseline consumption, possible-commit safe
+  guidance and natural-retry convergence, unchanged Invoice Draft state, and sanitized audit data.
+- `FiscalPreparationJvmPerformanceIT`: PASS — 1 test, 0 failures, 0 skipped. One hundred equivalent
+  same-draft requests completed in 1,035 ms and converged on one Fiscal Preparation; one hundred
+  different drafts sharing one fiscal scope completed in 604 ms and received exactly the next 100
+  Official Sequential Numbers. Pool recovery passed and the packaged log contained no
+  blocked-thread signal.
+- Genuine PostgreSQL commit uncertainty: PASS — the test-only TCP proxy interrupted an observed
+  COMMIT acknowledgement; database-truth reconciliation plus retry produced exactly one Fiscal
+  Preparation and one increment, never a second allocation.
+- Runtime contract and absence evidence: PASS — served OpenAPI preserved Feature 001 and added only
+  the approved bodyless Feature 002 operation; Company scoping, `no-store`, success-only fiscal
+  fields, PostgreSQL/Flyway readiness, telemetry redaction, Clean Architecture direction, and all
+  explicit exclusions passed.
+
+The fixture acceptance result does not establish production deployment readiness:
+
+| Accountable role | Evidence status | Release consequence |
+|------------------|-----------------|---------------------|
+| `Fiscal Context Provider Owner` | Concrete production destination and operational-owner registration are not evidenced | Production deployment blocked |
+| `Database Operations Owner` | Requester/approver/time/Company/exact-scope/validated-`lastAllocated`/resulting-baseline evidence is not evidenced | First production request for each fiscal scope blocked |
+| `Platform Operations Owner` | Target TLS, PostgreSQL encryption at rest, encrypted backup and successful restore, Invoice retention, and linked-disposal evidence is not evidenced | Production deployment blocked |
+
+`Pending Functional Validation: None`. The remaining items are approved operational evidence gates
+with accountable owners, not unresolved business decisions. Native support remains deferred and
+unclaimed. No production provider, baseline, or platform-control evidence is inferred from these
+fixture-backed results.
+
 ## Independent Acceptance Setup
 
 For the smallest end-to-end scenario:
@@ -218,3 +258,9 @@ For the smallest end-to-end scenario:
 6. call the same path again with a different correlation identifier and the fiscal fixture offline;
 7. verify `200`, byte/value-equivalent persisted fiscal data, replay header `true`, and no baseline
    or provider activity.
+
+This exact acceptance path passed against the approved fixture. The recovery variants also passed:
+a discarded successful response was recovered as replay; a delayed commit returned conservative
+same-Company/same-draft retry guidance and converged to exactly one preparation; and a confirmed
+persistence failure left both preparation count and `lastAllocated` unchanged. These results do not
+execute or replace any production provisioning or platform-control runbook.

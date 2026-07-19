@@ -5,6 +5,7 @@ import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailur
 import com.alexastudillo.taxdocument.application.invoicedraft.ReferenceDataPort;
 import com.alexastudillo.taxdocument.domain.invoicedraft.DraftValidationException;
 import com.alexastudillo.taxdocument.domain.invoicedraft.TaxSelection;
+import com.alexastudillo.taxdocument.infrastructure.persistence.ReactiveOperationBudget;
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -13,8 +14,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
 
 /** Reactive unscoped access to immutable global SRI reference catalogs. */
+@NullMarked
 @ApplicationScoped
 public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
   private final Duration operationTimeout;

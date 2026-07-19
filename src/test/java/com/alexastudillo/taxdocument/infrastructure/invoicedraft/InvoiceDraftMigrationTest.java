@@ -47,6 +47,8 @@ class InvoiceDraftMigrationTest {
           "invoice_payment",
           "invoice_additional_information",
           "invoice_draft_idempotency",
+          "official_sequence_baseline",
+          "fiscal_preparation",
           "flyway_schema_history");
 
   @Inject PostgreSqlTestResource database;
@@ -54,13 +56,13 @@ class InvoiceDraftMigrationTest {
 
   @BeforeEach
   void restoreEmptyDatabase() {
-    assertEquals(5, database.resetSchema().migrationsExecuted);
+    assertEquals(6, database.resetSchema().migrationsExecuted);
   }
 
   @Test
   void flywayCreatesTheApprovedSchemaFromEmptyPostgreSql() {
     assertTrue(database.scalarString("SHOW server_version").startsWith("18.4"));
-    assertEquals(5, database.appliedMigrations().size());
+    assertEquals(6, database.appliedMigrations().size());
 
     Set<String> tables =
         database
@@ -174,13 +176,13 @@ class InvoiceDraftMigrationTest {
   }
 
   @Test
-  void flywayUpgradesV3ToV5AndValidatesTheFinalAsciiConstraints() {
+  void flywayUpgradesV3ThroughV6AndPreservesTheFinalAsciiConstraints() {
     assertEquals(3, database.resetSchemaTo("3").migrationsExecuted);
     assertEquals(3, database.appliedMigrations().size());
     assertTrue(constraintDefinition("ck_invoice_line_product_code").contains("[[:alnum:]]"));
 
-    assertEquals(2, database.migrate().migrationsExecuted);
-    assertEquals(5, database.appliedMigrations().size());
+    assertEquals(3, database.migrate().migrationsExecuted);
+    assertEquals(6, database.appliedMigrations().size());
     assertTrue(database.validate().validationSuccessful);
 
     String buyer = constraintDefinition("ck_invoice_draft_buyer_identification");

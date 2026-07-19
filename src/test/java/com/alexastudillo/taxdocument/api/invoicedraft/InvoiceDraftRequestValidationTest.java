@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

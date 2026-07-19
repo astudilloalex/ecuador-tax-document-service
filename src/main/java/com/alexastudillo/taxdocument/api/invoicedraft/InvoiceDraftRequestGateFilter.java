@@ -1,11 +1,16 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
+import com.alexastudillo.taxdocument.api.requestcontext.CompanyContextHeader;
+import com.alexastudillo.taxdocument.api.requestcontext.CorrelationHeader;
 import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import org.jboss.resteasy.reactive.server.ServerRequestFilter;
+import org.jspecify.annotations.NullMarked;
 
 /** Non-blocking header gate executed before request entity consumption. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftRequestGateFilter {
   private final InvoiceDraftRequestDeadlineHandler deadlineHandler;

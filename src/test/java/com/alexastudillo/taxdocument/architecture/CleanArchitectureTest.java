@@ -16,12 +16,17 @@ import org.junit.jupiter.api.Test;
 class CleanArchitectureTest {
   private static final Path MAIN_JAVA = Path.of("src/main/java").toAbsolutePath().normalize();
   private static final String BASE_PATH = "com/alexastudillo/taxdocument/";
-  private static final Set<String> BOUNDARIES = Set.of("api", "application", "domain", "infrastructure");
-  private static final Pattern DECLARED_PROHIBITED_COMPONENT = Pattern.compile(
-      "(?m)\\b(?:class|interface|record|enum)\\s+(?:CompanyContextPort|"
-          + "ResolveCompanyFiscalContextPort|CompanyClient|CompanyRepository|CompanyEntity|"
-          + "CompanyService|IssuerRepository|IssuerEntity|SecurityService|SriClient|"
-          + "FiscalIssuanceService)\\b");
+  private static final Set<String> BOUNDARIES =
+      Set.of("api", "application", "domain", "infrastructure");
+  private static final Pattern DECLARED_PROHIBITED_COMPONENT =
+      Pattern.compile(
+          "(?m)\\b(?:class|interface|record|enum)\\s+(?:CompanyContextPort|"
+              + "ResolveCompanyFiscalContextPort|CompanyClient|CompanyRepository|CompanyEntity|"
+              + "CompanyService|IssuerRepository|IssuerEntity|EstablishmentRepository|"
+              + "EmissionPointRepository|SecurityService|AuthenticationService|"
+              + "AuthorizationService|SriClient|XmlGenerator|XmlSigner|CertificateStore|"
+              + "RideGenerator|PdfGenerator|BaselineAdministrationService|"
+              + "FiscalIssuanceService|BackgroundExecutor|RetryScheduler)\\b");
 
   @Test
   void productionSourcesUseOnlyTheApprovedTopLevelBoundaries() throws IOException {
@@ -72,10 +77,7 @@ class CleanArchitectureTest {
             "org.hibernate");
       }
       if (packageName.startsWith("com.alexastudillo.taxdocument.infrastructure")) {
-        assertNoImportPrefix(
-            source,
-            imports,
-            "com.alexastudillo.taxdocument.api");
+        assertNoImportPrefix(source, imports, "com.alexastudillo.taxdocument.api");
       }
     }
   }
@@ -86,21 +88,50 @@ class CleanArchitectureTest {
       String relative = MAIN_JAVA.relativize(source).toString().replace('\\', '/');
       String code = withoutComments(Files.readString(source, StandardCharsets.UTF_8));
       assertFalse(
-          relative.matches(".*(?:/security/|/identity/|/company/|/cache/|/sri/|/fiscalissuance/).*")
+          relative.matches(
+                  ".*(?:/security/|/identity/|/company/|/cache/|/sri/|/fiscalissuance/|"
+                      + "/xml/|/signing/|/certificate/|/ride/|/pdf/|/queue/|/notification/).*")
               || DECLARED_PROHIBITED_COMPONENT.matcher(code).find(),
           () -> "Prohibited capability in " + relative);
     }
 
     String build = Files.readString(Path.of("build.gradle.kts"), StandardCharsets.UTF_8);
+    assertTrue(
+        build.contains("io.quarkus:quarkus-rest-client-jackson"),
+        "The approved authoritative-fiscal-context client must use the BOM-managed REST Client");
+    String buildWithoutApprovedRestClient =
+        build.replace("io.quarkus:quarkus-rest-client-jackson", "");
     assertFalse(
         Pattern.compile(
-            "quarkus-(?:oidc|security|smallrye-jwt|keycloak|rest-client|cache|redis|kafka|amqp)|"
-                + "testcontainers",
-            Pattern.CASE_INSENSITIVE)
-            .matcher(build)
+                "quarkus-(?:oidc|security|smallrye-jwt|keycloak|rest-client|cache|redis|kafka|amqp)|"
+                    + "testcontainers",
+                Pattern.CASE_INSENSITIVE)
+            .matcher(buildWithoutApprovedRestClient)
             .find(),
-        "Build must not introduce identity, Company integration, cache, broker, or a second "
-            + "container lifecycle");
+        "Build must not introduce another REST client, identity, Company integration, cache, "
+            + "broker, or a second container lifecycle");
+  }
+
+  @Test
+  void featureTwoOwnedPackagesAreExplicitlyNullMarked() throws IOException {
+    List<Path> ownedPackageFiles =
+        List.of(
+            Path.of(
+                "src/main/java/com/alexastudillo/taxdocument/api/fiscalpreparation/package-info.java"),
+            Path.of(
+                "src/main/java/com/alexastudillo/taxdocument/api/fiscalpreparation/telemetry/package-info.java"),
+            Path.of(
+                "src/main/java/com/alexastudillo/taxdocument/application/fiscalpreparation/package-info.java"),
+            Path.of(
+                "src/main/java/com/alexastudillo/taxdocument/domain/fiscalpreparation/package-info.java"),
+            Path.of(
+                "src/main/java/com/alexastudillo/taxdocument/infrastructure/fiscalpreparation/package-info.java"));
+    for (Path packageFile : ownedPackageFiles) {
+      assertTrue(Files.exists(packageFile), () -> "Missing package contract " + packageFile);
+      assertTrue(
+          Files.readString(packageFile, StandardCharsets.UTF_8).contains("@NullMarked"),
+          () -> "Feature 002 package is not null-marked: " + packageFile);
+    }
   }
 
   private static List<Path> javaSources() throws IOException {
@@ -120,7 +151,8 @@ class CleanArchitectureTest {
   }
 
   private static List<String> imports(String source) {
-    var matcher = Pattern.compile("(?m)^import\\s+(?:static\\s+)?([a-zA-Z0-9_.]+);").matcher(source);
+    var matcher =
+        Pattern.compile("(?m)^import\\s+(?:static\\s+)?([a-zA-Z0-9_.]+);").matcher(source);
     var imports = new java.util.ArrayList<String>();
     while (matcher.find()) {
       imports.add(matcher.group(1));

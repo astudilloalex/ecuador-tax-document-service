@@ -22,12 +22,13 @@ public interface InvoiceDraftRepository {
       }
     }
 
-    record Conflict(byte[] storedFingerprint) implements IdempotencyLookup {
-      public Conflict {
-        storedFingerprint = Arrays.copyOf(storedFingerprint, storedFingerprint.length);
+    final class Conflict implements IdempotencyLookup {
+      private final byte[] storedFingerprint;
+
+      public Conflict(byte[] storedFingerprint) {
+        this.storedFingerprint = Arrays.copyOf(storedFingerprint, storedFingerprint.length);
       }
 
-      @Override
       public byte[] storedFingerprint() {
         return Arrays.copyOf(storedFingerprint, storedFingerprint.length);
       }

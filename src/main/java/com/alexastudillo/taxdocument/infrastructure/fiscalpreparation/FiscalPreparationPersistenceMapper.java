@@ -1,0 +1,156 @@
+package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
+
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.AccessKey;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalContextSnapshot;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalDesignation;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalPreparation;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalSourceEvidence;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.NumericCode;
+import com.alexastudillo.taxdocument.domain.fiscalpreparation.OfficialSequentialNumber;
+import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
+import io.vertx.mutiny.sqlclient.Row;
+import io.vertx.mutiny.sqlclient.Tuple;
+import jakarta.enterprise.context.ApplicationScoped;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Objects;
+import java.util.Optional;
+import org.jspecify.annotations.Nullable;
+
+/** Explicit lossless mapping between flattened persistence rows and the immutable domain. */
+@ApplicationScoped
+public final class FiscalPreparationPersistenceMapper {
+  public FiscalPreparation fromRow(Row row) {
+    Objects.requireNonNull(row, "row");
+    FiscalContextSnapshot snapshot =
+        new FiscalContextSnapshot(
+            require(row.getString("issuer_reference"), "issuerReference"),
+            require(row.getString("issuer_ruc"), "issuerRuc"),
+            require(row.getString("legal_name"), "legalName"),
+            Optional.ofNullable(row.getString("commercial_name")),
+            require(row.getString("head_office_address"), "headOfficeAddress"),
+            require(row.getBoolean("accounting_required"), "accountingRequired"),
+            specialTaxpayer(row.getString("special_taxpayer_resolution")),
+            withholdingAgent(row.getString("withholding_agent_resolution")),
+            FiscalDesignation.RimpeClassification.valueOf(
+                require(row.getString("rimpe_classification"), "rimpeClassification")),
+            largeContributor(
+                row.getString("large_contributor_resolution"),
+                row.getString("large_contributor_legend")),
+            require(row.getString("establishment_reference"), "establishmentReference"),
+            require(row.getString("establishment_code"), "establishmentCode"),
+            require(row.getString("establishment_address"), "establishmentAddress"),
+            require(row.getUUID("emission_point_id"), "emissionPointId"),
+            require(row.getString("emission_point_code"), "emissionPointCode"),
+            require(row.getString("environment_code"), "environmentCode"),
+            require(row.getString("document_type_code"), "documentTypeCode"),
+            require(row.getString("emission_type_code"), "emissionTypeCode"),
+            new FiscalSourceEvidence(
+                require(row.getString("source_authority"), "sourceAuthority"),
+                require(row.getString("source_revision"), "sourceRevision"),
+                require(row.getLocalDate("source_effective_from"), "sourceEffectiveFrom"),
+                Optional.ofNullable(row.getLocalDate("source_effective_through")),
+                require(row.getOffsetDateTime("source_observed_at"), "sourceObservedAt")
+                    .toInstant()),
+            require(row.getString("technical_rule_id"), "technicalRuleId"),
+            require(row.getLocalDate("technical_rule_modified_on"), "technicalRuleModifiedOn"),
+            require(row.getString("numeric_code_policy_id"), "numericCodePolicyId"));
+    return new FiscalPreparation(
+        require(row.getUUID("id"), "id"),
+        new CompanyId(require(row.getUUID("company_id"), "companyId")),
+        require(row.getUUID("invoice_draft_id"), "invoiceDraftId"),
+        require(row.getUUID("official_sequence_baseline_id"), "officialSequenceBaselineId"),
+        require(row.getLocalDate("emission_date"), "emissionDate"),
+        snapshot,
+        OfficialSequentialNumber.parse(
+            require(row.getString("official_sequential_number"), "officialSequentialNumber")),
+        NumericCode.parse(require(row.getString("numeric_code"), "numericCode")),
+        AccessKey.parse(require(row.getString("access_key"), "accessKey")),
+        require(row.getOffsetDateTime("created_at"), "createdAt").toInstant());
+  }
+
+  public Tuple toInsertParameters(FiscalPreparation preparation) {
+    Objects.requireNonNull(preparation, "preparation");
+    FiscalContextSnapshot snapshot = preparation.fiscalContextSnapshot();
+    FiscalSourceEvidence source = snapshot.sourceEvidence();
+    Tuple values = Tuple.tuple();
+    values.addUUID(preparation.id());
+    values.addUUID(preparation.companyId().value());
+    values.addUUID(preparation.invoiceDraftId());
+    values.addUUID(preparation.officialSequenceBaselineId());
+    values.addLocalDate(preparation.emissionDate());
+    values.addString(snapshot.issuerReference());
+    values.addString(snapshot.issuerRuc());
+    values.addString(snapshot.legalName());
+    values.addValue(snapshot.commercialName().orElse(null));
+    values.addString(snapshot.headOfficeAddress());
+    values.addBoolean(snapshot.accountingRequired());
+    values.addValue(
+        snapshot
+            .specialTaxpayer()
+            .map(FiscalDesignation.SpecialTaxpayer::resolutionIdentifier)
+            .orElse(null));
+    values.addValue(
+        snapshot
+            .withholdingAgent()
+            .map(FiscalDesignation.WithholdingAgent::resolutionIdentifier)
+            .orElse(null));
+    values.addString(snapshot.rimpeClassification().name());
+    values.addValue(
+        snapshot
+            .largeContributor()
+            .map(FiscalDesignation.LargeContributor::resolutionIdentifier)
+            .orElse(null));
+    values.addValue(
+        snapshot
+            .largeContributor()
+            .map(FiscalDesignation.LargeContributor::requiredLegend)
+            .orElse(null));
+    values.addString(snapshot.establishmentReference());
+    values.addString(snapshot.establishmentCode());
+    values.addString(snapshot.establishmentAddress());
+    values.addUUID(snapshot.emissionPointId());
+    values.addString(snapshot.emissionPointCode());
+    values.addString(snapshot.environmentCode());
+    values.addString(snapshot.documentTypeCode());
+    values.addString(snapshot.emissionTypeCode());
+    values.addString(source.authority());
+    values.addString(source.revision());
+    values.addLocalDate(source.effectiveFrom());
+    values.addValue(source.effectiveThrough().orElse(null));
+    values.addOffsetDateTime(OffsetDateTime.ofInstant(source.observedAt(), ZoneOffset.UTC));
+    values.addString(snapshot.sriTechnicalRuleIdentifier());
+    values.addLocalDate(snapshot.sriTechnicalRuleDate());
+    values.addString(snapshot.numericCodePolicyVersion());
+    values.addString(preparation.officialSequentialNumber().value());
+    values.addString(preparation.numericCode().value());
+    values.addString(preparation.accessKey().value());
+    values.addOffsetDateTime(OffsetDateTime.ofInstant(preparation.createdAt(), ZoneOffset.UTC));
+    return values;
+  }
+
+  private static Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer(
+      @Nullable String resolution) {
+    return Optional.ofNullable(resolution).map(FiscalDesignation.SpecialTaxpayer::new);
+  }
+
+  private static Optional<FiscalDesignation.WithholdingAgent> withholdingAgent(
+      @Nullable String resolution) {
+    return Optional.ofNullable(resolution).map(FiscalDesignation.WithholdingAgent::new);
+  }
+
+  private static Optional<FiscalDesignation.LargeContributor> largeContributor(
+      @Nullable String resolution, @Nullable String legend) {
+    if (resolution == null && legend == null) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new FiscalDesignation.LargeContributor(
+            Objects.requireNonNull(resolution, "largeContributorResolution"),
+            Objects.requireNonNull(legend, "largeContributorLegend")));
+  }
+
+  private static <T> T require(@Nullable T value, String field) {
+    return Objects.requireNonNull(value, field);
+  }
+}
