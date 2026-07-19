@@ -81,7 +81,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
           api.code(),
           title(api.code()),
           Objects.requireNonNull(Objects.requireNonNullElse(api.getMessage(), "The request failed")),
-          api.violations());
+          Objects.requireNonNull(api.violations()));
     }
     if (exception instanceof InvoiceDraftApplicationException application) {
       InvoiceDraftFailure failure = application.failure();

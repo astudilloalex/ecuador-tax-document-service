@@ -5,7 +5,10 @@ import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.NullMarked;
+
 /** Stable transport-neutral safe failure with explicit retry and commit knowledge. */
+@NullMarked
 public record FiscalPreparationFailure(
     Code code, String detail, boolean retryable, CommitKnowledge commitKnowledge)
     implements Serializable {

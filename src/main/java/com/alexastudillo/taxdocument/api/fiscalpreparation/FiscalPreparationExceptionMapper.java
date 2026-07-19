@@ -12,9 +12,11 @@ import java.net.URI;
 import java.util.Locale;
 import java.util.Objects;
 
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Maps stable Fiscal Preparation failures without exposing causes, SQL, or fiscal values. */
+@NullMarked
 @Provider
 @ApplicationScoped
 public final class FiscalPreparationExceptionMapper
@@ -36,7 +38,7 @@ public final class FiscalPreparationExceptionMapper
     }
     FiscalPreparationFailure failure = exception.failure();
     int status = status(failure.code());
-    String correlation = state.safeCorrelationOrGenerated();
+    String correlation = Objects.requireNonNull(state.safeCorrelationOrGenerated());
     telemetry.failed(correlation, failure);
     String codeName = Objects.requireNonNull(failure.code().name());
     ProblemDetails problem =

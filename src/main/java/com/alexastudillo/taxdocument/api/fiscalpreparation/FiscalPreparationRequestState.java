@@ -5,9 +5,11 @@ import com.alexastudillo.taxdocument.application.requestcontext.RequestContext;
 import jakarta.enterprise.context.RequestScoped;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Request-local fixed context and exclusive terminal-outcome state. */
+@NullMarked
 @RequestScoped
 public class FiscalPreparationRequestState {
   private final AtomicBoolean terminalAccepted = new AtomicBoolean();

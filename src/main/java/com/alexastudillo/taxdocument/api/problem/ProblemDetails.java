@@ -6,9 +6,11 @@ import java.net.URI;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Safe RFC 9457-style problem representation with stable English codes. */
+@NullMarked
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ProblemDetails(
     URI type,
@@ -18,7 +20,7 @@ public record ProblemDetails(
     String detail,
     URI instance,
     String correlationId,
-    @Nullable List<Violation> violations) {
+    @Nullable List<@NonNull Violation> violations) {
   public ProblemDetails {
     Objects.requireNonNull(type, "type");
     Objects.requireNonNull(title, "title");
@@ -26,7 +28,7 @@ public record ProblemDetails(
     Objects.requireNonNull(detail, "detail");
     Objects.requireNonNull(instance, "instance");
     Objects.requireNonNull(correlationId, "correlationId");
-    violations = violations == null ? null : List.copyOf(violations);
+    violations = violations == null ? null : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
   }
 
   public record Violation(

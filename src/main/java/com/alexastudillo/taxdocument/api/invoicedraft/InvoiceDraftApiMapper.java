@@ -152,7 +152,7 @@ public final class InvoiceDraftApiMapper {
         new InvoiceDraftResponse.LineTaxResponse(
             line.taxSelection().taxRuleId(),
             line.taxSelection().family(),
-            line.taxSelection().treatment().name(),
+            Objects.requireNonNull(line.taxSelection().treatment().name()),
             line.taxSelection().officialTaxCode(),
             line.taxSelection().officialPercentageCode(),
             line.taxSelection().rate(),
@@ -165,7 +165,7 @@ public final class InvoiceDraftApiMapper {
   private InvoiceDraftResponse.TaxResponse taxResponse(TaxTotal total) {
     return new InvoiceDraftResponse.TaxResponse(
         total.family(),
-        total.treatment().name(),
+        Objects.requireNonNull(total.treatment().name()),
         total.officialTaxCode(),
         total.officialPercentageCode(),
         total.rate(),
