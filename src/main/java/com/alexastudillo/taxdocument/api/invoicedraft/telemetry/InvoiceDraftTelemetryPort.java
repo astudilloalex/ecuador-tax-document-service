@@ -3,7 +3,7 @@ package com.alexastudillo.taxdocument.api.invoicedraft.telemetry;
 import com.alexastudillo.taxdocument.api.invoicedraft.InvoiceDraftRequestState;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 
-/** API-facing operational evidence boundary implemented by Infrastructure. */
+/** API-facing operational telemetry contract. */
 public interface InvoiceDraftTelemetryPort {
   void completed(
       InvoiceDraftRequestState state, CreateInvoiceDraftResult result, int selectedStatus);

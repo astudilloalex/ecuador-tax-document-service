@@ -16,14 +16,12 @@ import org.junit.jupiter.api.Test;
 class CleanArchitectureTest {
   private static final Path MAIN_JAVA = Path.of("src/main/java").toAbsolutePath().normalize();
   private static final String BASE_PATH = "com/alexastudillo/taxdocument/";
-  private static final Set<String> BOUNDARIES =
-      Set.of("api", "application", "domain", "infrastructure");
-  private static final Pattern DECLARED_PROHIBITED_COMPONENT =
-      Pattern.compile(
-          "(?m)\\b(?:class|interface|record|enum)\\s+(?:CompanyContextPort|"
-              + "ResolveCompanyFiscalContextPort|CompanyClient|CompanyRepository|CompanyEntity|"
-              + "CompanyService|IssuerRepository|IssuerEntity|SecurityService|SriClient|"
-              + "FiscalIssuanceService)\\b");
+  private static final Set<String> BOUNDARIES = Set.of("api", "application", "domain", "infrastructure");
+  private static final Pattern DECLARED_PROHIBITED_COMPONENT = Pattern.compile(
+      "(?m)\\b(?:class|interface|record|enum)\\s+(?:CompanyContextPort|"
+          + "ResolveCompanyFiscalContextPort|CompanyClient|CompanyRepository|CompanyEntity|"
+          + "CompanyService|IssuerRepository|IssuerEntity|SecurityService|SriClient|"
+          + "FiscalIssuanceService)\\b");
 
   @Test
   void productionSourcesUseOnlyTheApprovedTopLevelBoundaries() throws IOException {
@@ -73,6 +71,12 @@ class CleanArchitectureTest {
             "jakarta.persistence",
             "org.hibernate");
       }
+      if (packageName.startsWith("com.alexastudillo.taxdocument.infrastructure")) {
+        assertNoImportPrefix(
+            source,
+            imports,
+            "com.alexastudillo.taxdocument.api");
+      }
     }
   }
 
@@ -90,9 +94,9 @@ class CleanArchitectureTest {
     String build = Files.readString(Path.of("build.gradle.kts"), StandardCharsets.UTF_8);
     assertFalse(
         Pattern.compile(
-                "quarkus-(?:oidc|security|smallrye-jwt|keycloak|rest-client|cache|redis|kafka|amqp)|"
-                    + "testcontainers",
-                Pattern.CASE_INSENSITIVE)
+            "quarkus-(?:oidc|security|smallrye-jwt|keycloak|rest-client|cache|redis|kafka|amqp)|"
+                + "testcontainers",
+            Pattern.CASE_INSENSITIVE)
             .matcher(build)
             .find(),
         "Build must not introduce identity, Company integration, cache, broker, or a second "
@@ -116,8 +120,7 @@ class CleanArchitectureTest {
   }
 
   private static List<String> imports(String source) {
-    var matcher =
-        Pattern.compile("(?m)^import\\s+(?:static\\s+)?([a-zA-Z0-9_.]+);").matcher(source);
+    var matcher = Pattern.compile("(?m)^import\\s+(?:static\\s+)?([a-zA-Z0-9_.]+);").matcher(source);
     var imports = new java.util.ArrayList<String>();
     while (matcher.find()) {
       imports.add(matcher.group(1));
