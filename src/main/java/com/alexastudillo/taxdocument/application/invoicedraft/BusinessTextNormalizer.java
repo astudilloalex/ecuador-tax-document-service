@@ -4,6 +4,7 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.DraftValidationExceptio
 import java.text.Normalizer;
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /** The sole business-text normalization policy owner. */
 public final class BusinessTextNormalizer {
@@ -93,5 +94,5 @@ public final class BusinessTextNormalizer {
     return result.toString();
   }
 
-  public record NormalizedText(String displayValue, String canonicalValue) {}
+  public record NormalizedText(String displayValue, @Nullable String canonicalValue) {}
 }

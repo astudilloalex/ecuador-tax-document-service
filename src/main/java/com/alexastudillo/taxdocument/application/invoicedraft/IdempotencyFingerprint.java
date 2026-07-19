@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /** Versioned, domain-separated privacy-minimal SHA-256 hashing. */
 public final class IdempotencyFingerprint {
@@ -59,7 +60,7 @@ public final class IdempotencyFingerprint {
     source.forEach(value -> put(digest, value));
   }
 
-  private static void putNullable(MessageDigest digest, String value) {
+  private static void putNullable(MessageDigest digest, @Nullable String value) {
     digest.update((byte) (value == null ? 0 : 1));
     if (value != null) {
       put(digest, value);
@@ -74,7 +75,7 @@ public final class IdempotencyFingerprint {
 
   private static MessageDigest sha256() {
     try {
-      return MessageDigest.getInstance("SHA-256");
+      return Objects.requireNonNull(MessageDigest.getInstance("SHA-256"));
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is required by the JVM", exception);
     }

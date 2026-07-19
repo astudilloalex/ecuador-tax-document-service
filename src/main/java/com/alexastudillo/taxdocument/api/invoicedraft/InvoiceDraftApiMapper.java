@@ -11,6 +11,9 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.TaxTotal;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 
 /** Explicit raw-transport-to-command and persisted-result-to-response mapping. */
@@ -20,11 +23,13 @@ public final class InvoiceDraftApiMapper {
   public CreateInvoiceDraftCommand toCommand(
       CreateInvoiceDraftRequest request, InvoiceDraftRequestState state) {
     try {
-      List<CreateInvoiceDraftCommand.LineInput> lines =
-          request.lines().stream().map(line -> lineInput(line)).toList();
-      List<CreateInvoiceDraftCommand.PaymentInput> payments =
-          request.payments().stream().map(payment -> paymentInput(payment)).toList();
-      List<CreateInvoiceDraftCommand.AdditionalInformationInput> additionalInformation =
+      List<CreateInvoiceDraftCommand.@NonNull LineInput> lines =
+          Objects.requireNonNull(
+              request.lines().stream().map(line -> lineInput(Objects.requireNonNull(line))).toList());
+      List<CreateInvoiceDraftCommand.@NonNull PaymentInput> payments =
+          Objects.requireNonNull(
+              request.payments().stream().map(payment -> paymentInput(Objects.requireNonNull(payment))).toList());
+      List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additionalInformation =
           additionalInformationInputs(request);
 
       return new CreateInvoiceDraftCommand(
@@ -56,14 +61,22 @@ public final class InvoiceDraftApiMapper {
     if (!result.replayed() && !result.createdAt().equals(result.updatedAt())) {
       throw new IllegalStateException("Initial Invoice Draft timestamps must be identical");
     }
-    List<InvoiceDraftResponse.LineResponse> lines =
-        draft.lines().stream().map(line -> lineResponse(line)).toList();
-    List<InvoiceDraftResponse.TaxResponse> taxTotals =
-        draft.taxTotals().stream().map(tax -> taxResponse(tax)).toList();
-    List<InvoiceDraftResponse.PaymentResponse> payments =
-        draft.payments().stream().map(payment -> paymentResponse(payment)).toList();
-    List<InvoiceDraftResponse.AdditionalInformationResponse> additionalInformation =
-        draft.additionalInformation().stream().map(info -> additionalInformationResponse(info)).toList();
+    List<InvoiceDraftResponse.@NonNull LineResponse> lines =
+        Objects.requireNonNull(
+            draft.lines().stream().map(line -> lineResponse(Objects.requireNonNull(line))).toList());
+    List<InvoiceDraftResponse.@NonNull TaxResponse> taxTotals =
+        Objects.requireNonNull(
+            draft.taxTotals().stream().map(tax -> taxResponse(Objects.requireNonNull(tax))).toList());
+    List<InvoiceDraftResponse.@NonNull PaymentResponse> payments =
+        Objects.requireNonNull(
+            draft.payments().stream().map(payment -> paymentResponse(Objects.requireNonNull(payment))).toList());
+    List<InvoiceDraftResponse.@NonNull AdditionalInformationResponse> additionalInformation =
+        Objects.requireNonNull(
+            draft
+                .additionalInformation()
+                .stream()
+                .map(info -> additionalInformationResponse(Objects.requireNonNull(info)))
+                .toList());
 
     return new InvoiceDraftResponse(
         draft.id(),
@@ -98,22 +111,27 @@ public final class InvoiceDraftApiMapper {
         new BigDecimal(line.quantity()),
         new BigDecimal(line.unitPrice()),
         new BigDecimal(line.discount()),
-        line.taxRuleId());
+        Objects.requireNonNull(UUID.fromString(line.taxRuleId())));
   }
 
   private CreateInvoiceDraftCommand.PaymentInput paymentInput(
       CreateInvoiceDraftRequest.PaymentRequest payment) {
     return new CreateInvoiceDraftCommand.PaymentInput(
-        payment.paymentMethodId(), new BigDecimal(payment.amount()));
+        Objects.requireNonNull(UUID.fromString(payment.paymentMethodId())),
+        new BigDecimal(payment.amount()));
   }
 
-  private List<CreateInvoiceDraftCommand.AdditionalInformationInput> additionalInformationInputs(
+  private List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additionalInformationInputs(
       CreateInvoiceDraftRequest request) {
     List<CreateInvoiceDraftRequest.AdditionalInformationRequest> infoList = request.additionalInformation();
     if (infoList == null) {
-      return List.of();
+      return Objects.requireNonNull(List.<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>of());
     }
-    return infoList.stream().map(info -> additionalInformationInput(info)).toList();
+    return Objects.requireNonNull(
+        infoList
+            .stream()
+            .map(info -> additionalInformationInput(Objects.requireNonNull(info)))
+            .toList());
   }
 
   private CreateInvoiceDraftCommand.AdditionalInformationInput additionalInformationInput(

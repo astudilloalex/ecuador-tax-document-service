@@ -37,7 +37,8 @@ public class FiscalPreparationRequestState {
   }
 
   public String safeCorrelationOrGenerated() {
-    return correlationId == null ? java.util.UUID.randomUUID().toString() : correlationId;
+    String cid = correlationId;
+    return cid == null ? Objects.requireNonNull(java.util.UUID.randomUUID().toString()) : cid;
   }
 
   public boolean acceptTerminal() {

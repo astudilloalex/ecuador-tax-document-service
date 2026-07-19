@@ -5,6 +5,7 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalDesignation;
 import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalPreparation;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDate;
+import java.util.Objects;
 
 /**
  * Copies a committed immutable domain result into the exact API success
@@ -39,7 +40,7 @@ public final class FiscalPreparationApiMapper {
             snapshot.accountingRequired(),
             specialTaxpayerResponse,
             withholdingAgentResponse,
-            snapshot.rimpeClassification().name(),
+            Objects.requireNonNull(snapshot.rimpeClassification().name()),
             largeContributorResponse,
             snapshot.establishmentReference(),
             snapshot.establishmentCode(),

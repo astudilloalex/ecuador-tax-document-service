@@ -5,4 +5,7 @@
  * Company ownership and request-deadline values. It may depend on the domain and Mutiny, but it
  * contains no HTTP, persistence, security, Company-service, or fiscal-issuance implementation.
  */
+@NullMarked
 package com.alexastudillo.taxdocument.application.invoicedraft;
+
+import org.jspecify.annotations.NullMarked;

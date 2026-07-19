@@ -16,17 +16,21 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /** Transport-neutral ordered Invoice Draft creation orchestration. */
 @ApplicationScoped
 public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCase {
-  private static final ZoneId ECUADOR = ZoneId.of("America/Guayaquil");
+  private static final ZoneId ECUADOR = Objects.requireNonNull(ZoneId.of("America/Guayaquil"));
   private static final UUID NIL = new UUID(0L, 0L);
   private static final Pattern UUID_TEXT =
-      Pattern.compile(
-          "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$");
+      Objects.requireNonNull(
+          Pattern.compile(
+              "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"));
 
   private final InvoiceDraftRepository repository;
   private final ReferenceDataPort referenceData;
@@ -258,7 +262,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
   private CreateInvoiceDraftCommand normalize(CreateInvoiceDraftCommand command) {
     requireBudget(command);
     String emissionPoint = normalizeEmissionPoint(command.emissionPointId());
-    LocalDate expectedDate = command.requestCreationInstant().atZone(ECUADOR).toLocalDate();
+    LocalDate expectedDate = Objects.requireNonNull(command.requestCreationInstant().atZone(ECUADOR).toLocalDate());
     if (!expectedDate.equals(command.emissionDate())) {
       throw new DraftValidationException(
           "BUSINESS_VALIDATION_FAILED",
@@ -278,7 +282,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
             normalizeOptional("buyer.address", inputBuyer.address(), 300),
             normalizeOptional("buyer.email", inputBuyer.email(), 254),
             normalizeOptional("buyer.telephone", inputBuyer.telephone(), 20));
-    List<CreateInvoiceDraftCommand.LineInput> lines = new ArrayList<>();
+    List<CreateInvoiceDraftCommand.@NonNull LineInput> lines = new ArrayList<>();
     for (int index = 0; index < command.lines().size(); index++) {
       CreateInvoiceDraftCommand.LineInput line = command.lines().get(index);
       lines.add(
@@ -292,7 +296,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
               line.discount(),
               line.taxRuleId()));
     }
-    List<CreateInvoiceDraftCommand.AdditionalInformationInput> additional = new ArrayList<>();
+    List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additional = new ArrayList<>();
     for (int index = 0; index < command.additionalInformation().size(); index++) {
       CreateInvoiceDraftCommand.AdditionalInformationInput value =
           command.additionalInformation().get(index);
@@ -322,7 +326,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
         additional);
   }
 
-  private String normalizeOptional(String field, String value, int maximum) {
+  private @Nullable String normalizeOptional(String field, @Nullable String value, int maximum) {
     return value == null
         ? null
         : textNormalizer.normalizeDisplay(field, value, maximum).displayValue();

@@ -10,7 +10,8 @@ import org.jboss.logging.Logger;
 /** Metrics implementation restricted to stable bounded outcome and commit-knowledge labels. */
 @ApplicationScoped
 public final class FiscalPreparationTelemetry implements FiscalPreparationTelemetryPort {
-  private static final Logger LOG = Logger.getLogger(FiscalPreparationTelemetry.class);
+  private static final Logger LOG =
+      Objects.requireNonNull(Logger.getLogger(FiscalPreparationTelemetry.class));
   private final MeterRegistry registry;
 
   public FiscalPreparationTelemetry(MeterRegistry registry) {

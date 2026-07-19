@@ -3,6 +3,7 @@ package com.alexastudillo.taxdocument.application.invoicedraft;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /** Safe transport-neutral application failure. */
 public record InvoiceDraftFailure(
@@ -25,7 +26,11 @@ public record InvoiceDraftFailure(
   }
 
   public record Violation(
-      String code, String field, String validationStage, Integer maximum, String countingUnit)
+      String code,
+      String field,
+      String validationStage,
+      @Nullable Integer maximum,
+      @Nullable String countingUnit)
       implements Serializable {
     private static final long serialVersionUID = 1L;
   }

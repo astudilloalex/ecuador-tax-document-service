@@ -7,7 +7,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+
 /** Complete externally visible Invoice Draft representation. */
+@NullMarked
 public record InvoiceDraftResponse(
     UUID id,
     UUID companyId,
@@ -16,10 +20,10 @@ public record InvoiceDraftResponse(
     String status,
     String currency,
     BuyerResponse buyer,
-    List<LineResponse> lines,
-    List<TaxResponse> taxTotals,
-    List<PaymentResponse> payments,
-    List<AdditionalInformationResponse> additionalInformation,
+    List<@NonNull LineResponse> lines,
+    List<@NonNull TaxResponse> taxTotals,
+    List<@NonNull PaymentResponse> payments,
+    List<@NonNull AdditionalInformationResponse> additionalInformation,
     @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal subtotalBeforeTaxes,
     @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal totalDiscount,
     @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal grandTotal,

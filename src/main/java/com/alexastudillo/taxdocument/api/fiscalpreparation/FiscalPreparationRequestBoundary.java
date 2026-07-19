@@ -25,8 +25,9 @@ import org.eclipse.microprofile.config.ConfigProvider;
 @ApplicationScoped
 public final class FiscalPreparationRequestBoundary {
   private static final Pattern UUID_TEXT =
-      Pattern.compile(
-          "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$");
+      Objects.requireNonNull(
+          Pattern.compile(
+              "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"));
   private final RequestClock clock;
   private final CompanyContextHeader companyHeader;
   private final CorrelationHeader correlationHeader;
@@ -38,7 +39,8 @@ public final class FiscalPreparationRequestBoundary {
     this.companyHeader = Objects.requireNonNull(companyHeader, "companyHeader");
     this.correlationHeader = Objects.requireNonNull(correlationHeader, "correlationHeader");
     this.requestDeadline =
-        ConfigProvider.getConfig().getValue("fiscal-preparation.request-deadline", Duration.class);
+        Objects.requireNonNull(
+            ConfigProvider.getConfig().getValue("fiscal-preparation.request-deadline", Duration.class));
   }
 
   public PrepareInvoiceForFiscalIssuanceCommand accept(
@@ -50,13 +52,17 @@ public final class FiscalPreparationRequestBoundary {
     RequestContext context =
         new RequestContext(
             requestInstant,
-            requestInstant.atZone(RequestContext.ECUADOR_TIME_ZONE).toLocalDate(),
+            Objects.requireNonNull(requestInstant.atZone(RequestContext.ECUADOR_TIME_ZONE).toLocalDate()),
             RequestDeadline.start(requestDeadline));
+    List<String> correlationHeaders =
+        Objects.requireNonNull(routing.request().headers().getAll("X-Correlation-Id"));
     CorrelationHeader.Classification correlation =
-        correlationHeader.classify(routing.request().headers().getAll("X-Correlation-Id"));
+        correlationHeader.classify(correlationHeaders);
     FiscalPreparationCommitTracker commitTracker = new FiscalPreparationCommitTracker();
     state.initialize(context, correlation.safeValue(), commitTracker);
-    CompanyId companyId = parseCompany(routing.request().headers().getAll("X-Company-Id"));
+    List<String> companyHeaders =
+        Objects.requireNonNull(routing.request().headers().getAll("X-Company-Id"));
+    CompanyId companyId = parseCompany(companyHeaders);
     rejectProhibitedShape(routing);
     UUID draftId = parseDraftId(invoiceDraftId);
     return new PrepareInvoiceForFiscalIssuanceCommand(

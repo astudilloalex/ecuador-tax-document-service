@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -22,9 +23,9 @@ public record CreateInvoiceDraftCommand(
     String emissionPointId,
     LocalDate emissionDate,
     BuyerInput buyer,
-    List<LineInput> lines,
-    List<PaymentInput> payments,
-    List<AdditionalInformationInput> additionalInformation) {
+    List<@NonNull LineInput> lines,
+    List<@NonNull PaymentInput> payments,
+    List<@NonNull AdditionalInformationInput> additionalInformation) {
   public CreateInvoiceDraftCommand {
     Objects.requireNonNull(companyId, "companyId");
     Objects.requireNonNull(requestCreationInstant, "requestCreationInstant");
@@ -34,10 +35,12 @@ public record CreateInvoiceDraftCommand(
     Objects.requireNonNull(emissionPointId, "emissionPointId");
     Objects.requireNonNull(emissionDate, "emissionDate");
     Objects.requireNonNull(buyer, "buyer");
-    lines = List.copyOf(lines);
-    payments = List.copyOf(payments);
+    lines = Objects.requireNonNull(List.copyOf(lines));
+    payments = Objects.requireNonNull(List.copyOf(payments));
     additionalInformation =
-        additionalInformation == null ? List.of() : List.copyOf(additionalInformation);
+        additionalInformation == null
+            ? Objects.requireNonNull(List.<@NonNull AdditionalInformationInput>of())
+            : Objects.requireNonNull(List.copyOf(additionalInformation));
   }
 
   public record BuyerInput(

@@ -36,8 +36,12 @@ class FiscalPreparationJvmSmokeIT {
   private static final UUID EMISSION_POINT =
       Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"));
   private static final ObjectMapper JSON = Objects.requireNonNull(new ObjectMapper().findAndRegisterModules());
-  private static AuthoritativeFiscalContextFixture fixture;
+  private static @Nullable AuthoritativeFiscalContextFixture fixture;
   private static @Nullable DevServicesContext devServicesContext;
+
+  private static AuthoritativeFiscalContextFixture fixture() {
+    return Objects.requireNonNull(fixture, "fixture");
+  }
 
   @BeforeAll
   static void startFixture() {
@@ -46,37 +50,40 @@ class FiscalPreparationJvmSmokeIT {
 
   @AfterAll
   static void stopFixture() {
-    fixture.close();
+    if (fixture != null) {
+      fixture.close();
+    }
   }
 
   @Test
   void packagedJvmPreparesReplaysDuringOutageAndPreservesTheDraft() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String scopeSuffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String scopeSuffix = Objects.requireNonNull(UUID.randomUUID()).toString();
     configureProvider("issuer-" + scopeSuffix, "establishment-" + scopeSuffix, today);
     String draftId = createDraft(today, "fiscal-smoke-" + scopeSuffix);
     provisionBaseline(
-        UUID.randomUUID(), "issuer-" + scopeSuffix, "establishment-" + scopeSuffix, 122);
+        Objects.requireNonNull(UUID.randomUUID()), "issuer-" + scopeSuffix, "establishment-" + scopeSuffix, 122);
     JsonNode before = invoiceDraftRow(draftId);
 
     String path = "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
     JsonNode first =
         JSON.readTree(
-            given()
-                .header("X-Company-Id", COMPANY)
-                .header("X-Correlation-Id", "jvm-fiscal-first")
-                .when()
-                .post(path)
-                .then()
-                .statusCode(201)
-                .header("Fiscal-Preparation-Replayed", "false")
-                .header("Cache-Control", "no-store")
-                .body("officialSequentialNumber", equalTo("000000123"))
-                .body("numericCode", matchesPattern("^[0-9]{8}$"))
-                .body("accessKey", matchesPattern("^[0-9]{49}$"))
-                .extract()
-                .asString());
-    fixture.providerStatus(503);
+            Objects.requireNonNull(
+                given()
+                    .header("X-Company-Id", COMPANY)
+                    .header("X-Correlation-Id", "jvm-fiscal-first")
+                    .when()
+                    .post(path)
+                    .then()
+                    .statusCode(201)
+                    .header("Fiscal-Preparation-Replayed", "false")
+                    .header("Cache-Control", "no-store")
+                    .body("officialSequentialNumber", equalTo("000000123"))
+                    .body("numericCode", matchesPattern("^[0-9]{8}$"))
+                    .body("accessKey", matchesPattern("^[0-9]{49}$"))
+                    .extract()
+                    .asString()));
+    fixture().providerStatus(503);
     JsonNode replay =
         JSON.readTree(
             given()
@@ -114,11 +121,11 @@ class FiscalPreparationJvmSmokeIT {
 
   @Test
   void packagedJvmProviderTimeoutFailsBeforeMissingBaselineIsObserved() {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String suffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String suffix = Objects.requireNonNull(UUID.randomUUID()).toString();
     configureProvider("issuer-" + suffix, "establishment-" + suffix, today);
     String draftId = createDraft(today, "fiscal-timeout-" + suffix);
-    fixture.delayed(java.time.Duration.ofSeconds(3));
+    fixture().delayed(Objects.requireNonNull(java.time.Duration.ofSeconds(3)));
     given()
         .header("X-Company-Id", COMPANY)
         .when()
@@ -130,16 +137,16 @@ class FiscalPreparationJvmSmokeIT {
 
   @Test
   void packagedJvmDiscardedSuccessIsRecoveredByNaturalReplay() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String suffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String suffix = Objects.requireNonNull(UUID.randomUUID()).toString();
     configureProvider("discarded-issuer-" + suffix, "discarded-establishment-" + suffix, today);
     String draftId = createDraft(today, "fiscal-discarded-" + suffix);
     provisionBaseline(
-        UUID.randomUUID(), "discarded-issuer-" + suffix, "discarded-establishment-" + suffix, 0);
+        Objects.requireNonNull(UUID.randomUUID()), "discarded-issuer-" + suffix, "discarded-establishment-" + suffix, 0);
     String path = "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
 
     given().header("X-Company-Id", COMPANY).when().post(path).then().statusCode(201);
-    fixture.providerStatus(503);
+    fixture().providerStatus(503);
     given()
         .header("X-Company-Id", COMPANY)
         .when()
@@ -152,15 +159,15 @@ class FiscalPreparationJvmSmokeIT {
 
   @Test
   void packagedJvmConfirmedPersistenceFailureRollsBackPreparationAndBaseline() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String suffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String suffix = Objects.requireNonNull(UUID.randomUUID()).toString();
     String issuer = "rollback-issuer-" + suffix;
     String establishment = "rollback-establishment-" + suffix;
     configureProvider(issuer, establishment, today);
     String draftId = createDraft(today, "fiscal-rollback-" + suffix);
-    UUID baseline = UUID.randomUUID();
+    UUID baseline = Objects.requireNonNull(UUID.randomUUID());
     provisionBaseline(
-        baseline, issuer, establishment, 7, java.time.OffsetDateTime.parse("2099-01-01T00:00:00Z"));
+        baseline, issuer, establishment, 7, Objects.requireNonNull(java.time.OffsetDateTime.parse("2099-01-01T00:00:00Z")));
 
     given()
         .header("X-Company-Id", COMPANY)
@@ -175,13 +182,13 @@ class FiscalPreparationJvmSmokeIT {
 
   @Test
   void packagedJvmCommitDeadlineReturnsConservativeGuidanceAndRetryConverges() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String suffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String suffix = Objects.requireNonNull(UUID.randomUUID()).toString();
     String issuer = "uncertain-issuer-" + suffix;
     String establishment = "uncertain-establishment-" + suffix;
     configureProvider(issuer, establishment, today);
     String draftId = createDraft(today, "fiscal-uncertain-" + suffix);
-    UUID baseline = UUID.randomUUID();
+    UUID baseline = Objects.requireNonNull(UUID.randomUUID());
     provisionBaseline(baseline, issuer, establishment, 18);
     installCommitDelay(draftId);
     String path = "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
@@ -204,17 +211,18 @@ class FiscalPreparationJvmSmokeIT {
   }
 
   private static String createDraft(LocalDate date, String key) {
-    return given()
-        .contentType("application/json")
-        .header("X-Company-Id", COMPANY)
-        .header("Idempotency-Key", key)
-        .body(invoiceDraftBody(date))
-        .when()
-        .post("/api/v1/invoice-drafts")
-        .then()
-        .statusCode(201)
-        .extract()
-        .path("id");
+    return Objects.requireNonNull(
+        given()
+            .contentType("application/json")
+            .header("X-Company-Id", COMPANY)
+            .header("Idempotency-Key", key)
+            .body(invoiceDraftBody(date))
+            .when()
+            .post("/api/v1/invoice-drafts")
+            .then()
+            .statusCode(201)
+            .extract()
+            .path("id"));
   }
 
   private static void provisionBaseline(
@@ -225,7 +233,7 @@ class FiscalPreparationJvmSmokeIT {
         issuerReference,
         establishmentReference,
         lastAllocated,
-        java.time.OffsetDateTime.parse("2026-07-18T11:00:00Z"));
+        Objects.requireNonNull(java.time.OffsetDateTime.parse("2026-07-18T11:00:00Z")));
   }
 
   private static void provisionBaseline(
@@ -332,7 +340,7 @@ class FiscalPreparationJvmSmokeIT {
         if (!rows.next()) {
           throw new IllegalStateException("Packaged JVM draft fixture is absent");
         }
-        return JSON.readTree(rows.getString(1));
+        return Objects.requireNonNull(JSON.readTree(rows.getString(1)));
       }
     }
   }
@@ -358,36 +366,38 @@ class FiscalPreparationJvmSmokeIT {
             .getOrDefault(
                 "quarkus.datasource.password",
                 Objects.requireNonNullElse(System.getenv("DB_PASSWORD"), "admin"));
-    return DriverManager.getConnection(url, user, password);
+    return Objects.requireNonNull(DriverManager.getConnection(url, user, password));
   }
 
   private static void configureProvider(
       String issuerReference, String establishmentReference, LocalDate date) {
-    fixture.plan(
+    fixture().plan(
         200,
-        """
-        {
-          "issuerReference":"%s","issuerRuc":"1790012345001","legalName":"Fixture Issuer S.A.",
-          "headOfficeAddress":"Quito","accountingRequired":true,"rimpeClassification":"NONE",
-          "establishmentReference":"%s","establishmentCode":"001","establishmentAddress":"Quito",
-          "emissionPointId":"%s","emissionPointCode":"001","environmentCode":"1",
-          "documentTypeCode":"01","emissionTypeCode":"1","invoiceIssuanceEligible":true,
-          "sourceEvidence":{"authority":"SRI fixture","revision":"%s","effectiveFrom":"%s",
-          "observedAt":"%s"}
-        }
-        """
-            .formatted(
-                issuerReference,
-                establishmentReference,
-                EMISSION_POINT,
-                issuerReference,
-                date,
-                Instant.now()),
-        java.time.Duration.ZERO);
+        Objects.requireNonNull(
+            """
+            {
+              "issuerReference":"%s","issuerRuc":"1790012345001","legalName":"Fixture Issuer S.A.",
+              "headOfficeAddress":"Quito","accountingRequired":true,"rimpeClassification":"NONE",
+              "establishmentReference":"%s","establishmentCode":"001","establishmentAddress":"Quito",
+              "emissionPointId":"%s","emissionPointCode":"001","environmentCode":"1",
+              "documentTypeCode":"01","emissionTypeCode":"1","invoiceIssuanceEligible":true,
+              "sourceEvidence":{"authority":"SRI fixture","revision":"%s","effectiveFrom":"%s",
+              "observedAt":"%s"}
+            }
+            """
+                .formatted(
+                    issuerReference,
+                    establishmentReference,
+                    EMISSION_POINT,
+                    issuerReference,
+                    date,
+                    Instant.now())),
+        Objects.requireNonNull(java.time.Duration.ZERO));
   }
 
   private static String invoiceDraftBody(LocalDate date) {
-    return """
+    return Objects.requireNonNull(
+        """
         {
           "emissionPointId":"%s","emissionDate":"%s",
           "buyer":{"identificationType":"06","identification":"FISCAL123","legalName":"Fiscal Buyer"},
@@ -398,6 +408,6 @@ class FiscalPreparationJvmSmokeIT {
           "additionalInformation":[]
         }
         """
-        .formatted(EMISSION_POINT, date);
+            .formatted(EMISSION_POINT, date));
   }
 }
