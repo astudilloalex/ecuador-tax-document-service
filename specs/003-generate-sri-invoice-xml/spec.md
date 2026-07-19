@@ -9,6 +9,29 @@
 **Input**: Generate, validate, persist, and expose exactly one immutable unsigned SRI Invoice XML
 for one Company-owned Invoice Draft that already has one committed Fiscal Preparation.
 
+## Clarifications
+
+### Session 2026-07-19
+
+- Q: How must the committed Fiscal Preparation prove standard Invoice XML `1.1.0` eligibility? →
+  A: It must record the selected profile plus a separate assessment for every specialized-profile
+  trigger governed by the referenced SRI rule version. Each assessment is conclusively
+  `APPLIES`, `DOES_NOT_APPLY`, or `INDETERMINATE`. Standard generation is eligible only when every
+  governed trigger is present and `DOES_NOT_APPLY`; `APPLIES` is unsupported, while a missing or
+  `INDETERMINATE` assessment is undetermined.
+- Q: What success representation should the operation return? → A: Return an
+  `application/json` metadata envelope whose `xmlContentBase64` field is the canonical padded
+  Base64 encoding of the exact validated and persisted UTF-8 XML bytes. Digest and byte length
+  describe the decoded XML bytes, not the Base64 text or JSON envelope.
+- Q: How should callers distinguish first creation from replay? → A: The request that commits
+  the one artifact returns `201 Created`; an existing-artifact replay or concurrent follower
+  returns `200 OK`. Both return the same artifact representation values, with no replay flag or
+  mutable lifecycle status in the body.
+- Q: Which byte-level formatting contract should first-generation XML use? → A: Use compact XML:
+  the declaration is immediately followed by the root, no indentation or inter-element formatting
+  whitespace is added, and the closing `</factura>` is the final byte sequence with no trailing
+  newline. Whitespace persisted inside business text remains unchanged.
+
 ## Scope and Evidence *(mandatory)*
 
 ### Bounded Outcome
@@ -33,8 +56,9 @@ deliver, replace, or mutate the Invoice Draft or its Fiscal Preparation.
 - Company-scoped retrieval of a complete Invoice Draft, its one committed Fiscal Preparation, and
   any previously committed Unsigned SRI Invoice XML Artifact.
 - Explicit committed eligibility evidence for the ordinary domestic Invoice XML profile
-  `STANDARD_DOMESTIC_INVOICE_1_1_0` and a fail-closed decision when a mandatory specialized profile
-  or field may apply.
+  `STANDARD_DOMESTIC_INVOICE_1_1_0`, including one conclusive result for every specialized-profile
+  trigger governed by the referenced SRI rule version, and a fail-closed decision when a mandatory
+  specialized profile or field may apply.
 - Deterministic generation of the official SRI Invoice XML `1.1.0` representation exclusively from
   persisted commercial, calculated, fiscal-identity, and Fiscal Context Snapshot values.
 - Official conditional representation of Special Taxpayer, Withholding Agent, RIMPE, and Large
@@ -150,17 +174,19 @@ invalidate the later signature or fiscal identity.
 
 **Independent Test**: Start with one complete Company-owned Invoice Draft, one consistent committed
 Fiscal Preparation, and affirmative standard-profile eligibility evidence. Request generation and
-verify that exactly one artifact is returned, its UTF-8 content uses root version `1.1.0`, every
-represented source value matches the persisted source, it contains no signature, it passes the
-exact official XSD, and its stored digest and byte length match the returned content.
+verify that exactly one artifact is returned, decoding `xmlContentBase64` yields UTF-8 content with
+root version `1.1.0`, every represented source value matches the persisted source, it contains no
+signature, it passes the exact official XSD, and its stored digest and byte length match the decoded
+content.
 
 **Acceptance Scenarios**:
 
 1. **Given** one valid prepared ordinary domestic Invoice with complete standard-profile evidence
    and no existing XML artifact, **when** generation is requested with exactly one valid
    `X-Company-Id`, **then** one unsigned UTF-8 Invoice XML `1.1.0` is generated, validated, committed,
-   and returned with its stable identity, source identities, integrity evidence, and creation
-   instant.
+   and returned as canonical padded Base64 in a JSON envelope with its stable identity, source
+   identities, integrity evidence, and creation instant using `201 Created`; decoding the content
+   yields the required compact byte representation.
 2. **Given** the valid source uses environment, Issuer, Establishment, Emission Point, sequence,
    Numeric Code, Access Key, emission date, buyer, lines, tax groups, payments, and totals with
    boundary-valid values, **when** XML is generated, **then** every represented value is mapped from
@@ -205,21 +231,23 @@ content even when visible amounts appear equal.
 **Independent Test**: Commit one artifact, then repeat and race the equivalent request while the
 fiscal-context provider and reference catalogs are unavailable and the system date has changed.
 Verify that every successful response has the same artifact identifier, source identifiers,
-schema version, byte-equivalent XML, digest, byte length, and creation instant, with no generation,
-schema validation, external read, current-date read, or new state.
+schema version, Base64 content that decodes to byte-equivalent XML, digest, byte length, and creation
+instant, with no generation, schema validation, external read, current-date read, or new state.
 
 **Acceptance Scenarios**:
 
 1. **Given** one committed Unsigned SRI Invoice XML Artifact, **when** the same Company and Invoice
-   Draft request generation again, **then** the original artifact and exact bytes are returned
-   without rebuilding or revalidating XML and without creating a timestamp or artifact.
+   Draft request generation again, **then** `200 OK` returns the original artifact representation
+   and exact bytes without rebuilding or revalidating XML and without creating a timestamp or
+   artifact.
 2. **Given** an existing artifact and later changes or outages in the fiscal-context provider,
    current reference catalogs, official publication site, or system date, **when** replay is
    requested, **then** the original artifact is returned unchanged and none of those sources is
    accessed.
 3. **Given** no committed artifact, **when** 100 equivalent requests for the same Company and
-   Invoice Draft run concurrently, **then** exactly one artifact is committed and every successful
-   request returns the same identity, content, integrity evidence, and timestamp.
+   Invoice Draft run concurrently, **then** exactly one committing request returns `201 Created`,
+   every other successful request returns `200 OK`, and all return the same artifact identity,
+   content, integrity evidence, and timestamp.
 4. **Given** the first response is lost after a successful commit, **when** the caller repeats the
    same natural request, **then** the committed artifact is recovered without another artifact,
    XML build, XSD validation, or idempotency key.
@@ -286,8 +314,10 @@ mutation, and zero excluded side effects.
 - A preparation containing only Feature 002's generic invoice eligibility does not become
   standard-profile eligible by age, absence of known fields, successful prior preparation, or
   caller assertion.
-- Positive standard-profile evidence must explicitly account for every v2.33 mandatory specialized
-  trigger applicable to invoices. Unknown applicability is not equivalent to `NONE`.
+- Positive standard-profile evidence must contain a separate assessment for every v2.33 mandatory
+  specialized trigger applicable to invoices. Every assessment must be `DOES_NOT_APPLY`; an absent
+  or `INDETERMINATE` assessment is not equivalent to `DOES_NOT_APPLY`, and `APPLIES` establishes an
+  unsupported profile.
 - A Special Taxpayer or Withholding Agent designation without its required resolution, a RIMPE
   value outside the committed enumeration, or a Large Contributor designation missing either its
   required legend or resolution fails closed.
@@ -369,8 +399,8 @@ mutation, and zero excluded side effects.
   generation, XSD validation, provider access, catalog access, or current-date access.
 - **FR-015**: An existing artifact whose Company, Invoice Draft, and Fiscal Preparation identities
   match the loaded immutable relationships MUST be returned as an equivalent replay with its
-  original artifact identity, exact XML bytes, schema version, source identities, integrity
-  evidence, and creation instant unchanged.
+  original artifact identity, exact XML bytes encoded under the success contract, schema version,
+  source identities, integrity evidence, and creation instant unchanged.
 - **FR-016**: Replay MAY verify only persisted ownership and source-identity relationships. It MUST
   NOT revalidate source business values or profile eligibility; rebuild, normalize,
   parse-and-reserialize, schema-validate, or update the XML; generate a new digest or timestamp;
@@ -400,22 +430,27 @@ mutation, and zero excluded side effects.
 #### Standard Profile Eligibility
 
 - **FR-024**: First generation MUST require immutable committed evidence that explicitly declares
-  the exact profile `STANDARD_DOMESTIC_INVOICE_1_1_0` eligible for the prepared Invoice and records
-  a conclusive determination that no unsupported mandatory specialized extension applies.
+  the exact profile `STANDARD_DOMESTIC_INVOICE_1_1_0` and contains a separate assessment for every
+  specialized-profile trigger governed by the evidence's referenced SRI rule version. Each
+  assessment MUST be exactly `APPLIES`, `DOES_NOT_APPLY`, or `INDETERMINATE`; standard generation
+  is eligible only when every governed trigger is present and `DOES_NOT_APPLY`.
 - **FR-025**: A generic invoice-issuance eligibility boolean, successful Fiscal Preparation,
   absence of specialized fields, default value, caller assertion, or inference from commercial
   text MUST NOT satisfy FR-024.
 - **FR-026**: Missing, generic, incomplete, not effective for the persisted emission date, or
-  indeterminate profile evidence MUST return `INVOICE_XML_PROFILE_UNDETERMINED` before XML
-  generation and create no artifact.
-- **FR-027**: Evidence that an export, reimbursement, subsidy, third-party charge, replacement of a
-  delivery guide, fuel/presumptive-withholding case, commercial-transport requirement,
-  construction-material requirement, fiscal-machine requirement, negotiable-invoice requirement,
-  automatic IVA-refund requirement, or any other unsupported mandatory extension applies MUST
-  return `INVOICE_XML_PROFILE_UNSUPPORTED` before XML generation.
+  indeterminate profile evidence, including an absent governed-trigger assessment or any
+  `INDETERMINATE` result, MUST return `INVOICE_XML_PROFILE_UNDETERMINED` before XML generation and
+  create no artifact.
+- **FR-027**: An `APPLIES` assessment for export, reimbursement, subsidy, third-party charge,
+  replacement of a delivery guide, fuel/presumptive-withholding case, commercial-transport
+  requirement, construction-material requirement, fiscal-machine requirement, negotiable-invoice
+  requirement, automatic IVA-refund requirement, or any other unsupported mandatory extension
+  governed by the referenced rule version MUST return `INVOICE_XML_PROFILE_UNSUPPORTED` before XML
+  generation.
 - **FR-028**: The standard-profile evidence MUST be part of immutable fiscal evidence committed
-  before this operation and MUST identify the governing SRI technical rule version, applicable
-  effective evidence, and source revision. Generation MUST NOT add or repair that evidence.
+  before this operation and MUST identify the governing SRI technical rule version, its complete
+  governed-trigger set, the separate assessment for each trigger, applicable effective evidence,
+  and source revision. Generation MUST NOT add, collapse, infer, or repair that evidence.
 - **FR-029**: Special Taxpayer, Withholding Agent, RIMPE, and Large Contributor designations are
   supported conditional attributes of the ordinary profile and MUST NOT by themselves classify an
   otherwise eligible Invoice as an unsupported specialized profile.
@@ -427,7 +462,8 @@ mutation, and zero excluded side effects.
 #### Official XML Representation
 
 - **FR-031**: The generated byte sequence MUST be XML `1.0`, encoded as UTF-8 without a byte-order
-  mark, and begin with the exact declaration `<?xml version="1.0" encoding="UTF-8"?>`.
+  mark, and begin with the exact declaration `<?xml version="1.0" encoding="UTF-8"?>`. The first
+  byte of the root start tag MUST immediately follow that declaration with no intervening byte.
 - **FR-032**: The root MUST be exactly `<factura id="comprobante" version="1.1.0">` in no namespace,
   and the complete document MUST contain no digital-signature element, signature namespace,
   certificate data, processing instruction other than the XML declaration, or application-added
@@ -528,8 +564,10 @@ mutation, and zero excluded side effects.
 - **FR-062**: The first-generation byte sequence MUST be deterministic for the same complete
   persisted sources and schema/profile rules. Physical database row order, locale, process
   timezone, current date, and correlation identifier MUST NOT change it.
-- **FR-063**: XML formatting whitespace MUST be deterministic, MUST NOT appear inside business text
-  unless persisted there, and MUST be included in the integrity digest exactly as stored.
+- **FR-063**: The XML MUST be compact: the generator MUST add no indentation, line break, or other
+  formatting whitespace between elements; the closing `</factura>` MUST be the final byte sequence
+  with no trailing newline or other byte. Whitespace inside business text MUST appear exactly when
+  and as persisted, and every such byte MUST be included in the integrity digest.
 
 #### Schema Validation, Artifact Persistence, and Concurrency
 
@@ -561,18 +599,25 @@ mutation, and zero excluded side effects.
   digest, byte length, and creation instant MUST be immutable after commit; this feature MUST expose
   no update, replace, delete, or regenerate behavior.
 - **FR-074**: Concurrent equivalent first-generation requests MUST converge on one committed
-  artifact. Every successful contender MUST return the committed winner with identical content and
-  metadata.
+  artifact. Exactly the committing contender MUST return `201 Created`; every other successful
+  contender MUST return `200 OK`; all MUST return the committed winner with identical artifact
+  representation values.
 - **FR-075**: A failed generation or confirmed complete rollback MUST leave no artifact or partial
   artifact. A commit whose outcome cannot be determined safely MUST return
   `INVOICE_XML_OUTCOME_UNKNOWN`, make no zero-state claim, and direct natural replay.
-- **FR-076**: The successful representation MUST expose the artifact identifier, Invoice Draft
-  identifier, Fiscal Preparation identifier, schema version, exact XML content, SHA-256 algorithm
-  and digest, byte length, and original creation instant. It MUST not expose a mutable status that
-  implies signing, submission, receipt, authorization, or issuance.
-- **FR-077**: A first successful commit and a replay MUST be observably distinguishable without
-  changing artifact identity or content, and every successful representation MUST be marked
-  non-cacheable.
+- **FR-076**: The successful representation MUST be an `application/json` metadata envelope that
+  exposes the artifact identifier, Invoice Draft identifier, Fiscal Preparation identifier, schema
+  version, SHA-256 algorithm and digest, byte length, and original creation instant. Its
+  `xmlContentBase64` field MUST be the canonical RFC 4648 standard-alphabet Base64 encoding with
+  required padding of the exact validated and persisted UTF-8 XML bytes. The decoded bytes, not the
+  Base64 characters or JSON envelope, are the XML content covered by the digest and byte length.
+  The representation MUST not expose a mutable status that implies signing, submission, receipt,
+  authorization, or issuance.
+- **FR-077**: The request that successfully commits the artifact MUST return `201 Created`. A
+  request that returns an artifact already committed before its result selection, including a
+  concurrent follower, MUST return `200 OK`. Both outcomes MUST return the same artifact
+  representation values; the body MUST contain no replay indicator or mutable lifecycle status.
+  Every successful representation MUST be marked non-cacheable.
 
 #### Deadline, Errors, Privacy, and Side Effects
 
@@ -660,8 +705,8 @@ mutation, and zero excluded side effects.
 - **DR-010**: Text escaping changes XML syntax bytes but not the parsed business value. Escaping is
   neither business-text normalization nor permission to alter unsupported characters.
 - **DR-011**: The artifact digest identifies exact unsigned bytes, not semantic XML equivalence.
-  Any whitespace, declaration, escaping, ordering, or byte change produces a different digest and
-  is prohibited after commit.
+  The compact layout is part of those bytes. Any whitespace, declaration, escaping, ordering, or
+  byte change produces a different digest and is prohibited after commit.
 - **DR-012**: Artifact creation time is one unambiguous instant recorded only for a successful first
   commit. It is not an Invoice emission date, SRI receipt time, authorization time, or issuance
   time.
@@ -701,8 +746,10 @@ mutation, and zero excluded side effects.
   Numeric Code, Access Key, source evidence, and creation instant. This feature requires additional
   committed standard-profile eligibility evidence and never mutates the preparation.
 - **Standard Invoice XML Profile Evidence**: Immutable evidence committed before generation that
-  positively identifies ordinary domestic Invoice XML `1.1.0` eligibility and conclusively records
-  that no unsupported mandatory specialized extension applies under the governing SRI rule version.
+  identifies ordinary domestic Invoice XML `1.1.0`, the governing SRI rule version and its complete
+  specialized-trigger set, and one `APPLIES`, `DOES_NOT_APPLY`, or `INDETERMINATE` assessment per
+  trigger. It establishes eligibility only when every governed trigger is present and
+  `DOES_NOT_APPLY`.
 - **Unsigned SRI Invoice XML Artifact**: One immutable Company-owned result identified naturally by
   Company plus Invoice Draft and also carrying one opaque artifact identifier. It contains exact
   schema-valid UTF-8 bytes, schema version, source Invoice Draft and Fiscal Preparation identities,
@@ -718,8 +765,8 @@ mutation, and zero excluded side effects.
 ### Measurable Outcomes
 
 - **SC-001**: Every valid first-generation request that becomes conclusive within the service-wide
-  10-second deadline returns exactly one complete artifact; no provisional, partial, or
-  post-deadline second result is externally visible.
+  10-second deadline returns exactly one complete artifact using `201 Created`; no provisional,
+  partial, or post-deadline second result is externally visible.
 - **SC-002**: One hundred percent of supported-profile acceptance fixtures pass the exact official
   Invoice XSD `1.1.0` and applicable v2.33 rules before persistence; every one-rule mutation fails
   before artifact creation.
@@ -728,22 +775,25 @@ mutation, and zero excluded side effects.
   date, and text equals its persisted Invoice Draft or Fiscal Context Snapshot source after only
   the explicitly approved SRI representation mapping.
 - **SC-004**: Across 100 concurrent equivalent first-generation requests for one Company and
-  Invoice Draft, exactly one artifact is committed and all successful outcomes return one artifact
-  identifier, one byte sequence, one digest, one byte length, and one creation instant.
-- **SC-005**: Every equivalent replay returns byte-for-byte identical XML and identical identity,
-  schema version, source links, integrity evidence, and timestamp, while performing zero XML builds,
-  XSD validations, provider calls, current-catalog reads, current-date reads, or writes.
-- **SC-006**: For every successful artifact, independently hashing the returned UTF-8 bytes with
-  SHA-256 produces the stored 64-hexadecimal digest and independently counting the bytes produces
-  the stored byte length.
+  Invoice Draft, exactly one artifact is committed, exactly one outcome is `201 Created`, every
+  other successful outcome is `200 OK`, and all return one artifact identifier, one byte sequence,
+  one digest, one byte length, and one creation instant.
+- **SC-005**: Every equivalent replay returns identical Base64 content that decodes to byte-for-byte
+  identical XML using `200 OK`, plus identical identity, schema version, source links, integrity
+  evidence, and timestamp, while performing zero XML builds, XSD validations, provider calls,
+  current-catalog reads, current-date reads, or writes.
+- **SC-006**: For every successful artifact, decoding `xmlContentBase64` and independently hashing
+  the decoded bytes with SHA-256 produces the stored 64-hexadecimal digest; independently counting
+  those decoded bytes produces the stored byte length; the declaration is adjacent to the root,
+  no formatting whitespace occurs between elements, and `</factura>` is the final byte sequence.
 - **SC-007**: Every missing, repeated, blank, malformed, comma-combined, and nil Company-header
   vector produces its specified stable error and zero Company-owned access; every cross-Company
   draft vector returns the safe not-found result and exposes zero other-Company data.
 - **SC-008**: Every absent, duplicate, partial, cross-linked, or inconsistent Fiscal Preparation
   vector produces its specified failure before XML generation and leaves zero artifact state.
-- **SC-009**: Every generic, missing, incomplete, or indeterminate profile-evidence vector returns
-  `INVOICE_XML_PROFILE_UNDETERMINED`; every explicitly unsupported specialized-profile vector
-  returns `INVOICE_XML_PROFILE_UNSUPPORTED`; none builds or stores XML.
+- **SC-009**: Every generic, missing, incomplete, absent-trigger, or `INDETERMINATE`
+  profile-evidence vector returns `INVOICE_XML_PROFILE_UNDETERMINED`; every governed trigger marked
+  `APPLIES` returns `INVOICE_XML_PROFILE_UNSUPPORTED`; none builds or stores XML.
 - **SC-010**: Every XML metacharacter and approved Unicode fixture round-trips to its exact persisted
   text after parsing, with zero truncated, silently replaced, normalized, or double-escaped values.
 - **SC-011**: Every numeric fixture uses plain official representation: quantity and unit price have
@@ -781,9 +831,10 @@ mutation, and zero excluded side effects.
   has zero or one preparation. — **Basis**: `specs/002-prepare-invoice-issuance/spec.md`.
 - **Blocking contract dependency**: Before first-generation implementation can be accepted, the
   accountable Fiscal Context Provider Owner and Feature 002 contract owner must approve a
-  versioned contract evolution that determines the exact standard Invoice XML profile and every
-  applicable mandatory specialized-extension trigger, and Feature 002 must persist that immutable
-  decision with its governing rule/effective evidence. Existing generic
+  versioned contract evolution that identifies the exact standard Invoice XML profile, defines the
+  complete specialized-trigger set for the referenced SRI rule version, and returns a separate
+  `APPLIES`, `DOES_NOT_APPLY`, or `INDETERMINATE` assessment for every trigger. Feature 002 must
+  persist that immutable decision with its governing rule/effective evidence. Existing generic
   `invoiceIssuanceEligible=true` is not migrated, inferred, or rewritten by Feature 003. A
   preparation lacking the new evidence remains readable but returns
   `INVOICE_XML_PROFILE_UNDETERMINED` for first generation.

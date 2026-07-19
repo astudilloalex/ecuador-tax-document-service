@@ -44,3 +44,6 @@
 - The current Feature 002 generic eligibility gap is documented as a blocking versioned-contract
   dependency with a deterministic fail-closed outcome; it is not resolved by inference or by
   expanding this feature into fiscal-context resolution.
+- Clarification session 2026-07-19 resolved four material choices: per-trigger standard-profile
+  evidence, canonical Base64 success content, `201 Created` versus `200 OK` result semantics, and
+  compact XML bytes. Re-evaluation left all 16 checklist items passed; no marker changed.
