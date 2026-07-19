@@ -4,6 +4,7 @@ import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.Nullable;
@@ -12,8 +13,9 @@ import org.jspecify.annotations.Nullable;
 @ApplicationScoped
 public final class CompanyContextHeader {
   private static final Pattern UUID_TEXT =
-      Pattern.compile(
-          "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$");
+      Objects.requireNonNull(
+          Pattern.compile(
+              "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"));
 
   public CompanyId parse(@Nullable List<String> values) {
     if (values == null || values.isEmpty()) {

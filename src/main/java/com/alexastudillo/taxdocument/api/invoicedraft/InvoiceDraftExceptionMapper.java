@@ -36,7 +36,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
   @Override
   public Response toResponse(@Nullable Throwable exception) {
     if (exception == null) {
-      return Response.status(500).build();
+      return Objects.requireNonNull(Response.status(500).build());
     }
     Mapping mapping = mapping(exception);
     String correlation = safeCorrelation();
@@ -44,23 +44,24 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     state.acceptedStatus(mapping.status());
     telemetry.failed(state, telemetryOutcome(mapping), mapping.status());
     List<ProblemDetails.Violation> violations = mapping.violations();
+    String codeLower = Objects.requireNonNull(mapping.code().toLowerCase(Locale.ROOT));
     ProblemDetails problem =
         new ProblemDetails(
-            URI.create(
-                "urn:ecuador-tax-document-service:problem:"
-                    + mapping.code().toLowerCase(Locale.ROOT)),
+            Objects.requireNonNull(
+                URI.create("urn:ecuador-tax-document-service:problem:" + codeLower)),
             mapping.title(),
             mapping.status(),
             mapping.code(),
             mapping.detail(),
-            URI.create("/api/v1/invoice-drafts"),
+            Objects.requireNonNull(URI.create("/api/v1/invoice-drafts")),
             correlation,
             violations.isEmpty() ? null : violations);
-    return Response.status(mapping.status())
-        .type(PROBLEM_JSON)
-        .header("X-Correlation-Id", correlation)
-        .entity(problem)
-        .build();
+    return Objects.requireNonNull(
+        Response.status(mapping.status())
+            .type(PROBLEM_JSON)
+            .header("X-Correlation-Id", correlation)
+            .entity(problem)
+            .build());
   }
 
   private static String telemetryOutcome(Mapping mapping) {
@@ -84,6 +85,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     if (exception instanceof InvoiceDraftApplicationException application) {
       InvoiceDraftFailure failure = application.failure();
       int status = status(failure.code());
+      String codeName = Objects.requireNonNull(failure.code().name());
       List<ProblemDetails.Violation> violations =
           failure.violations().stream()
               .<ProblemDetails.Violation>map(
@@ -97,8 +99,8 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
               .toList();
       return new Mapping(
           status,
-          failure.code().name(),
-          title(failure.code().name()),
+          codeName,
+          title(codeName),
           failure.detail(),
           violations);
     }
@@ -123,7 +125,8 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
   }
 
   private String safeCorrelation() {
-    return state.correlationId() == null ? UUID.randomUUID().toString() : state.correlationId();
+    String cid = state.correlationId();
+    return cid == null ? Objects.requireNonNull(UUID.randomUUID().toString()) : cid;
   }
 
   private static int status(InvoiceDraftFailure.Code code) {

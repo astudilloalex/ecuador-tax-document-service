@@ -51,25 +51,31 @@ public final class FiscalPreparationResource {
     PrepareInvoiceForFiscalIssuanceCommand command =
         requestBoundary.accept(invoiceDraftId, routing, state);
     Uni<PrepareInvoiceForFiscalIssuanceResult> application =
-        useCase
-            .prepare(command)
-            .onFailure(error -> !(error instanceof FiscalPreparationApplicationException))
-            .transform(
-                error ->
-                    new FiscalPreparationApplicationException(
-                        FiscalPreparationFailure.of(FiscalPreparationFailure.Code.INTERNAL_ERROR),
-                        error));
-    return deadlineHandler.race(application, state).onItem().transform(res -> successResponse(res));
+        Objects.requireNonNull(
+            useCase
+                .prepare(command)
+                .onFailure(error -> error != null && !(error instanceof FiscalPreparationApplicationException))
+                .transform(
+                    error ->
+                        new FiscalPreparationApplicationException(
+                            FiscalPreparationFailure.of(FiscalPreparationFailure.Code.INTERNAL_ERROR),
+                            Objects.requireNonNull(error))));
+    return Objects.requireNonNull(
+        deadlineHandler
+            .race(application, state)
+            .onItem()
+            .transform(res -> successResponse(Objects.requireNonNull(res))));
   }
 
   private Response successResponse(PrepareInvoiceForFiscalIssuanceResult result) {
     int status = result.replayed() ? 200 : 201;
     telemetry.completed(state.correlationId(), result.replayed());
-    return Response.status(status)
-        .header("Fiscal-Preparation-Replayed", result.replayed())
-        .header("X-Correlation-Id", state.correlationId())
-        .header("Cache-Control", "no-store")
-        .entity(mapper.toResponse(result.preparation()))
-        .build();
+    return Objects.requireNonNull(
+        Response.status(status)
+            .header("Fiscal-Preparation-Replayed", result.replayed())
+            .header("X-Correlation-Id", state.correlationId())
+            .header("Cache-Control", "no-store")
+            .entity(mapper.toResponse(result.preparation()))
+            .build());
   }
 }

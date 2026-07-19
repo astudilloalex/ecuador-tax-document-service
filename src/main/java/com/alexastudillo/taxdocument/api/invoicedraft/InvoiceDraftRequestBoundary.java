@@ -105,12 +105,13 @@ public final class InvoiceDraftRequestBoundary {
     }
     ProblemDetails problem =
         new ProblemDetails(
-            URI.create("urn:ecuador-tax-document-service:problem:request_timeout"),
+            Objects.requireNonNull(
+                URI.create("urn:ecuador-tax-document-service:problem:request_timeout")),
             "Request timeout",
             504,
             "REQUEST_TIMEOUT",
             "The Invoice Draft request exceeded its deadline",
-            URI.create(PATH),
+            Objects.requireNonNull(URI.create(PATH)),
             state.correlation().safeValue(),
             null);
     try {

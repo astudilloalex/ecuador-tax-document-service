@@ -20,6 +20,13 @@ public final class InvoiceDraftApiMapper {
   public CreateInvoiceDraftCommand toCommand(
       CreateInvoiceDraftRequest request, InvoiceDraftRequestState state) {
     try {
+      List<CreateInvoiceDraftCommand.LineInput> lines =
+          request.lines().stream().map(line -> lineInput(line)).toList();
+      List<CreateInvoiceDraftCommand.PaymentInput> payments =
+          request.payments().stream().map(payment -> paymentInput(payment)).toList();
+      List<CreateInvoiceDraftCommand.AdditionalInformationInput> additionalInformation =
+          additionalInformationInputs(request);
+
       return new CreateInvoiceDraftCommand(
           state.companyId(),
           state.requestCreationInstant(),
@@ -35,9 +42,9 @@ public final class InvoiceDraftApiMapper {
               request.buyer().address(),
               request.buyer().email(),
               request.buyer().telephone()),
-          request.lines().stream().map(line -> lineInput(line)).toList(),
-          request.payments().stream().map(payment -> paymentInput(payment)).toList(),
-          additionalInformationInputs(request));
+          lines,
+          payments,
+          additionalInformation);
     } catch (NullPointerException | NumberFormatException exception) {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");
@@ -49,6 +56,15 @@ public final class InvoiceDraftApiMapper {
     if (!result.replayed() && !result.createdAt().equals(result.updatedAt())) {
       throw new IllegalStateException("Initial Invoice Draft timestamps must be identical");
     }
+    List<InvoiceDraftResponse.LineResponse> lines =
+        draft.lines().stream().map(line -> lineResponse(line)).toList();
+    List<InvoiceDraftResponse.TaxResponse> taxTotals =
+        draft.taxTotals().stream().map(tax -> taxResponse(tax)).toList();
+    List<InvoiceDraftResponse.PaymentResponse> payments =
+        draft.payments().stream().map(payment -> paymentResponse(payment)).toList();
+    List<InvoiceDraftResponse.AdditionalInformationResponse> additionalInformation =
+        draft.additionalInformation().stream().map(info -> additionalInformationResponse(info)).toList();
+
     return new InvoiceDraftResponse(
         draft.id(),
         draft.companyId().value(),
@@ -63,10 +79,10 @@ public final class InvoiceDraftApiMapper {
             draft.buyer().address(),
             draft.buyer().email(),
             draft.buyer().telephone()),
-        draft.lines().stream().map(line -> lineResponse(line)).toList(),
-        draft.taxTotals().stream().map(tax -> taxResponse(tax)).toList(),
-        draft.payments().stream().map(payment -> paymentResponse(payment)).toList(),
-        draft.additionalInformation().stream().map(info -> additionalInformationResponse(info)).toList(),
+        lines,
+        taxTotals,
+        payments,
+        additionalInformation,
         draft.subtotalBeforeTaxes(),
         draft.totalDiscount(),
         draft.grandTotal(),
@@ -93,10 +109,11 @@ public final class InvoiceDraftApiMapper {
 
   private List<CreateInvoiceDraftCommand.AdditionalInformationInput> additionalInformationInputs(
       CreateInvoiceDraftRequest request) {
-    if (request.additionalInformation() == null) {
+    List<CreateInvoiceDraftRequest.AdditionalInformationRequest> infoList = request.additionalInformation();
+    if (infoList == null) {
       return List.of();
     }
-    return request.additionalInformation().stream().map(info -> additionalInformationInput(info)).toList();
+    return infoList.stream().map(info -> additionalInformationInput(info)).toList();
   }
 
   private CreateInvoiceDraftCommand.AdditionalInformationInput additionalInformationInput(

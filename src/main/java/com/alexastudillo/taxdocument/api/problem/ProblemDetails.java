@@ -46,14 +46,14 @@ public record ProblemDetails(
     private final transient List<Violation> violations;
 
     public ApiException(int status, String code, String message) {
-      this(status, code, message, List.of());
+      this(status, code, message, List.<Violation>of());
     }
 
     public ApiException(int status, String code, String message, List<Violation> violations) {
       super(message);
       this.status = status;
       this.code = Objects.requireNonNull(code, "code");
-      this.violations = List.copyOf(violations);
+      this.violations = List.<Violation>copyOf(Objects.requireNonNull(violations, "violations"));
     }
 
     public int status() {

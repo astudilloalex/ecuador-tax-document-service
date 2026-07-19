@@ -5,6 +5,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+import org.jspecify.annotations.Nullable;
+
 /** Strict client-controlled request representation; Company context is intentionally absent. */
 @JsonIgnoreProperties(ignoreUnknown = false)
 public record CreateInvoiceDraftRequest(
@@ -13,7 +15,7 @@ public record CreateInvoiceDraftRequest(
     BuyerRequest buyer,
     List<LineRequest> lines,
     List<PaymentRequest> payments,
-    List<AdditionalInformationRequest> additionalInformation) {
+    @Nullable List<AdditionalInformationRequest> additionalInformation) {
   @JsonIgnoreProperties(ignoreUnknown = false)
   public record BuyerRequest(
       String identificationType,

@@ -17,31 +17,33 @@ public final class FiscalPreparationRequestDeadlineHandler {
     Duration remaining = state.requestContext().deadline().remaining();
     if (remaining.isZero() || remaining.isNegative()) {
       state.acceptTerminal();
-      return Uni.createFrom().failure(timeoutFailure(state.commitTracker()));
+      return Objects.requireNonNull(Uni.createFrom().failure(timeoutFailure(state.commitTracker())));
     }
     Uni<T> timeout =
-        Uni.createFrom()
-            .voidItem()
-            .onItem()
-            .delayIt()
-            .by(remaining)
-            .onItem()
+        Objects.requireNonNull(
+            Uni.createFrom()
+                .voidItem()
+                .onItem()
+                .delayIt()
+                .by(remaining)
+                .onItem()
+                .transformToUni(
+                    ignored -> Uni.createFrom().failure(timeoutFailure(state.commitTracker()))));
+    return Objects.requireNonNull(
+        Uni.join()
+            .first(application, timeout)
+            .toTerminate()
+            .onItemOrFailure()
             .transformToUni(
-                ignored -> Uni.createFrom().failure(timeoutFailure(state.commitTracker())));
-    return Uni.join()
-        .first(application, timeout)
-        .toTerminate()
-        .onItemOrFailure()
-        .transformToUni(
-            (item, failure) -> {
-              if (!state.acceptTerminal()) {
-                return Uni.createFrom().nothing();
-              }
-              if (failure != null) {
-                return Uni.createFrom().failure(failure);
-              }
-              return Uni.createFrom().item(item);
-            });
+                (item, failure) -> {
+                  if (!state.acceptTerminal()) {
+                    return Uni.createFrom().nothing();
+                  }
+                  if (failure != null) {
+                    return Uni.createFrom().failure(failure);
+                  }
+                  return Uni.createFrom().item(item);
+                }));
   }
 
   private static FiscalPreparationApplicationException timeoutFailure(

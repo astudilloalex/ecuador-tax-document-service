@@ -10,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jspecify.annotations.NullMarked;
 
@@ -26,7 +27,8 @@ public final class InvoiceDraftRequestDeadlineHandler {
     this.clock = clock;
     this.telemetry = telemetry;
     requestDeadline =
-        ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class);
+        Objects.requireNonNull(
+            ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class));
   }
 
   public void initialize(InvoiceDraftRequestState state, String safeCorrelationId) {
@@ -59,21 +61,22 @@ public final class InvoiceDraftRequestDeadlineHandler {
                 .by(remaining)
                 .onItem()
                 .transformToUni(ignored -> Uni.createFrom().failure(timeoutFailure()));
-    return Uni.join()
-        .first(application, timeout)
-        .toTerminate()
-        .onItemOrFailure()
-        .transformToUni(
-            (item, failure) -> {
-              if (!state.acceptTerminal()) {
-                telemetry.lateOutcome(state, "discarded");
-                return Uni.createFrom().nothing();
-              }
-              if (failure != null) {
-                return Uni.createFrom().failure(failure);
-              }
-              return Uni.createFrom().item(item);
-            });
+    return Objects.requireNonNull(
+        Uni.join()
+            .first(application, timeout)
+            .toTerminate()
+            .onItemOrFailure()
+            .transformToUni(
+                (item, failure) -> {
+                  if (!state.acceptTerminal()) {
+                    telemetry.lateOutcome(state, "discarded");
+                    return Uni.createFrom().nothing();
+                  }
+                  if (failure != null) {
+                    return Uni.createFrom().failure(failure);
+                  }
+                  return Uni.createFrom().item(item);
+                }));
   }
 
   private static InvoiceDraftApplicationException timeoutFailure() {

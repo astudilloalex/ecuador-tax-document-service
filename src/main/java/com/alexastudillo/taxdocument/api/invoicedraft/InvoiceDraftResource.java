@@ -14,7 +14,9 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Objects;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** POST /api/v1/invoice-drafts transport adapter. */
 @NullMarked
@@ -51,26 +53,29 @@ public final class InvoiceDraftResource {
   @POST
   public Uni<Response> create(JsonNode decodedRequest) {
     Uni<CreateInvoiceDraftResult> application =
-        Uni.createFrom()
-            .item(() -> bind(decodedRequest))
+        Objects.requireNonNull(
+            Uni.createFrom()
+                .item(() -> bind(decodedRequest))
+                .onItem()
+                .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
+                .onItem()
+                .transformToUni(useCase::create));
+    return Objects.requireNonNull(
+        deadlineHandler
+            .race(application, state)
             .onItem()
-            .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
-            .onItem()
-            .transformToUni(useCase::create);
-    return deadlineHandler
-        .race(application, state)
-        .onItem()
-        .transform(
-            result -> {
-              int status = result.replayed() ? 200 : 201;
-              state.acceptedStatus(status);
-              telemetry.completed(state, result, status);
-              return Response.status(status)
-                  .header("X-Correlation-Id", state.correlationId())
-                  .header("Idempotency-Replayed", result.replayed())
-                  .entity(mapper.toResponse(result))
-                  .build();
-            });
+            .transform(
+                result -> {
+                  int status = result.replayed() ? 200 : 201;
+                  state.acceptedStatus(status);
+                  telemetry.completed(state, result, status);
+                  return Objects.requireNonNull(
+                      Response.status(status)
+                          .header("X-Correlation-Id", state.correlationId())
+                          .header("Idempotency-Replayed", String.valueOf(result.replayed()))
+                          .entity(mapper.toResponse(result))
+                          .build());
+                }));
   }
 
   private CreateInvoiceDraftRequest bind(JsonNode request) {
@@ -82,7 +87,7 @@ public final class InvoiceDraftResource {
     }
     validateRepresentation(request);
     try {
-      return objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class);
+      return Objects.requireNonNull(objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class));
     } catch (JsonProcessingException exception) {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");
@@ -130,18 +135,18 @@ public final class InvoiceDraftResource {
     }
   }
 
-  private static JsonNode requireObject(JsonNode value) {
-    if (value == null || !value.isObject()) {
-      throw invalidRequest();
+  private static JsonNode requireObject(@Nullable JsonNode value) {
+    if (value != null && value.isObject()) {
+      return value;
     }
-    return value;
+    throw invalidRequest();
   }
 
-  private static JsonNode requireArray(JsonNode value) {
-    if (value == null || !value.isArray()) {
-      throw invalidRequest();
+  private static JsonNode requireArray(@Nullable JsonNode value) {
+    if (value != null && value.isArray()) {
+      return value;
     }
-    return value;
+    throw invalidRequest();
   }
 
   private static void requireText(JsonNode object, String property) {

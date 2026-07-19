@@ -32,30 +32,33 @@ public final class FiscalPreparationExceptionMapper
   @Override
   public Response toResponse(@Nullable FiscalPreparationApplicationException exception) {
     if (exception == null) {
-      return Response.status(500).build();
+      return Objects.requireNonNull(Response.status(500).build());
     }
     FiscalPreparationFailure failure = exception.failure();
     int status = status(failure.code());
     String correlation = state.safeCorrelationOrGenerated();
     telemetry.failed(correlation, failure);
+    String codeName = Objects.requireNonNull(failure.code().name());
     ProblemDetails problem =
         new ProblemDetails(
-            URI.create(
-                "urn:ecuador-tax-document-service:problem:"
-                    + failure.code().name().toLowerCase(Locale.ROOT)),
+            Objects.requireNonNull(
+                URI.create(
+                    "urn:ecuador-tax-document-service:problem:"
+                        + codeName.toLowerCase(Locale.ROOT))),
             title(status),
             status,
-            failure.code().name(),
+            codeName,
             failure.detail(),
-            URI.create("/api/v1/invoice-drafts/fiscal-preparation"),
+            Objects.requireNonNull(URI.create("/api/v1/invoice-drafts/fiscal-preparation")),
             correlation,
             null);
-    return Response.status(status)
-        .type(PROBLEM_JSON)
-        .header("X-Correlation-Id", correlation)
-        .header("Cache-Control", "no-store")
-        .entity(problem)
-        .build();
+    return Objects.requireNonNull(
+        Response.status(status)
+            .type(PROBLEM_JSON)
+            .header("X-Correlation-Id", correlation)
+            .header("Cache-Control", "no-store")
+            .entity(problem)
+            .build());
   }
 
   private static int status(FiscalPreparationFailure.Code code) {

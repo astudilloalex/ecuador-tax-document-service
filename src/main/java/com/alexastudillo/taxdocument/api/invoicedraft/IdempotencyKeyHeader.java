@@ -4,6 +4,7 @@ import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.BusinessTextNormalizer;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.List;
+import java.util.Objects;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
@@ -13,8 +14,9 @@ import org.jspecify.annotations.Nullable;
 @ApplicationScoped
 public final class IdempotencyKeyHeader {
   private static final Pattern VALID =
-      Pattern.compile(
-          "^[\\x21-\\x2B\\x2D-\\x7E](?:[\\x20-\\x2B\\x2D-\\x7E]{0,126}[\\x21-\\x2B\\x2D-\\x7E])?$");
+      Objects.requireNonNull(
+          Pattern.compile(
+              "^[\\x21-\\x2B\\x2D-\\x7E](?:[\\x20-\\x2B\\x2D-\\x7E]{0,126}[\\x21-\\x2B\\x2D-\\x7E])?$"));
 
   public String parse(@Nullable List<String> values) {
     if (values == null || values.isEmpty()) {
