@@ -11,10 +11,12 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import io.vertx.mutiny.sqlclient.Row;
 import io.vertx.mutiny.sqlclient.Tuple;
 import jakarta.enterprise.context.ApplicationScoped;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -93,36 +95,14 @@ public final class FiscalPreparationPersistenceMapper {
     values.addString(snapshot.issuerReference());
     values.addString(snapshot.issuerRuc());
     values.addString(snapshot.legalName());
-    values.addValue(orNull(snapshot.commercialName()));
+    values.addValue(optionalString(snapshot.commercialName(), "commercialName"));
     values.addString(snapshot.headOfficeAddress());
     values.addBoolean(snapshot.accountingRequired());
-    values.addValue(
-        orNull(
-            require(
-                snapshot
-                    .specialTaxpayer()
-                    .map(FiscalDesignation.SpecialTaxpayer::resolutionIdentifier),
-                "special taxpayer resolution")));
-    values.addValue(
-        orNull(
-            require(
-                snapshot
-                    .withholdingAgent()
-                    .map(FiscalDesignation.WithholdingAgent::resolutionIdentifier),
-                "withholding agent resolution")));
+    values.addValue(specialTaxpayerResolution(snapshot.specialTaxpayer()));
+    values.addValue(withholdingAgentResolution(snapshot.withholdingAgent()));
     values.addString(snapshot.rimpeClassification().name());
-    values.addValue(
-        orNull(
-            require(
-                snapshot
-                    .largeContributor()
-                    .map(FiscalDesignation.LargeContributor::resolutionIdentifier),
-                "large contributor resolution")));
-    values.addValue(
-        orNull(
-            require(
-                snapshot.largeContributor().map(FiscalDesignation.LargeContributor::requiredLegend),
-                "large contributor legend")));
+    values.addValue(largeContributorResolution(snapshot.largeContributor()));
+    values.addValue(largeContributorLegend(snapshot.largeContributor()));
     values.addString(snapshot.establishmentReference());
     values.addString(snapshot.establishmentCode());
     values.addString(snapshot.establishmentAddress());
@@ -134,7 +114,7 @@ public final class FiscalPreparationPersistenceMapper {
     values.addString(source.authority());
     values.addString(source.revision());
     values.addLocalDate(source.effectiveFrom());
-    values.addValue(orNull(source.effectiveThrough()));
+    values.addValue(optionalDate(source.effectiveThrough(), "sourceEffectiveThrough"));
     values.addOffsetDateTime(OffsetDateTime.ofInstant(source.observedAt(), ZoneOffset.UTC));
     values.addString(snapshot.sriTechnicalRuleIdentifier());
     values.addLocalDate(snapshot.sriTechnicalRuleDate());
@@ -175,11 +155,61 @@ public final class FiscalPreparationPersistenceMapper {
             Objects.requireNonNull(legend, "largeContributorLegend")));
   }
 
-  private static <T> T require(@Nullable T value, String field) {
+  private static <T> @NonNull T require(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
   }
 
-  private static <T> @Nullable T orNull(Optional<T> value) {
-    return value.isPresent() ? value.get() : null;
+  private static @Nullable String optionalString(Optional<String> value, String field) {
+    Optional<String> optional = require(value, field);
+    return optional.isPresent() ? require(optional.get(), field) : null;
+  }
+
+  private static @Nullable LocalDate optionalDate(Optional<LocalDate> value, String field) {
+    Optional<LocalDate> optional = require(value, field);
+    return optional.isPresent() ? require(optional.get(), field) : null;
+  }
+
+  private static @Nullable String specialTaxpayerResolution(
+      Optional<FiscalDesignation.SpecialTaxpayer> value) {
+    Optional<FiscalDesignation.SpecialTaxpayer> optional = require(value, "specialTaxpayer");
+    if (optional.isEmpty()) {
+      return null;
+    }
+    FiscalDesignation.SpecialTaxpayer designation =
+        require(optional.get(), "specialTaxpayer value");
+    return require(designation.resolutionIdentifier(), "specialTaxpayer resolution");
+  }
+
+  private static @Nullable String withholdingAgentResolution(
+      Optional<FiscalDesignation.WithholdingAgent> value) {
+    Optional<FiscalDesignation.WithholdingAgent> optional = require(value, "withholdingAgent");
+    if (optional.isEmpty()) {
+      return null;
+    }
+    FiscalDesignation.WithholdingAgent designation =
+        require(optional.get(), "withholdingAgent value");
+    return require(designation.resolutionIdentifier(), "withholdingAgent resolution");
+  }
+
+  private static @Nullable String largeContributorResolution(
+      Optional<FiscalDesignation.LargeContributor> value) {
+    Optional<FiscalDesignation.LargeContributor> optional = require(value, "largeContributor");
+    if (optional.isEmpty()) {
+      return null;
+    }
+    FiscalDesignation.LargeContributor designation =
+        require(optional.get(), "largeContributor value");
+    return require(designation.resolutionIdentifier(), "largeContributor resolution");
+  }
+
+  private static @Nullable String largeContributorLegend(
+      Optional<FiscalDesignation.LargeContributor> value) {
+    Optional<FiscalDesignation.LargeContributor> optional = require(value, "largeContributor");
+    if (optional.isEmpty()) {
+      return null;
+    }
+    FiscalDesignation.LargeContributor designation =
+        require(optional.get(), "largeContributor value");
+    return require(designation.requiredLegend(), "largeContributor legend");
   }
 }
