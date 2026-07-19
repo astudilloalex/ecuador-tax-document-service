@@ -1,0 +1,80 @@
+{
+  "authority": "SRI Offline Technical Sheet v2.33",
+  "updated": "2026-07",
+  "modified": "2026-07-13",
+  "positive": [
+    {
+      "emissionDate": "2011-10-21",
+      "documentTypeCode": "01",
+      "issuerRuc": "1792146739001",
+      "environmentCode": "1",
+      "establishmentCode": "002",
+      "emissionPointCode": "001",
+      "officialSequentialNumber": "000000001",
+      "numericCode": "12345678",
+      "emissionTypeCode": "1",
+      "verificationDigit": 3,
+      "accessKey": "2110201101179214673900110020010000000011234567813"
+    },
+    {
+      "emissionDate": "2012-03-05",
+      "documentTypeCode": "01",
+      "issuerRuc": "1760013210001",
+      "environmentCode": "1",
+      "establishmentCode": "001",
+      "emissionPointCode": "003",
+      "officialSequentialNumber": "000990064",
+      "numericCode": "12345678",
+      "emissionTypeCode": "1",
+      "verificationDigit": 4,
+      "accessKey": "0503201201176001321000110010030009900641234567814"
+    },
+    {
+      "emissionDate": "2016-01-06",
+      "documentTypeCode": "01",
+      "issuerRuc": "1760013210001",
+      "environmentCode": "1",
+      "establishmentCode": "001",
+      "emissionPointCode": "123",
+      "officialSequentialNumber": "000000008",
+      "numericCode": "12345678",
+      "emissionTypeCode": "1",
+      "verificationDigit": 7,
+      "accessKey": "0601201601176001321000110011230000000081234567817"
+    }
+  ],
+  "moduloEdges": [
+    {
+      "raw": 11,
+      "mapped": 0,
+      "accessKey": "1807202601179214673900110010010000000010000000110"
+    },
+    {
+      "raw": 10,
+      "mapped": 1,
+      "accessKey": "1807202601179214673900110010010000000010000000511"
+    }
+  ],
+  "moduloOnly": {
+    "digits": "41261533",
+    "verificationDigit": 6
+  },
+  "page64PrintedNegative": {
+    "printed": "0403201301176815353000110015010000000081234567816",
+    "weightedSum": 473,
+    "correctVerificationDigit": 0,
+    "corrected": "0403201301176815353000110015010000000081234567810"
+  },
+  "componentMutationIndices": {
+    "emissionDate": 0,
+    "documentTypeCode": 8,
+    "issuerRuc": 10,
+    "environmentCode": 23,
+    "establishmentCode": 24,
+    "emissionPointCode": 27,
+    "officialSequentialNumber": 30,
+    "numericCode": 39,
+    "emissionTypeCode": 47,
+    "verificationDigit": 48
+  }
+}

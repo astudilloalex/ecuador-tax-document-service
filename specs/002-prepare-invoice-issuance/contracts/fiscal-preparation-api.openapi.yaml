@@ -1,0 +1,456 @@
+openapi: 3.1.0
+info:
+  title: Ecuador Tax Document Service - Fiscal Preparation API
+  version: 1.0.0
+  description: >-
+    Feature contract for preparing one existing Company-owned Invoice Draft for fiscal issuance.
+    This document defines the new operation to be merged into the existing canonical runtime
+    OpenAPI document. It performs no authentication, authorization, XML, signing, SRI, document
+    delivery, or administrative operation.
+servers:
+  - url: /api/v1
+tags:
+  - name: Fiscal Preparations
+
+paths:
+  /invoice-drafts/{invoiceDraftId}/fiscal-preparation:
+    post:
+      tags: [Fiscal Preparations]
+      operationId: prepareInvoiceForFiscalIssuance
+      summary: Prepare an existing Invoice Draft exactly once
+      description: >-
+        Accepts no request body and no caller-generated idempotency key. Natural equivalence is
+        exactly the canonical X-Company-Id plus invoiceDraftId. On a first request, the service
+        fixes one America/Guayaquil civil date at initial request entry, resolves authoritative
+        fiscal context through the approved read-only boundary, then atomically commits the
+        immutable snapshot, next controlled sequential, Numeric Code, Access Key, and baseline
+        advancement. A committed replay is returned before date revalidation or external access.
+        Invalid correlation input is replaced with a safe generated value and never changes
+        equivalence. Any non-empty body is non-contract input and returns INVALID_REQUEST.
+      parameters:
+        - $ref: '#/components/parameters/InvoiceDraftId'
+        - $ref: '#/components/parameters/CompanyContext'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: One new Fiscal Preparation was committed.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Fiscal-Preparation-Replayed:
+              description: False because this response committed the preparation.
+              schema:
+                type: boolean
+                const: false
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPreparationResponse'
+        '200':
+          description: >-
+            The original committed Fiscal Preparation was returned without fiscal-context access,
+            date revalidation, baseline access, or new identity generation.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Fiscal-Preparation-Replayed:
+              description: True because this response returned the committed winner.
+              schema:
+                type: boolean
+                const: true
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPreparationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/DraftNotFound'
+        '409':
+          $ref: '#/components/responses/PreparationConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessablePreparation'
+        '500':
+          $ref: '#/components/responses/InternalPreparationFailure'
+        '503':
+          $ref: '#/components/responses/PreparationUnavailable'
+        '504':
+          $ref: '#/components/responses/PreparationTimeout'
+
+components:
+  parameters:
+    InvoiceDraftId:
+      name: invoiceDraftId
+      in: path
+      required: true
+      description: Existing non-nil Invoice Draft UUID interpreted only inside X-Company-Id scope.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        Exactly one field value is accepted. Surrounding ASCII SP/HTAB is trimmed once and the
+        result must be a syntactically valid non-nil UUID. It is normalized to lowercase
+        hyphenated form and scopes every owned read and mutation. It is business context, not an
+        authentication or authorization credential, and is absent from body, path, query, and
+        response schemas.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: >-
+        One safe value may be preserved. Missing, repeated, blank, unsafe, or over-length input is
+        never echoed and receives a generated UUID replacement. Correlation never participates in
+        natural equivalence.
+      schema:
+        type: string
+        maxLength: 64
+
+  headers:
+    CorrelationId:
+      description: Safe preserved or generated correlation identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    NoStore:
+      description: Prevents intermediary caching of the sensitive successful representation.
+      schema:
+        type: string
+        const: no-store
+
+  schemas:
+    NonNilUuid:
+      type: string
+      format: uuid
+      pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+
+    FiscalPreparationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - fiscalPreparationId
+        - invoiceDraftId
+        - emissionDate
+        - fiscalContextSnapshot
+        - officialSequentialNumber
+        - numericCode
+        - accessKey
+        - createdAt
+      properties:
+        fiscalPreparationId:
+          $ref: '#/components/schemas/NonNilUuid'
+        invoiceDraftId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionDate:
+          type: string
+          format: date
+          description: Exact unchanged Invoice Draft emission date.
+        fiscalContextSnapshot:
+          $ref: '#/components/schemas/FiscalContextSnapshot'
+        officialSequentialNumber:
+          type: string
+          pattern: '^(?!000000000$)[0-9]{9}$'
+        numericCode:
+          type: string
+          pattern: '^[0-9]{8}$'
+        accessKey:
+          type: string
+          pattern: '^[0-9]{49}$'
+          description: Complete SRI v2.33 Access Key required by this internal success contract.
+        createdAt:
+          type: string
+          format: date-time
+
+    FiscalContextSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - issuerReference
+        - issuerRuc
+        - legalName
+        - headOfficeAddress
+        - accountingRequired
+        - rimpeClassification
+        - establishmentReference
+        - establishmentCode
+        - establishmentAddress
+        - emissionPointId
+        - emissionPointCode
+        - environmentCode
+        - documentTypeCode
+        - emissionTypeCode
+        - technicalRuleId
+        - technicalRuleModifiedOn
+        - numericCodePolicyId
+        - sourceAuthority
+        - sourceRevision
+        - sourceEffectiveFrom
+        - sourceObservedAt
+      properties:
+        issuerReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        issuerRuc:
+          type: string
+          pattern: '^[0-9]{13}$'
+        legalName:
+          $ref: '#/components/schemas/FiscalText'
+        commercialName:
+          $ref: '#/components/schemas/FiscalText'
+        headOfficeAddress:
+          $ref: '#/components/schemas/FiscalText'
+        accountingRequired:
+          type: boolean
+        specialTaxpayer:
+          $ref: '#/components/schemas/ResolutionDesignation'
+        withholdingAgent:
+          $ref: '#/components/schemas/WithholdingAgentDesignation'
+        rimpeClassification:
+          type: string
+          enum: [NONE, RIMPE_CONTRIBUTOR, POPULAR_BUSINESS]
+        largeContributor:
+          $ref: '#/components/schemas/LargeContributorDesignation'
+        establishmentReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        establishmentCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        establishmentAddress:
+          $ref: '#/components/schemas/FiscalText'
+        emissionPointId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionPointCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        environmentCode:
+          type: string
+          enum: ['1', '2']
+        documentTypeCode:
+          type: string
+          const: '01'
+        emissionTypeCode:
+          type: string
+          const: '1'
+        technicalRuleId:
+          type: string
+          const: SRI-OFFLINE-2.33
+        technicalRuleModifiedOn:
+          type: string
+          format: date
+          const: '2026-07-13'
+        numericCodePolicyId:
+          type: string
+          const: SECURE_RANDOM_8_V1
+        sourceAuthority:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceRevision:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceEffectiveFrom:
+          type: string
+          format: date
+        sourceEffectiveThrough:
+          type: string
+          format: date
+          description: Inclusive; omission means the source interval is open-ended.
+        sourceObservedAt:
+          type: string
+          format: date-time
+
+    OpaqueReference:
+      type: string
+      minLength: 1
+      maxLength: 128
+
+    FiscalText:
+      type: string
+      minLength: 1
+      maxLength: 300
+
+    ResolutionDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    WithholdingAgentDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,7})$'
+
+    LargeContributorDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier, requiredLegend]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+        requiredLegend:
+          type: string
+          minLength: 1
+          maxLength: 300
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          enum:
+            - COMPANY_CONTEXT_REQUIRED
+            - COMPANY_CONTEXT_INVALID
+            - INVALID_REQUEST
+            - INVOICE_DRAFT_NOT_FOUND
+            - INVOICE_DRAFT_NOT_PREPARABLE
+            - EMISSION_DATE_STALE
+            - FISCAL_CONTEXT_UNAVAILABLE
+            - FISCAL_CONTEXT_INVALID
+            - FISCAL_CONTEXT_UNSUPPORTED
+            - FISCAL_CONTEXT_INCONSISTENT
+            - OFFICIAL_SEQUENCE_BASELINE_MISSING
+            - OFFICIAL_SEQUENCE_BASELINE_INVALID
+            - OFFICIAL_SEQUENCE_EXHAUSTED
+            - ACCESS_KEY_INVALID
+            - REQUEST_TIMEOUT
+            - PERSISTENCE_FAILURE
+            - PREPARATION_OUTCOME_UNKNOWN
+            - INTERNAL_ERROR
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+  responses:
+    BadRequest:
+      description: >-
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. No Company-owned
+        read or write occurs before valid Company context. Non-empty/prohibited request content and
+        malformed or nil invoiceDraftId use INVALID_REQUEST.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    DraftNotFound:
+      description: >-
+        INVOICE_DRAFT_NOT_FOUND. Absent and cross-Company drafts are indistinguishable and expose no
+        fiscal or commercial data.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PreparationConflict:
+      description: >-
+        INVOICE_DRAFT_NOT_PREPARABLE, OFFICIAL_SEQUENCE_BASELINE_MISSING,
+        OFFICIAL_SEQUENCE_BASELINE_INVALID, or OFFICIAL_SEQUENCE_EXHAUSTED. No baseline is
+        initialized, repaired, wrapped, or advanced by the failed request.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnprocessablePreparation:
+      description: >-
+        EMISSION_DATE_STALE, FISCAL_CONTEXT_INVALID, FISCAL_CONTEXT_UNSUPPORTED, or
+        FISCAL_CONTEXT_INCONSISTENT. Failure is conclusive before sequence allocation.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    InternalPreparationFailure:
+      description: >-
+        ACCESS_KEY_INVALID or INTERNAL_ERROR. ACCESS_KEY_INVALID commits no baseline advancement or
+        preparation.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PreparationUnavailable:
+      description: >-
+        FISCAL_CONTEXT_UNAVAILABLE, PERSISTENCE_FAILURE, or PREPARATION_OUTCOME_UNKNOWN. Unknown
+        outcome makes no zero-state claim; retry exactly the same Company and Invoice Draft.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Retry-After:
+          description: Optional safe retry delay when known.
+          schema:
+            type: string
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PreparationTimeout:
+      description: >-
+        REQUEST_TIMEOUT. Zero local state is claimed only when commit did not begin or rollback is
+        confirmed; otherwise the detail directs natural replay without asserting absence.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

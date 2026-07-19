@@ -1,9 +1,10 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.Buyer;
 import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceDraftCalculator;
 import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceLine;
@@ -21,9 +22,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class InvoiceDraftPerformanceTest {
   @Inject Pool pool;
 
@@ -31,7 +35,7 @@ class InvoiceDraftPerformanceTest {
   void maximumLineCalculationIsDeterministicAndCompletesWithinRequestBudget() {
     TaxSelection tax =
         new TaxSelection(
-            UUID.randomUUID(),
+            randomUuid(),
             "IVA",
             TaxSelection.Treatment.PERCENTAGE_RATE,
             "2",
@@ -39,17 +43,17 @@ class InvoiceDraftPerformanceTest {
             new BigDecimal("15.00"),
             "SRI-OFFLINE-2.32-TARGET-1",
             true,
-            LocalDate.of(2026, 7, 12),
+            requireNonNull(LocalDate.of(2026, 7, 12)),
             null);
-    List<InvoiceLine> lines = new ArrayList<>();
+    List<@NonNull InvoiceLine> lines = new ArrayList<>();
     for (int position = 1; position <= 500; position++) {
       lines.add(
           new InvoiceLine(
-              UUID.randomUUID(),
+              randomUuid(),
               position,
               "SKU" + position,
               "Service",
-              BigDecimal.ONE,
+              requireNonNull(BigDecimal.ONE),
               new BigDecimal("1.000000"),
               new BigDecimal("0.00"),
               tax,
@@ -61,15 +65,16 @@ class InvoiceDraftPerformanceTest {
     }
     Payment payment =
         new Payment(
-            UUID.randomUUID(),
-            UUID.randomUUID(),
+            randomUuid(),
+            randomUuid(),
             "01",
             "Cash",
             new BigDecimal("575.00"),
             "SRI-OFFLINE-2.32-TARGET-1");
     Buyer buyer = new Buyer("06", "P123", "Buyer", null, null, null, "SRI-OFFLINE-2.32-TARGET-1");
     long start = System.nanoTime();
-    var calculation = new InvoiceDraftCalculator().calculate(buyer, lines, List.of(payment));
+    var calculation =
+        new InvoiceDraftCalculator().calculate(buyer, lines, requireNonNull(List.of(payment)));
     assertEquals(new BigDecimal("575.00"), calculation.grandTotal());
     assertTrue(Duration.ofNanos(System.nanoTime() - start).compareTo(Duration.ofSeconds(10)) < 0);
   }
@@ -77,7 +82,8 @@ class InvoiceDraftPerformanceTest {
   @Test
   void remainingBudgetClampsToZeroWithoutSleeping() {
     AtomicLong ticker = new AtomicLong(0L);
-    RequestDeadline deadline = RequestDeadline.start(Duration.ofNanos(10), ticker::get);
+    RequestDeadline deadline =
+        RequestDeadline.start(requireNonNull(Duration.ofNanos(10)), ticker::get);
     ticker.set(10L);
     assertTrue(deadline.expired());
     assertEquals(Duration.ZERO, deadline.remaining());
@@ -113,6 +119,10 @@ class InvoiceDraftPerformanceTest {
             .await()
             .atMost(Duration.ofSeconds(5));
     assertEquals(1L, value);
+  }
+
+  private static UUID randomUuid() {
+    return requireNonNull(UUID.randomUUID());
   }
 
   private static double percentileMillis(long[] sortedNanos, double percentile) {

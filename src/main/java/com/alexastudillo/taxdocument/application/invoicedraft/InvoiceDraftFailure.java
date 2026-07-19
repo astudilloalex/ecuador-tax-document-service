@@ -3,17 +3,24 @@ package com.alexastudillo.taxdocument.application.invoicedraft;
 import java.io.Serializable;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Safe transport-neutral application failure. */
+@NullMarked
 public record InvoiceDraftFailure(
-    Code code, String detail, boolean retryable, List<Violation> violations)
+    Code code, String detail, boolean retryable, List<@NonNull Violation> violations)
     implements Serializable {
   private static final long serialVersionUID = 1L;
 
   public InvoiceDraftFailure {
     Objects.requireNonNull(code, "code");
     Objects.requireNonNull(detail, "detail");
-    violations = violations == null ? List.<Violation>of() : List.copyOf(violations);
+    violations =
+        violations == null
+            ? Objects.requireNonNull(List.<@NonNull Violation>of())
+            : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
   }
 
   public enum Code {
@@ -25,7 +32,11 @@ public record InvoiceDraftFailure(
   }
 
   public record Violation(
-      String code, String field, String validationStage, Integer maximum, String countingUnit)
+      String code,
+      String field,
+      String validationStage,
+      @Nullable Integer maximum,
+      @Nullable String countingUnit)
       implements Serializable {
     private static final long serialVersionUID = 1L;
   }
@@ -35,6 +46,7 @@ public record InvoiceDraftFailure(
         Code.BUSINESS_VALIDATION_FAILED,
         "The Invoice Draft request violates an approved business rule",
         false,
-        List.<Violation>of(new Violation(code, field, stage, null, null)));
+        Objects.requireNonNull(
+            List.<@NonNull Violation>of(new Violation(code, field, stage, null, null))));
   }
 }

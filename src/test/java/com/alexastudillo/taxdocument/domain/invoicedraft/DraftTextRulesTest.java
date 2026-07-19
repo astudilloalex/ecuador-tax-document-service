@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.domain.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -7,8 +8,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class DraftTextRulesTest {
   @Test
   void productionProductRuleConsumesApplicationNormalizedAsciiVectors() throws Exception {
@@ -34,7 +37,7 @@ class DraftTextRulesTest {
   void domainAcceptsAlreadyDerivedCanonicalNameWithoutNormalizingIt() {
     AdditionalInformation information =
         new AdditionalInformation(
-            UUID.randomUUID(), 1, "Display   Name", "display name", "Value 😀");
+            requireNonNull(UUID.randomUUID()), 1, "Display   Name", "display name", "Value 😀");
     assertEquals("display name", information.canonicalName());
   }
 

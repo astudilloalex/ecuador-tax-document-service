@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.runtime;
 
 import static io.restassured.RestAssured.given;
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -15,15 +16,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
 @QuarkusIntegrationTest
+@NullMarked
 class InvoiceDraftJvmSmokeIT {
   private static final String COMPANY = "A1111111-1111-4111-8111-111111111111";
   private static final String CANONICAL_COMPANY = "a1111111-1111-4111-8111-111111111111";
   private static final String CORRELATION_PATTERN = "^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$";
-  private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
+  private static final ObjectMapper JSON =
+      requireNonNull(new ObjectMapper().findAndRegisterModules());
   private static final ObjectMapper YAML = new YAMLMapper();
 
   @Test
@@ -43,7 +48,18 @@ class InvoiceDraftJvmSmokeIT {
     String canonical =
         Files.readString(
             Path.of("specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml"));
-    assertEquals(YAML.readTree(canonical), YAML.readTree(served));
+    JsonNode canonicalNode = YAML.readTree(canonical);
+    JsonNode servedNode = YAML.readTree(served);
+    assertEquals(
+        canonicalNode.required("paths").required("/invoice-drafts"),
+        servedNode.required("paths").required("/invoice-drafts"));
+    for (Map.Entry<String, JsonNode> group : canonicalNode.required("components").properties()) {
+      for (Map.Entry<String, JsonNode> entry : group.getValue().properties()) {
+        assertEquals(
+            entry.getValue(),
+            servedNode.required("components").required(group.getKey()).get(entry.getKey()));
+      }
+    }
     assertFalse(served.contains("securitySchemes:"));
     assertFalse(served.contains("security:"));
     assertFalse(served.contains("'401':"));
@@ -52,7 +68,7 @@ class InvoiceDraftJvmSmokeIT {
 
   @Test
   void packagedJvmCoversCreateReplayConflictAndSafeFailures() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
+    LocalDate today = requireNonNull(LocalDate.now(requireNonNull(ZoneId.of("America/Guayaquil"))));
     String key = "jvm-smoke-" + UUID.randomUUID();
     String correlation = "jvm-smoke-create-" + UUID.randomUUID();
     String body = validBody(today);
@@ -111,19 +127,21 @@ class InvoiceDraftJvmSmokeIT {
         .body("code", equalTo("IDEMPOTENCY_CONFLICT"));
 
     assertBusinessFailure(
-        body.replace("123E4567-E89B-12D3-A456-426614174000", "not-a-uuid"),
+        requireNonNull(body.replace("123E4567-E89B-12D3-A456-426614174000", "not-a-uuid")),
         "EMISSION_POINT_INVALID");
-    assertBusinessFailure(body.replace("buyer@example.com", "buyer@example.com."), "EMAIL_INVALID");
     assertBusinessFailure(
-        body.replace("\"discount\": \"5.00\"", "\"discount\": \"25.00\"")
-            .replace("\"amount\": \"17.25\"", "\"amount\": \"0.00\""),
+        requireNonNull(body.replace("buyer@example.com", "buyer@example.com.")), "EMAIL_INVALID");
+    assertBusinessFailure(
+        requireNonNull(
+            body.replace("\"discount\": \"5.00\"", "\"discount\": \"25.00\"")
+                .replace("\"amount\": \"17.25\"", "\"amount\": \"0.00\"")),
         "DISCOUNT_EXCEEDS_GROSS");
 
     given()
         .contentType("application/json")
         .header("X-Company-Id", COMPANY)
         .header("Idempotency-Key", "jvm-date-" + UUID.randomUUID())
-        .body(validBody(today.minusDays(1)))
+        .body(validBody(requireNonNull(today.minusDays(1))))
         .when()
         .post("/api/v1/invoice-drafts")
         .then()
@@ -216,7 +234,8 @@ class InvoiceDraftJvmSmokeIT {
   }
 
   private static String validBody(LocalDate emissionDate) {
-    return """
+    return requireNonNull(
+        """
         {
           "emissionPointId": "\\t123E4567-E89B-12D3-A456-426614174000\\t",
           "emissionDate": "%s",
@@ -245,6 +264,6 @@ class InvoiceDraftJvmSmokeIT {
           "additionalInformation": []
         }
         """
-        .formatted(emissionDate);
+            .formatted(emissionDate));
   }
 }

@@ -5,13 +5,16 @@ import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 /** Company-scoped aggregate and idempotency persistence boundary. */
+@NullMarked
 public interface InvoiceDraftRepository {
-  Uni<IdempotencyLookup> findByIdempotency(
+  Uni<@NonNull IdempotencyLookup> findByIdempotency(
       CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining);
 
-  Uni<PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining);
+  Uni<@NonNull PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining);
 
   sealed interface IdempotencyLookup {
     record Missing() implements IdempotencyLookup {}
@@ -22,14 +25,16 @@ public interface InvoiceDraftRepository {
       }
     }
 
-    record Conflict(byte[] storedFingerprint) implements IdempotencyLookup {
-      public Conflict {
-        storedFingerprint = Arrays.copyOf(storedFingerprint, storedFingerprint.length);
+    final class Conflict implements IdempotencyLookup {
+      private final byte[] storedFingerprint;
+
+      public Conflict(byte[] storedFingerprint) {
+        this.storedFingerprint =
+            Objects.requireNonNull(Arrays.copyOf(storedFingerprint, storedFingerprint.length));
       }
 
-      @Override
       public byte[] storedFingerprint() {
-        return Arrays.copyOf(storedFingerprint, storedFingerprint.length);
+        return Objects.requireNonNull(Arrays.copyOf(storedFingerprint, storedFingerprint.length));
       }
     }
   }

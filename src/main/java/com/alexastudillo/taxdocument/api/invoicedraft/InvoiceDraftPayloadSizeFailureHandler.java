@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
+import com.alexastudillo.taxdocument.api.requestcontext.CorrelationHeader;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.vertx.http.runtime.RouteConstants;
@@ -11,8 +13,11 @@ import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import java.net.URI;
+import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Exclusive API construction of the payload-too-large outcome. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftPayloadSizeFailureHandler {
   private static final String PATH = "/api/v1/invoice-drafts";
@@ -32,8 +37,9 @@ public final class InvoiceDraftPayloadSizeFailureHandler {
     router
         .route(HttpMethod.POST, PATH)
         .order(RouteConstants.ROUTE_ORDER_UPLOAD_LIMIT - 1)
-        .handler(this::rejectKnownOversizeBody)
-        .failureHandler(this::mapStreamingBodyFailure);
+        .handler(context -> rejectKnownOversizeBody(Objects.requireNonNull(context, "context")))
+        .failureHandler(
+            context -> mapStreamingBodyFailure(Objects.requireNonNull(context, "context")));
   }
 
   public ProblemDetails.ApiException payloadTooLarge() {
@@ -77,12 +83,13 @@ public final class InvoiceDraftPayloadSizeFailureHandler {
     CorrelationHeader.Classification correlation = boundary.correlation();
     ProblemDetails problem =
         new ProblemDetails(
-            URI.create("urn:ecuador-tax-document-service:problem:request_payload_too_large"),
+            Objects.requireNonNull(
+                URI.create("urn:ecuador-tax-document-service:problem:request_payload_too_large")),
             "Payload too large",
             413,
             "REQUEST_PAYLOAD_TOO_LARGE",
             "The request body exceeds 2 MiB",
-            URI.create(PATH),
+            Objects.requireNonNull(URI.create(PATH)),
             correlation.safeValue(),
             null);
     try {
@@ -94,7 +101,7 @@ public final class InvoiceDraftPayloadSizeFailureHandler {
           .putHeader(HttpHeaders.CONNECTION, "close")
           .putHeader("X-Correlation-Id", correlation.safeValue())
           .end(body)
-          .onComplete(ignored -> context.request().connection().close());
+          .onComplete(_ -> context.request().connection().close());
     } catch (JsonProcessingException exception) {
       context.fail(exception);
     }

@@ -2,20 +2,24 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Additional information after Application normalization and canonical-name derivation. */
+@NullMarked
 public record AdditionalInformation(
-    UUID id, int position, String name, String canonicalName, String value) {
+    UUID id, int position, String name, @Nullable String canonicalName, String value) {
   public AdditionalInformation {
     Objects.requireNonNull(id, "id");
     Objects.requireNonNull(name, "name");
-    Objects.requireNonNull(canonicalName, "canonicalName");
     Objects.requireNonNull(value, "value");
     if (position < 1 || position > 15) {
       throw invalid("additionalInformation[].position");
     }
     requireLength(name, "additionalInformation[].name");
-    requireLength(canonicalName, "additionalInformation[].name");
+    if (canonicalName != null) {
+      requireLength(canonicalName, "additionalInformation[].name");
+    }
     requireLength(value, "additionalInformation[].value");
   }
 

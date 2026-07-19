@@ -9,15 +9,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Deterministic Stage 11A calculation followed by ordered Stage 11B validation. */
+@NullMarked
 public final class InvoiceDraftCalculator {
   public static final BigDecimal MAX_MONEY = new BigDecimal("999999999999999.99");
   private static final BigDecimal HUNDRED = new BigDecimal("100");
+  private static final BigDecimal ZERO = Objects.requireNonNull(BigDecimal.ZERO);
   private static final int MONEY_SCALE = 2;
 
-  public Calculation calculate(Buyer buyer, List<InvoiceLine> inputs, List<Payment> payments) {
+  public Calculation calculate(
+      Buyer buyer, List<@NonNull InvoiceLine> inputs, List<@NonNull Payment> payments) {
     Objects.requireNonNull(buyer, "buyer");
     Objects.requireNonNull(inputs, "inputs");
     Objects.requireNonNull(payments, "payments");
@@ -25,8 +32,8 @@ public final class InvoiceDraftCalculator {
       throw violation("LINE_CARDINALITY_INVALID", "lines", "Line count is invalid");
     }
 
-    List<InvoiceLine> lines = new ArrayList<>(inputs.size());
-    Map<String, MutableTaxTotal> grouped = new LinkedHashMap<>();
+    List<@NonNull InvoiceLine> lines = new ArrayList<>(inputs.size());
+    Map<@NonNull String, @Nullable MutableTaxTotal> grouped = new LinkedHashMap<>();
     BigDecimal subtotal = zero();
     BigDecimal totalDiscount = zero();
     for (InvoiceLine input :
@@ -50,9 +57,15 @@ public final class InvoiceDraftCalculator {
       subtotal = subtotal.add(net);
       totalDiscount = totalDiscount.add(discount);
       String key = groupKey(input.taxSelection());
-      grouped
-          .computeIfAbsent(key, ignored -> new MutableTaxTotal(input.taxSelection()))
-          .add(base, tax);
+      @Nullable MutableTaxTotal existing = grouped.get(key);
+      MutableTaxTotal total;
+      if (existing == null) {
+        total = new MutableTaxTotal(input.taxSelection());
+        grouped.put(key, total);
+      } else {
+        total = existing;
+      }
+      total.add(base, tax);
     }
 
     subtotal = money(subtotal);
@@ -60,16 +73,17 @@ public final class InvoiceDraftCalculator {
     requireMaximum(subtotal.abs(), Integer.MAX_VALUE, "subtotalBeforeTaxes");
     requireMaximum(totalDiscount, Integer.MAX_VALUE, "totalDiscount");
 
-    List<TaxTotal> taxTotals =
+    List<@NonNull TaxTotal> taxTotals =
         grouped.values().stream()
+            .map(value -> Objects.requireNonNull(value, "tax total"))
             .sorted(Comparator.comparing(total -> total.key()))
-            .<TaxTotal>map(total -> total.toTaxTotal())
+            .<@NonNull TaxTotal>map(total -> total.toTaxTotal())
             .toList();
     BigDecimal totalTax =
         money(
             taxTotals.stream()
                 .map(total -> total.amount())
-                .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val)));
+                .reduce(ZERO, (acc, val) -> Objects.requireNonNull(acc.add(val))));
     requireMaximum(totalTax, Integer.MAX_VALUE, "taxTotals");
     BigDecimal grandTotal = money(subtotal.add(totalTax));
     requireMaximum(grandTotal.abs(), Integer.MAX_VALUE, "grandTotal");
@@ -85,7 +99,7 @@ public final class InvoiceDraftCalculator {
     buyer.validateCalculatedTotal(grandTotal);
     validatePayments(grandTotal, payments);
     return new Calculation(
-        List.copyOf(lines),
+        Objects.requireNonNull(List.copyOf(lines), "calculated lines"),
         taxTotals,
         money(subtotal),
         money(totalDiscount),
@@ -93,11 +107,11 @@ public final class InvoiceDraftCalculator {
         grandTotal);
   }
 
-  private static void validatePayments(BigDecimal grandTotal, List<Payment> payments) {
+  private static void validatePayments(BigDecimal grandTotal, List<@NonNull Payment> payments) {
     if (payments.isEmpty() || payments.size() > 8) {
       throw violation("PAYMENT_CARDINALITY_INVALID", "payments", "Payment count is invalid");
     }
-    Set<java.util.UUID> methods =
+    Set<@NonNull UUID> methods =
         payments.stream()
             .map(payment -> payment.paymentMethodId())
             .collect(Collectors.toUnmodifiableSet());
@@ -105,7 +119,8 @@ public final class InvoiceDraftCalculator {
       throw violation("DUPLICATE_PAYMENT_METHOD", "payments", "Payment method is duplicated");
     }
     if (grandTotal.signum() == 0) {
-      if (payments.size() != 1 || payments.getFirst().amount().signum() != 0) {
+      if (payments.size() != 1
+          || Objects.requireNonNull(payments.getFirst(), "first payment").amount().signum() != 0) {
         throw violation("PAYMENT_SHAPE_INVALID", "payments", "Zero total needs one zero payment");
       }
     } else if (payments.stream().anyMatch(payment -> payment.amount().signum() <= 0)) {
@@ -115,7 +130,7 @@ public final class InvoiceDraftCalculator {
         money(
             payments.stream()
                 .map(payment -> payment.amount())
-                .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val)));
+                .reduce(ZERO, (acc, val) -> Objects.requireNonNull(acc.add(val))));
     if (sum.compareTo(grandTotal) != 0) {
       throw violation("PAYMENT_TOTAL_MISMATCH", "payments", "Payments do not reconcile");
     }
@@ -133,19 +148,22 @@ public final class InvoiceDraftCalculator {
         + selection.catalogVersion();
   }
 
-  private static void requireMaximum(BigDecimal value, int line, String field) {
-    if (value.compareTo(MAX_MONEY) > 0) {
+  private static void requireMaximum(@Nullable BigDecimal value, int line, String field) {
+    BigDecimal requiredValue = Objects.requireNonNull(value, field);
+    if (requiredValue.compareTo(MAX_MONEY) > 0) {
       String path = line == Integer.MAX_VALUE ? field : "lines[" + (line - 1) + "]." + field;
       throw violation("MONETARY_RANGE_EXCEEDED", path, "Calculated monetary value overflowed");
     }
   }
 
-  private static BigDecimal money(BigDecimal value) {
-    return value.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+  private static BigDecimal money(@Nullable BigDecimal value) {
+    return Objects.requireNonNull(
+        Objects.requireNonNull(value, "monetary value")
+            .setScale(MONEY_SCALE, RoundingMode.HALF_UP));
   }
 
   private static BigDecimal zero() {
-    return BigDecimal.ZERO.setScale(MONEY_SCALE);
+    return Objects.requireNonNull(ZERO.setScale(MONEY_SCALE));
   }
 
   private static DraftValidationException violation(String code, String field, String message) {
@@ -153,8 +171,8 @@ public final class InvoiceDraftCalculator {
   }
 
   public record Calculation(
-      List<InvoiceLine> lines,
-      List<TaxTotal> taxTotals,
+      List<@NonNull InvoiceLine> lines,
+      List<@NonNull TaxTotal> taxTotals,
       BigDecimal subtotalBeforeTaxes,
       BigDecimal totalDiscount,
       BigDecimal grandTotal,

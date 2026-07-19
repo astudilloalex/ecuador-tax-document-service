@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -24,116 +25,120 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class ReferenceDataBaselineTest {
-  private static final UUID REFERENCE_NAMESPACE =
-      UUID.fromString("32576bbf-b70d-5c24-98ff-d5f9b48e8826");
+  private static final UUID REFERENCE_NAMESPACE = uuid("32576bbf-b70d-5c24-98ff-d5f9b48e8826");
   private static final String CATALOG_VERSION = "SRI-OFFLINE-2.32-TARGET-1";
 
   private static final List<@NonNull ExpectedTaxRule> TAX_RULES =
-      List.of(
-          new ExpectedTaxRule(
-              "84cb3f03-574b-54de-9e73-efb8d485476a",
-              "0",
-              "0%",
-              "IVA 0%",
-              "0.00",
-              "ZERO_RATE",
-              null),
-          new ExpectedTaxRule(
-              "2b31de9b-20f2-50c7-aeff-fed9babfe112",
-              "5",
-              "5%",
-              "IVA 5%",
-              "5.00",
-              "PERCENTAGE_RATE",
-              LocalDate.of(2024, 4, 1)),
-          new ExpectedTaxRule(
-              "3aa0fb56-17ad-5310-a10c-64c1f6dbe2fb",
-              "10",
-              "13%",
-              "IVA 13%",
-              "13.00",
-              "PERCENTAGE_RATE",
-              null),
-          new ExpectedTaxRule(
-              "5b34b038-931c-50e3-a84c-10af272fdcd4",
-              "4",
-              "15%",
-              "IVA 15%",
-              "15.00",
-              "PERCENTAGE_RATE",
-              LocalDate.of(2025, 12, 26)),
-          new ExpectedTaxRule(
-              "a70a77f5-1176-5b0b-a539-74ead416a3ff",
-              "6",
-              "No Objeto de Impuesto",
-              "Not subject to IVA",
-              "0.00",
-              "NOT_SUBJECT",
-              null),
-          new ExpectedTaxRule(
-              "a7eeaf77-dbdc-5f99-9bdd-d783c072a7de",
-              "7",
-              "Exento de IVA",
-              "Exempt from IVA",
-              "0.00",
-              "EXEMPT",
-              null));
+      requireNonNull(
+          List.of(
+              new ExpectedTaxRule(
+                  "84cb3f03-574b-54de-9e73-efb8d485476a",
+                  "0",
+                  "0%",
+                  "IVA 0%",
+                  "0.00",
+                  "ZERO_RATE",
+                  null),
+              new ExpectedTaxRule(
+                  "2b31de9b-20f2-50c7-aeff-fed9babfe112",
+                  "5",
+                  "5%",
+                  "IVA 5%",
+                  "5.00",
+                  "PERCENTAGE_RATE",
+                  date(2024, 4, 1)),
+              new ExpectedTaxRule(
+                  "3aa0fb56-17ad-5310-a10c-64c1f6dbe2fb",
+                  "10",
+                  "13%",
+                  "IVA 13%",
+                  "13.00",
+                  "PERCENTAGE_RATE",
+                  null),
+              new ExpectedTaxRule(
+                  "5b34b038-931c-50e3-a84c-10af272fdcd4",
+                  "4",
+                  "15%",
+                  "IVA 15%",
+                  "15.00",
+                  "PERCENTAGE_RATE",
+                  date(2025, 12, 26)),
+              new ExpectedTaxRule(
+                  "a70a77f5-1176-5b0b-a539-74ead416a3ff",
+                  "6",
+                  "No Objeto de Impuesto",
+                  "Not subject to IVA",
+                  "0.00",
+                  "NOT_SUBJECT",
+                  null),
+              new ExpectedTaxRule(
+                  "a7eeaf77-dbdc-5f99-9bdd-d783c072a7de",
+                  "7",
+                  "Exento de IVA",
+                  "Exempt from IVA",
+                  "0.00",
+                  "EXEMPT",
+                  null)));
 
   private static final List<@NonNull ExpectedPaymentMethod> PAYMENT_METHODS =
-      List.of(
-          new ExpectedPaymentMethod(
-              "639f2b7e-10a3-5d92-a1a3-28223896f5b5",
-              "01",
-              "SIN UTILIZACION DEL SISTEMA FINANCIERO",
-              "Without use of the financial system",
-              LocalDate.of(2013, 1, 1)),
-          new ExpectedPaymentMethod(
-              "daad9ac7-6a55-5df6-8a9e-60012c5d261b",
-              "15",
-              "COMPENSACIÓN DE DEUDAS",
-              "Debt compensation",
-              LocalDate.of(2013, 1, 1)),
-          new ExpectedPaymentMethod(
-              "cbf7e764-0ef5-5422-965e-fe08eaa49772",
-              "16",
-              "TARJETA DE DÉBITO",
-              "Debit card",
-              LocalDate.of(2016, 6, 1)),
-          new ExpectedPaymentMethod(
-              "8b626780-39fb-5c72-b1e2-8453df01b79a",
-              "17",
-              "DINERO ELECTRÓNICO",
-              "Electronic money",
-              LocalDate.of(2016, 6, 1)),
-          new ExpectedPaymentMethod(
-              "65eee3f8-1c46-5749-8101-6e6d50d08a69",
-              "18",
-              "TARJETA PREPAGO",
-              "Prepaid card",
-              LocalDate.of(2016, 6, 1)),
-          new ExpectedPaymentMethod(
-              "178f5fd1-038b-577f-bac3-21c49ce6d1f2",
-              "19",
-              "TARJETA DE CRÉDITO",
-              "Credit card",
-              LocalDate.of(2016, 6, 1)),
-          new ExpectedPaymentMethod(
-              "953df84c-d41c-5e72-b975-9d02c45ee656",
-              "20",
-              "OTROS CON UTILIZACIÓN DEL SISTEMA FINANCIERO",
-              "Other with use of the financial system",
-              LocalDate.of(2016, 6, 1)),
-          new ExpectedPaymentMethod(
-              "f2bc801e-c241-5df8-99f8-ceb9ee870d05",
-              "21",
-              "ENDOSO DE TÍTULOS",
-              "Endorsement of securities",
-              LocalDate.of(2016, 6, 1)));
+      requireNonNull(
+          List.of(
+              new ExpectedPaymentMethod(
+                  "639f2b7e-10a3-5d92-a1a3-28223896f5b5",
+                  "01",
+                  "SIN UTILIZACION DEL SISTEMA FINANCIERO",
+                  "Without use of the financial system",
+                  date(2013, 1, 1)),
+              new ExpectedPaymentMethod(
+                  "daad9ac7-6a55-5df6-8a9e-60012c5d261b",
+                  "15",
+                  "COMPENSACIÓN DE DEUDAS",
+                  "Debt compensation",
+                  date(2013, 1, 1)),
+              new ExpectedPaymentMethod(
+                  "cbf7e764-0ef5-5422-965e-fe08eaa49772",
+                  "16",
+                  "TARJETA DE DÉBITO",
+                  "Debit card",
+                  date(2016, 6, 1)),
+              new ExpectedPaymentMethod(
+                  "8b626780-39fb-5c72-b1e2-8453df01b79a",
+                  "17",
+                  "DINERO ELECTRÓNICO",
+                  "Electronic money",
+                  date(2016, 6, 1)),
+              new ExpectedPaymentMethod(
+                  "65eee3f8-1c46-5749-8101-6e6d50d08a69",
+                  "18",
+                  "TARJETA PREPAGO",
+                  "Prepaid card",
+                  date(2016, 6, 1)),
+              new ExpectedPaymentMethod(
+                  "178f5fd1-038b-577f-bac3-21c49ce6d1f2",
+                  "19",
+                  "TARJETA DE CRÉDITO",
+                  "Credit card",
+                  date(2016, 6, 1)),
+              new ExpectedPaymentMethod(
+                  "953df84c-d41c-5e72-b975-9d02c45ee656",
+                  "20",
+                  "OTROS CON UTILIZACIÓN DEL SISTEMA FINANCIERO",
+                  "Other with use of the financial system",
+                  date(2016, 6, 1)),
+              new ExpectedPaymentMethod(
+                  "f2bc801e-c241-5df8-99f8-ceb9ee870d05",
+                  "21",
+                  "ENDOSO DE TÍTULOS",
+                  "Endorsement of securities",
+                  date(2016, 6, 1))));
 
   @Inject PostgreSqlTestResource database;
 
@@ -141,14 +146,17 @@ class ReferenceDataBaselineTest {
 
   @BeforeEach
   void restoreApprovedBaseline() {
-    assertEquals(5, database.resetSchema().migrationsExecuted);
+    assertEquals(6, database.resetSchema().migrationsExecuted);
   }
 
   @Test
   void baselineContainsExactlyTheApprovedRowsAndEvidenceMetadata() {
     assertEquals(
         List.of("1", "2", "3", "4", "5"),
-        database.appliedMigrations().stream().map(info -> info.getVersion().getVersion()).toList());
+        database.appliedMigrations().stream()
+            .map(info -> info.getVersion().getVersion())
+            .filter(version -> Integer.parseInt(version) <= 5)
+            .toList());
     assertEquals(5, database.rowCount("buyer_identification_type_catalog"));
     assertEquals(6, database.rowCount("iva_tax_rule_catalog"));
     assertEquals(8, database.rowCount("payment_method_catalog"));
@@ -183,11 +191,12 @@ class ReferenceDataBaselineTest {
                 + "FORMAT_ONLY_ALPHANUMERIC_1_TO_20"),
         buyerMappings);
 
-    for (String table :
+    for (String candidateTable :
         List.of(
             "buyer_identification_type_catalog",
             "iva_tax_rule_catalog",
             "payment_method_catalog")) {
+      String table = requireNonNull(candidateTable);
       assertEquals(
           database.rowCount(table),
           database.scalarLong(
@@ -293,7 +302,7 @@ class ReferenceDataBaselineTest {
       String productionSource =
           files
               .filter(path -> path.toString().endsWith(".java"))
-              .map(ReferenceDataBaselineTest::read)
+              .map(path -> read(requireNonNull(path)))
               .collect(Collectors.joining("\n"));
       assertFalse(productionSource.contains(REFERENCE_NAMESPACE.toString()));
       assertFalse(productionSource.contains("reference-data.v1"));
@@ -342,7 +351,7 @@ class ReferenceDataBaselineTest {
 
   private static String read(Path path) {
     try {
-      return Files.readString(path, UTF_8);
+      return requireNonNull(Files.readString(path, UTF_8));
     } catch (IOException exception) {
       throw new IllegalStateException("Unable to inspect production source", exception);
     }
@@ -355,7 +364,7 @@ class ReferenceDataBaselineTest {
       String displayName,
       String rate,
       String treatment,
-      LocalDate sourceValidFrom) {}
+      @Nullable LocalDate sourceValidFrom) {}
 
   private record ExpectedPaymentMethod(
       String id,
@@ -363,4 +372,12 @@ class ReferenceDataBaselineTest {
       String officialLabel,
       String displayName,
       LocalDate sourceValidFrom) {}
+
+  private static UUID uuid(String value) {
+    return requireNonNull(UUID.fromString(value));
+  }
+
+  private static LocalDate date(int year, int month, int day) {
+    return requireNonNull(LocalDate.of(year, month, day));
+  }
 }

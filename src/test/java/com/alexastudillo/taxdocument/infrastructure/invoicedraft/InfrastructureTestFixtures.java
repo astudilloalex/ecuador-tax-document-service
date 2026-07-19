@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
+
 import com.alexastudillo.taxdocument.application.invoicedraft.ApplicationTestFixtures;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftCommand;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftService;
@@ -13,7 +15,11 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
+@NullMarked
 final class InfrastructureTestFixtures {
   private static final AtomicLong FIXTURE_SEQUENCE = new AtomicLong(100L);
 
@@ -42,29 +48,33 @@ final class InfrastructureTestFixtures {
     InvoiceDraftRepository capture =
         new InvoiceDraftRepository() {
           @Override
-          public Uni<IdempotencyLookup> findByIdempotency(
+          public Uni<@NonNull IdempotencyLookup> findByIdempotency(
               CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
-            return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
+            return uniItem(new IdempotencyLookup.Missing());
           }
 
           @Override
-          public Uni<PersistedInvoiceDraft> persist(
+          public Uni<@NonNull PersistedInvoiceDraft> persist(
               InvoiceDraftCandidate candidate, Duration remaining) {
             result.set(candidate);
-            Instant time = Instant.parse("2026-07-17T12:00:01Z");
-            return Uni.createFrom()
-                .<PersistedInvoiceDraft>item(
-                    new PersistedInvoiceDraft(candidate.draft(), time, time));
+            Instant time = requireNonNull(Instant.parse("2026-07-17T12:00:01Z"));
+            return uniItem(
+                new PersistedInvoiceDraft(requireNonNull(candidate.draft()), time, time));
           }
         };
     new CreateInvoiceDraftService(capture, ApplicationTestFixtures.references(), identifiers)
         .create(command)
         .subscribe()
         .with(
-            ignored -> {},
+            _ -> {},
             failure -> {
               throw new IllegalStateException(failure);
             });
-    return result.get();
+    return requireNonNull(result.get(), "captured candidate");
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> uniItem(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
   }
 }

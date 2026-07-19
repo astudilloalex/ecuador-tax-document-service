@@ -4,10 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
+import com.alexastudillo.taxdocument.api.requestcontext.CorrelationHeader;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class CorrelationHeaderTest {
   private final CorrelationHeader header = new CorrelationHeader();
 
@@ -50,7 +55,7 @@ class CorrelationHeaderTest {
   }
 
   private static ProblemDetails.ApiException keyFailure(
-      IdempotencyKeyHeader header, List<String> values) {
+      IdempotencyKeyHeader header, @Nullable List<String> values) {
     try {
       header.parse(values);
       throw new AssertionError("Expected failure");

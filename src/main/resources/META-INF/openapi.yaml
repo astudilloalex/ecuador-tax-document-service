@@ -9,8 +9,77 @@ servers:
   - url: /api/v1
 tags:
   - name: Invoice Drafts
+  - name: Fiscal Preparations
 
 paths:
+  /invoice-drafts/{invoiceDraftId}/fiscal-preparation:
+    post:
+      tags: [Fiscal Preparations]
+      operationId: prepareInvoiceForFiscalIssuance
+      summary: Prepare an existing Invoice Draft exactly once
+      description: >-
+        Accepts no request body and no caller-generated idempotency key. Natural equivalence is
+        exactly the canonical X-Company-Id plus invoiceDraftId. On a first request, the service
+        fixes one America/Guayaquil civil date at initial request entry, resolves authoritative
+        fiscal context through the approved read-only boundary, then atomically commits the
+        immutable snapshot, next controlled sequential, Numeric Code, Access Key, and baseline
+        advancement. A committed replay is returned before date revalidation or external access.
+        Invalid correlation input is replaced with a safe generated value and never changes
+        equivalence. Any non-empty body is non-contract input and returns INVALID_REQUEST.
+      parameters:
+        - $ref: '#/components/parameters/FiscalPreparationInvoiceDraftId'
+        - $ref: '#/components/parameters/FiscalPreparationCompanyContext'
+        - $ref: '#/components/parameters/FiscalPreparationCorrelationId'
+      responses:
+        '201':
+          description: One new Fiscal Preparation was committed.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/FiscalPreparationCorrelationId'
+            Fiscal-Preparation-Replayed:
+              description: False because this response committed the preparation.
+              schema:
+                type: boolean
+                const: false
+            Cache-Control:
+              $ref: '#/components/headers/FiscalPreparationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPreparationResponse'
+        '200':
+          description: >-
+            The original committed Fiscal Preparation was returned without fiscal-context access,
+            date revalidation, baseline access, or new identity generation.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/FiscalPreparationCorrelationId'
+            Fiscal-Preparation-Replayed:
+              description: True because this response returned the committed winner.
+              schema:
+                type: boolean
+                const: true
+            Cache-Control:
+              $ref: '#/components/headers/FiscalPreparationNoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPreparationResponse'
+        '400':
+          $ref: '#/components/responses/FiscalPreparationBadRequest'
+        '404':
+          $ref: '#/components/responses/FiscalPreparationDraftNotFound'
+        '409':
+          $ref: '#/components/responses/FiscalPreparationConflict'
+        '422':
+          $ref: '#/components/responses/FiscalPreparationUnprocessable'
+        '500':
+          $ref: '#/components/responses/FiscalPreparationInternalFailure'
+        '503':
+          $ref: '#/components/responses/FiscalPreparationUnavailable'
+        '504':
+          $ref: '#/components/responses/FiscalPreparationTimeout'
+
   /invoice-drafts:
     post:
       tags: [Invoice Drafts]
@@ -102,6 +171,37 @@ paths:
 
 components:
   parameters:
+    FiscalPreparationInvoiceDraftId:
+      name: invoiceDraftId
+      in: path
+      required: true
+      description: Existing non-nil Invoice Draft UUID interpreted only inside X-Company-Id scope.
+      schema:
+        $ref: '#/components/schemas/FiscalPreparationNonNilUuid'
+    FiscalPreparationCompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        Exactly one field value is accepted. Surrounding ASCII SP/HTAB is trimmed once and the
+        result must be a syntactically valid non-nil UUID. It is normalized to lowercase
+        hyphenated form and scopes every owned read and mutation. It is business context, not an
+        authentication or authorization credential, and is absent from body, path, query, and
+        response schemas.
+      schema:
+        $ref: '#/components/schemas/FiscalPreparationNonNilUuid'
+    FiscalPreparationCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: >-
+        One safe value may be preserved. Missing, repeated, blank, unsafe, or over-length input is
+        never echoed and receives a generated UUID replacement. Correlation never participates in
+        natural equivalence.
+      schema:
+        type: string
+        maxLength: 64
+
     CompanyContext:
       name: X-Company-Id
       in: header
@@ -157,6 +257,18 @@ components:
         $ref: '#/components/schemas/CorrelationIdentifier'
 
   headers:
+    FiscalPreparationCorrelationId:
+      description: Safe preserved or generated correlation identifier.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+    FiscalPreparationNoStore:
+      description: Prevents intermediary caching of the sensitive successful representation.
+      schema:
+        type: string
+        const: no-store
+
     CorrelationId:
       description: Correlates this attempt and its safe operational evidence.
       required: true
@@ -178,6 +290,234 @@ components:
         const: true
 
   schemas:
+    FiscalPreparationNonNilUuid:
+      type: string
+      format: uuid
+      pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+
+    FiscalPreparationResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - fiscalPreparationId
+        - invoiceDraftId
+        - emissionDate
+        - fiscalContextSnapshot
+        - officialSequentialNumber
+        - numericCode
+        - accessKey
+        - createdAt
+      properties:
+        fiscalPreparationId:
+          $ref: '#/components/schemas/FiscalPreparationNonNilUuid'
+        invoiceDraftId:
+          $ref: '#/components/schemas/FiscalPreparationNonNilUuid'
+        emissionDate:
+          type: string
+          format: date
+          description: Exact unchanged Invoice Draft emission date.
+        fiscalContextSnapshot:
+          $ref: '#/components/schemas/FiscalContextSnapshot'
+        officialSequentialNumber:
+          type: string
+          pattern: '^(?!000000000$)[0-9]{9}$'
+        numericCode:
+          type: string
+          pattern: '^[0-9]{8}$'
+        accessKey:
+          type: string
+          pattern: '^[0-9]{49}$'
+          description: Complete SRI v2.33 Access Key required by this internal success contract.
+        createdAt:
+          type: string
+          format: date-time
+
+    FiscalContextSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - issuerReference
+        - issuerRuc
+        - legalName
+        - headOfficeAddress
+        - accountingRequired
+        - rimpeClassification
+        - establishmentReference
+        - establishmentCode
+        - establishmentAddress
+        - emissionPointId
+        - emissionPointCode
+        - environmentCode
+        - documentTypeCode
+        - emissionTypeCode
+        - technicalRuleId
+        - technicalRuleModifiedOn
+        - numericCodePolicyId
+        - sourceAuthority
+        - sourceRevision
+        - sourceEffectiveFrom
+        - sourceObservedAt
+      properties:
+        issuerReference:
+          $ref: '#/components/schemas/FiscalPreparationOpaqueReference'
+        issuerRuc:
+          type: string
+          pattern: '^[0-9]{13}$'
+        legalName:
+          $ref: '#/components/schemas/FiscalPreparationFiscalText'
+        commercialName:
+          $ref: '#/components/schemas/FiscalPreparationFiscalText'
+        headOfficeAddress:
+          $ref: '#/components/schemas/FiscalPreparationFiscalText'
+        accountingRequired:
+          type: boolean
+        specialTaxpayer:
+          $ref: '#/components/schemas/FiscalPreparationResolutionDesignation'
+        withholdingAgent:
+          $ref: '#/components/schemas/FiscalPreparationWithholdingAgentDesignation'
+        rimpeClassification:
+          type: string
+          enum: [NONE, RIMPE_CONTRIBUTOR, POPULAR_BUSINESS]
+        largeContributor:
+          $ref: '#/components/schemas/FiscalPreparationLargeContributorDesignation'
+        establishmentReference:
+          $ref: '#/components/schemas/FiscalPreparationOpaqueReference'
+        establishmentCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        establishmentAddress:
+          $ref: '#/components/schemas/FiscalPreparationFiscalText'
+        emissionPointId:
+          $ref: '#/components/schemas/FiscalPreparationNonNilUuid'
+        emissionPointCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        environmentCode:
+          type: string
+          enum: ['1', '2']
+        documentTypeCode:
+          type: string
+          const: '01'
+        emissionTypeCode:
+          type: string
+          const: '1'
+        technicalRuleId:
+          type: string
+          const: SRI-OFFLINE-2.33
+        technicalRuleModifiedOn:
+          type: string
+          format: date
+          const: '2026-07-13'
+        numericCodePolicyId:
+          type: string
+          const: SECURE_RANDOM_8_V1
+        sourceAuthority:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceRevision:
+          type: string
+          minLength: 1
+          maxLength: 128
+        sourceEffectiveFrom:
+          type: string
+          format: date
+        sourceEffectiveThrough:
+          type: string
+          format: date
+          description: Inclusive; omission means the source interval is open-ended.
+        sourceObservedAt:
+          type: string
+          format: date-time
+
+    FiscalPreparationOpaqueReference:
+      type: string
+      minLength: 1
+      maxLength: 128
+
+    FiscalPreparationFiscalText:
+      type: string
+      minLength: 1
+      maxLength: 300
+
+    FiscalPreparationResolutionDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+
+    FiscalPreparationWithholdingAgentDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,7})$'
+
+    FiscalPreparationLargeContributorDesignation:
+      type: object
+      additionalProperties: false
+      required: [resolutionIdentifier, requiredLegend]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+        requiredLegend:
+          type: string
+          minLength: 1
+          maxLength: 300
+
+    FiscalPreparationProblemDetails:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+          enum:
+            - COMPANY_CONTEXT_REQUIRED
+            - COMPANY_CONTEXT_INVALID
+            - INVALID_REQUEST
+            - INVOICE_DRAFT_NOT_FOUND
+            - INVOICE_DRAFT_NOT_PREPARABLE
+            - EMISSION_DATE_STALE
+            - FISCAL_CONTEXT_UNAVAILABLE
+            - FISCAL_CONTEXT_INVALID
+            - FISCAL_CONTEXT_UNSUPPORTED
+            - FISCAL_CONTEXT_INCONSISTENT
+            - OFFICIAL_SEQUENCE_BASELINE_MISSING
+            - OFFICIAL_SEQUENCE_BASELINE_INVALID
+            - OFFICIAL_SEQUENCE_EXHAUSTED
+            - ACCESS_KEY_INVALID
+            - REQUEST_TIMEOUT
+            - PERSISTENCE_FAILURE
+            - PREPARATION_OUTCOME_UNKNOWN
+            - INTERNAL_ERROR
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          type: string
+          minLength: 1
+          maxLength: 64
+
     CorrelationIdentifier:
       type: string
       minLength: 1
@@ -1189,6 +1529,104 @@ components:
                 const: buyer.email
 
   responses:
+    FiscalPreparationBadRequest:
+      description: >-
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. No Company-owned
+        read or write occurs before valid Company context. Non-empty/prohibited request content and
+        malformed or nil invoiceDraftId use INVALID_REQUEST.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationDraftNotFound:
+      description: >-
+        INVOICE_DRAFT_NOT_FOUND. Absent and cross-Company drafts are indistinguishable and expose no
+        fiscal or commercial data.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationConflict:
+      description: >-
+        INVOICE_DRAFT_NOT_PREPARABLE, OFFICIAL_SEQUENCE_BASELINE_MISSING,
+        OFFICIAL_SEQUENCE_BASELINE_INVALID, or OFFICIAL_SEQUENCE_EXHAUSTED. No baseline is
+        initialized, repaired, wrapped, or advanced by the failed request.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationUnprocessable:
+      description: >-
+        EMISSION_DATE_STALE, FISCAL_CONTEXT_INVALID, FISCAL_CONTEXT_UNSUPPORTED, or
+        FISCAL_CONTEXT_INCONSISTENT. Failure is conclusive before sequence allocation.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationInternalFailure:
+      description: >-
+        ACCESS_KEY_INVALID or INTERNAL_ERROR. ACCESS_KEY_INVALID commits no baseline advancement or
+        preparation.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationUnavailable:
+      description: >-
+        FISCAL_CONTEXT_UNAVAILABLE, PERSISTENCE_FAILURE, or PREPARATION_OUTCOME_UNKNOWN. Unknown
+        outcome makes no zero-state claim; retry exactly the same Company and Invoice Draft.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Retry-After:
+          description: Optional safe retry delay when known.
+          schema:
+            type: string
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+    FiscalPreparationTimeout:
+      description: >-
+        REQUEST_TIMEOUT. Zero local state is claimed only when commit did not begin or rollback is
+        confirmed; otherwise the detail directs natural replay without asserting absence.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/FiscalPreparationCorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/FiscalPreparationNoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/FiscalPreparationProblemDetails'
+
     BadRequest:
       description: >-
         COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, IDEMPOTENCY_KEY_REQUIRED,

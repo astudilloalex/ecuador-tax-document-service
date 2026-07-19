@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftCommand;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import com.alexastudillo.taxdocument.domain.invoicedraft.AdditionalInformation;
@@ -10,13 +11,31 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.TaxTotal;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 /** Explicit raw-transport-to-command and persisted-result-to-response mapping. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftApiMapper {
   public CreateInvoiceDraftCommand toCommand(
       CreateInvoiceDraftRequest request, InvoiceDraftRequestState state) {
     try {
+      List<CreateInvoiceDraftCommand.@NonNull LineInput> lines =
+          Objects.requireNonNull(
+              request.lines().stream()
+                  .map(line -> lineInput(Objects.requireNonNull(line)))
+                  .toList());
+      List<CreateInvoiceDraftCommand.@NonNull PaymentInput> payments =
+          Objects.requireNonNull(
+              request.payments().stream()
+                  .map(payment -> paymentInput(Objects.requireNonNull(payment)))
+                  .toList());
+      List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additionalInformation =
+          additionalInformationInputs(request);
+
       return new CreateInvoiceDraftCommand(
           state.companyId(),
           state.requestCreationInstant(),
@@ -32,9 +51,9 @@ public final class InvoiceDraftApiMapper {
               request.buyer().address(),
               request.buyer().email(),
               request.buyer().telephone()),
-          request.lines().stream().map(this::lineInput).toList(),
-          request.payments().stream().map(this::paymentInput).toList(),
-          additionalInformationInputs(request));
+          lines,
+          payments,
+          additionalInformation);
     } catch (NullPointerException | NumberFormatException exception) {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");
@@ -46,6 +65,27 @@ public final class InvoiceDraftApiMapper {
     if (!result.replayed() && !result.createdAt().equals(result.updatedAt())) {
       throw new IllegalStateException("Initial Invoice Draft timestamps must be identical");
     }
+    List<InvoiceDraftResponse.@NonNull LineResponse> lines =
+        Objects.requireNonNull(
+            draft.lines().stream()
+                .map(line -> lineResponse(Objects.requireNonNull(line)))
+                .toList());
+    List<InvoiceDraftResponse.@NonNull TaxResponse> taxTotals =
+        Objects.requireNonNull(
+            draft.taxTotals().stream()
+                .map(tax -> taxResponse(Objects.requireNonNull(tax)))
+                .toList());
+    List<InvoiceDraftResponse.@NonNull PaymentResponse> payments =
+        Objects.requireNonNull(
+            draft.payments().stream()
+                .map(payment -> paymentResponse(Objects.requireNonNull(payment)))
+                .toList());
+    List<InvoiceDraftResponse.@NonNull AdditionalInformationResponse> additionalInformation =
+        Objects.requireNonNull(
+            draft.additionalInformation().stream()
+                .map(info -> additionalInformationResponse(Objects.requireNonNull(info)))
+                .toList());
+
     return new InvoiceDraftResponse(
         draft.id(),
         draft.companyId().value(),
@@ -60,10 +100,10 @@ public final class InvoiceDraftApiMapper {
             draft.buyer().address(),
             draft.buyer().email(),
             draft.buyer().telephone()),
-        draft.lines().stream().map(this::lineResponse).toList(),
-        draft.taxTotals().stream().map(this::taxResponse).toList(),
-        draft.payments().stream().map(this::paymentResponse).toList(),
-        draft.additionalInformation().stream().map(this::additionalInformationResponse).toList(),
+        lines,
+        taxTotals,
+        payments,
+        additionalInformation,
         draft.subtotalBeforeTaxes(),
         draft.totalDiscount(),
         draft.grandTotal(),
@@ -79,21 +119,28 @@ public final class InvoiceDraftApiMapper {
         new BigDecimal(line.quantity()),
         new BigDecimal(line.unitPrice()),
         new BigDecimal(line.discount()),
-        line.taxRuleId());
+        Objects.requireNonNull(UUID.fromString(line.taxRuleId())));
   }
 
   private CreateInvoiceDraftCommand.PaymentInput paymentInput(
       CreateInvoiceDraftRequest.PaymentRequest payment) {
     return new CreateInvoiceDraftCommand.PaymentInput(
-        payment.paymentMethodId(), new BigDecimal(payment.amount()));
+        Objects.requireNonNull(UUID.fromString(payment.paymentMethodId())),
+        new BigDecimal(payment.amount()));
   }
 
-  private List<CreateInvoiceDraftCommand.AdditionalInformationInput> additionalInformationInputs(
-      CreateInvoiceDraftRequest request) {
-    if (request.additionalInformation() == null) {
-      return List.of();
+  private List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>
+      additionalInformationInputs(CreateInvoiceDraftRequest request) {
+    List<CreateInvoiceDraftRequest.AdditionalInformationRequest> infoList =
+        request.additionalInformation();
+    if (infoList == null) {
+      return Objects.requireNonNull(
+          List.<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>of());
     }
-    return request.additionalInformation().stream().map(this::additionalInformationInput).toList();
+    return Objects.requireNonNull(
+        infoList.stream()
+            .map(info -> additionalInformationInput(Objects.requireNonNull(info)))
+            .toList());
   }
 
   private CreateInvoiceDraftCommand.AdditionalInformationInput additionalInformationInput(
@@ -114,7 +161,7 @@ public final class InvoiceDraftApiMapper {
         new InvoiceDraftResponse.LineTaxResponse(
             line.taxSelection().taxRuleId(),
             line.taxSelection().family(),
-            line.taxSelection().treatment().name(),
+            Objects.requireNonNull(line.taxSelection().treatment().name()),
             line.taxSelection().officialTaxCode(),
             line.taxSelection().officialPercentageCode(),
             line.taxSelection().rate(),
@@ -127,7 +174,7 @@ public final class InvoiceDraftApiMapper {
   private InvoiceDraftResponse.TaxResponse taxResponse(TaxTotal total) {
     return new InvoiceDraftResponse.TaxResponse(
         total.family(),
-        total.treatment().name(),
+        Objects.requireNonNull(total.treatment().name()),
         total.officialTaxCode(),
         total.officialPercentageCode(),
         total.rate(),

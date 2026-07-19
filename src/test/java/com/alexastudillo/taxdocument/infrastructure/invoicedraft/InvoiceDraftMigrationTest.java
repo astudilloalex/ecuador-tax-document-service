@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,42 +26,49 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.flywaydb.core.api.MigrationInfo;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class InvoiceDraftMigrationTest {
   private static final String ASCII_FIXTURE = "invoicedraft/ascii-validation-vectors.json";
   private static final String BUYER_PATTERN = "^[A-Za-z0-9]{1,20}$";
   private static final String PRODUCT_PATTERN = "^[A-Za-z0-9]{1,25}$";
   private static final Set<String> FAILURE_STAGES =
-      Set.of("NONE", "TRANSPORT_REPRESENTATION", "APPLICATION_STAGE_6", "PERSISTENCE_DEFENSE");
+      requireNonNull(
+          Set.of("NONE", "TRANSPORT_REPRESENTATION", "APPLICATION_STAGE_6", "PERSISTENCE_DEFENSE"));
   private static final Set<String> EXPECTED_TABLES =
-      Set.of(
-          "buyer_identification_type_catalog",
-          "iva_tax_rule_catalog",
-          "payment_method_catalog",
-          "invoice_draft",
-          "invoice_line",
-          "invoice_line_tax",
-          "invoice_tax_total",
-          "invoice_payment",
-          "invoice_additional_information",
-          "invoice_draft_idempotency",
-          "flyway_schema_history");
+      requireNonNull(
+          Set.of(
+              "buyer_identification_type_catalog",
+              "iva_tax_rule_catalog",
+              "payment_method_catalog",
+              "invoice_draft",
+              "invoice_line",
+              "invoice_line_tax",
+              "invoice_tax_total",
+              "invoice_payment",
+              "invoice_additional_information",
+              "invoice_draft_idempotency",
+              "official_sequence_baseline",
+              "fiscal_preparation",
+              "flyway_schema_history"));
 
   @Inject PostgreSqlTestResource database;
   @Inject ObjectMapper objectMapper;
 
   @BeforeEach
   void restoreEmptyDatabase() {
-    assertEquals(5, database.resetSchema().migrationsExecuted);
+    assertEquals(6, database.resetSchema().migrationsExecuted);
   }
 
   @Test
   void flywayCreatesTheApprovedSchemaFromEmptyPostgreSql() {
     assertTrue(database.scalarString("SHOW server_version").startsWith("18.4"));
-    assertEquals(5, database.appliedMigrations().size());
+    assertEquals(6, database.appliedMigrations().size());
 
     Set<String> tables =
         database
@@ -90,7 +98,8 @@ class InvoiceDraftMigrationTest {
         PRODUCT_PATTERN, fixture.required("approvedPatterns").required("productCode").textValue());
 
     Set<String> identifiers = new java.util.HashSet<>();
-    for (JsonNode vector : fixture.required("requestPipelineVectors")) {
+    for (JsonNode candidateVector : fixture.required("requestPipelineVectors")) {
+      JsonNode vector = requireNonNull(candidateVector);
       String id = requiredText(vector, "id");
       assertTrue(identifiers.add(id), () -> "Duplicate vector id: " + id);
       String field = requiredText(vector, "field");
@@ -120,7 +129,8 @@ class InvoiceDraftMigrationTest {
       }
     }
 
-    for (JsonNode vector : fixture.required("persistenceDefenseVectors")) {
+    for (JsonNode candidateVector : fixture.required("persistenceDefenseVectors")) {
+      JsonNode vector = requireNonNull(candidateVector);
       String id = requiredText(vector, "id");
       assertTrue(identifiers.add(id), () -> "Duplicate vector id: " + id);
       assertEquals("PERSISTENCE_DEFENSE", requiredText(vector, "failureStage"), id);
@@ -135,17 +145,21 @@ class InvoiceDraftMigrationTest {
     JsonNode fixture = loadAsciiFixture(objectMapper);
     int position = 1;
     UUID productDraftId =
-        UUID.nameUUIDFromBytes("ascii-product-root".getBytes(StandardCharsets.UTF_8));
+        requireNonNull(
+            UUID.nameUUIDFromBytes("ascii-product-root".getBytes(StandardCharsets.UTF_8)));
     insertDraft(productDraftId, "04", "1790012345001");
 
-    for (JsonNode vector : fixture.required("requestPipelineVectors")) {
+    for (JsonNode candidateVector : fixture.required("requestPipelineVectors")) {
+      JsonNode vector = requireNonNull(candidateVector);
       if (!"ACCEPTED".equals(requiredText(vector, "expectedApplicationOutcome"))) {
         continue;
       }
       String id = requiredText(vector, "id");
       String storedValue = requiredText(vector, "expectedStoredValue");
       if ("buyer.identification".equals(requiredText(vector, "field"))) {
-        UUID draftId = UUID.nameUUIDFromBytes(("buyer:" + id).getBytes(StandardCharsets.UTF_8));
+        UUID draftId =
+            requireNonNull(
+                UUID.nameUUIDFromBytes(("buyer:" + id).getBytes(StandardCharsets.UTF_8)));
         assertDoesNotThrow(
             () -> insertDraft(draftId, requiredText(vector, "identificationType"), storedValue),
             id);
@@ -155,12 +169,14 @@ class InvoiceDraftMigrationTest {
       }
     }
 
-    for (JsonNode vector : fixture.required("persistenceDefenseVectors")) {
+    for (JsonNode candidateVector : fixture.required("persistenceDefenseVectors")) {
+      JsonNode vector = requireNonNull(candidateVector);
       String id = requiredText(vector, "id");
       String probe = requiredText(vector, "storedProbeValue");
       if ("buyer.identification".equals(requiredText(vector, "field"))) {
         UUID draftId =
-            UUID.nameUUIDFromBytes(("buyer-defense:" + id).getBytes(StandardCharsets.UTF_8));
+            requireNonNull(
+                UUID.nameUUIDFromBytes(("buyer-defense:" + id).getBytes(StandardCharsets.UTF_8)));
         assertThrows(
             RuntimeException.class,
             () -> insertDraft(draftId, requiredText(vector, "identificationType"), probe),
@@ -174,13 +190,13 @@ class InvoiceDraftMigrationTest {
   }
 
   @Test
-  void flywayUpgradesV3ToV5AndValidatesTheFinalAsciiConstraints() {
+  void flywayUpgradesV3ThroughV6AndPreservesTheFinalAsciiConstraints() {
     assertEquals(3, database.resetSchemaTo("3").migrationsExecuted);
     assertEquals(3, database.appliedMigrations().size());
     assertTrue(constraintDefinition("ck_invoice_line_product_code").contains("[[:alnum:]]"));
 
-    assertEquals(2, database.migrate().migrationsExecuted);
-    assertEquals(5, database.appliedMigrations().size());
+    assertEquals(3, database.migrate().migrationsExecuted);
+    assertEquals(6, database.appliedMigrations().size());
     assertTrue(database.validate().validationSuccessful);
 
     String buyer = constraintDefinition("ck_invoice_draft_buyer_identification");
@@ -354,7 +370,7 @@ class InvoiceDraftMigrationTest {
     try (InputStream input =
         InvoiceDraftMigrationTest.class.getClassLoader().getResourceAsStream(ASCII_FIXTURE)) {
       assertNotNull(input, ASCII_FIXTURE);
-      return mapper.readTree(input);
+      return requireNonNull(mapper.readTree(input), ASCII_FIXTURE);
     }
   }
 
@@ -406,7 +422,7 @@ class InvoiceDraftMigrationTest {
     if (!value.isTextual()) {
       throw new IllegalArgumentException(field + " must be textual");
     }
-    return value.textValue();
+    return requireNonNull(value.textValue(), field);
   }
 
   private static String trimAsciiSpAndHtab(String value) {
@@ -418,7 +434,7 @@ class InvoiceDraftMigrationTest {
     while (end > start && isAsciiTrim(value.charAt(end - 1))) {
       end--;
     }
-    return value.substring(start, end);
+    return requireNonNull(value.substring(start, end));
   }
 
   private static boolean isAsciiTrim(char value) {
@@ -426,17 +442,15 @@ class InvoiceDraftMigrationTest {
   }
 
   private static String sqlLiteral(String value) {
-    return value.replace("'", "''");
+    return requireNonNull(value.replace("'", "''"));
   }
 
   private Map<String, Integer> migrationChecksums() {
-    return database.appliedMigrations().stream()
-        .collect(
-            Collectors.toMap(
-                info -> info.getVersion().getVersion(),
-                info -> info.getChecksum(),
-                (left, right) -> right,
-                LinkedHashMap::new));
+    Map<String, Integer> checksums = new LinkedHashMap<>();
+    for (MigrationInfo info : database.appliedMigrations()) {
+      checksums.put(info.getVersion().getVersion(), info.getChecksum());
+    }
+    return checksums;
   }
 
   private Map<String, Long> approvedRowCounts() {
@@ -444,7 +458,7 @@ class InvoiceDraftMigrationTest {
     counts.put("buyer", database.rowCount("buyer_identification_type_catalog"));
     counts.put("iva", database.rowCount("iva_tax_rule_catalog"));
     counts.put("payment", database.rowCount("payment_method_catalog"));
-    return Map.copyOf(counts);
+    return requireNonNull(Map.copyOf(counts));
   }
 
   private static void assertConfiguration(

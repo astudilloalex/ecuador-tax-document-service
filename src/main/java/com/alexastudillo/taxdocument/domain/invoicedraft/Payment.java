@@ -3,8 +3,10 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Validated payment reference and amount. */
+@NullMarked
 public record Payment(
     UUID id,
     UUID paymentMethodId,

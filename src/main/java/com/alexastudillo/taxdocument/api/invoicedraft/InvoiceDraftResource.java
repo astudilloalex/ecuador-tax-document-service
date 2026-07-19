@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
+import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftUseCase;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,8 +14,13 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Objects;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** POST /api/v1/invoice-drafts transport adapter. */
+@NullMarked
 @Path("/api/v1/invoice-drafts")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
@@ -46,28 +52,32 @@ public final class InvoiceDraftResource {
   }
 
   @POST
-  public Uni<Response> create(JsonNode decodedRequest) {
-    Uni<CreateInvoiceDraftResult> application =
-        Uni.createFrom()
-            .item(() -> bind(decodedRequest))
+  public Uni<@NonNull Response> create(JsonNode decodedRequest) {
+    Uni<@NonNull CreateInvoiceDraftResult> application =
+        Objects.requireNonNull(
+            Uni.createFrom()
+                .item(() -> bind(decodedRequest))
+                .onItem()
+                .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
+                .onItem()
+                .transformToUni(useCase::create));
+    return requireUni(
+        deadlineHandler
+            .race(application, state)
             .onItem()
-            .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
-            .onItem()
-            .transformToUni(useCase::create);
-    return deadlineHandler
-        .race(application, state)
-        .onItem()
-        .transform(
-            result -> {
-              int status = result.replayed() ? 200 : 201;
-              state.acceptedStatus(status);
-              telemetry.completed(state, result, status);
-              return Response.status(status)
-                  .header("X-Correlation-Id", state.correlationId())
-                  .header("Idempotency-Replayed", result.replayed())
-                  .entity(mapper.toResponse(result))
-                  .build();
-            });
+            .transform(
+                result -> {
+                  int status = result.replayed() ? 200 : 201;
+                  state.acceptedStatus(status);
+                  telemetry.completed(state, result, status);
+                  return Objects.requireNonNull(
+                      Response.status(status)
+                          .header("X-Correlation-Id", state.correlationId())
+                          .header("Idempotency-Replayed", String.valueOf(result.replayed()))
+                          .entity(mapper.toResponse(result))
+                          .build());
+                }),
+        "invoice draft response");
   }
 
   private CreateInvoiceDraftRequest bind(JsonNode request) {
@@ -79,11 +89,17 @@ public final class InvoiceDraftResource {
     }
     validateRepresentation(request);
     try {
-      return objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class);
+      return Objects.requireNonNull(
+          objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class));
     } catch (JsonProcessingException exception) {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");
     }
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 
   private static void validateRepresentation(JsonNode request) {
@@ -127,18 +143,18 @@ public final class InvoiceDraftResource {
     }
   }
 
-  private static JsonNode requireObject(JsonNode value) {
-    if (value == null || !value.isObject()) {
-      throw invalidRequest();
+  private static JsonNode requireObject(@Nullable JsonNode value) {
+    if (value != null && value.isObject()) {
+      return value;
     }
-    return value;
+    throw invalidRequest();
   }
 
-  private static JsonNode requireArray(JsonNode value) {
-    if (value == null || !value.isArray()) {
-      throw invalidRequest();
+  private static JsonNode requireArray(@Nullable JsonNode value) {
+    if (value != null && value.isArray()) {
+      return value;
     }
-    return value;
+    throw invalidRequest();
   }
 
   private static void requireText(JsonNode object, String property) {

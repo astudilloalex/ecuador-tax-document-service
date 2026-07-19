@@ -4,8 +4,11 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Ordered commercial line with one selected IVA rule and optional calculated values. */
+@NullMarked
 public record InvoiceLine(
     UUID id,
     int position,
@@ -15,12 +18,13 @@ public record InvoiceLine(
     BigDecimal unitPrice,
     BigDecimal discount,
     TaxSelection taxSelection,
-    BigDecimal grossAmount,
-    BigDecimal netAmount,
-    BigDecimal taxBase,
-    BigDecimal taxAmount,
-    BigDecimal lineTotal) {
-  private static final Pattern PRODUCT_CODE = Pattern.compile("^[A-Za-z0-9]{1,25}$");
+    @Nullable BigDecimal grossAmount,
+    @Nullable BigDecimal netAmount,
+    @Nullable BigDecimal taxBase,
+    @Nullable BigDecimal taxAmount,
+    @Nullable BigDecimal lineTotal) {
+  private static final Pattern PRODUCT_CODE =
+      Objects.requireNonNull(Pattern.compile("^[A-Za-z0-9]{1,25}$"));
   private static final BigDecimal MAX_QUANTITY = new BigDecimal("999999.999999");
 
   public InvoiceLine {
@@ -47,7 +51,7 @@ public record InvoiceLine(
     }
   }
 
-  public static boolean productCodeIsValid(String value) {
+  public static boolean productCodeIsValid(@Nullable String value) {
     return value != null && PRODUCT_CODE.matcher(value).matches();
   }
 

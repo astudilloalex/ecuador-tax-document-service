@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -7,15 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetry;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
-import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
+import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.support.FixedRequestClock;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class InvoiceDraftRequestDeadlineHandlerTest {
   @Test
   void firstConclusiveApplicationOrDeadlineOutcomeWinsExactlyOnce() {
@@ -27,21 +30,20 @@ class InvoiceDraftRequestDeadlineHandlerTest {
     AtomicLong applicationTicker = new AtomicLong();
     InvoiceDraftRequestState applicationState = new InvoiceDraftRequestState();
     applicationState.initialize(
-        Instant.EPOCH,
-        RequestDeadline.start(Duration.ofNanos(10), applicationTicker::get),
+        requireNonNull(Instant.EPOCH),
+        RequestDeadline.start(requireNonNull(Duration.ofNanos(10)), applicationTicker::get),
         "application-first",
         System.nanoTime());
     assertEquals(
-        "accepted",
-        handler.race(Uni.createFrom().item("accepted"), applicationState).await().indefinitely());
+        "accepted", handler.race(item("accepted"), applicationState).await().indefinitely());
     applicationTicker.set(10L);
     assertFalse(applicationState.acceptTerminal());
 
     AtomicLong deadlineTicker = new AtomicLong();
     InvoiceDraftRequestState deadlineState = new InvoiceDraftRequestState();
     deadlineState.initialize(
-        Instant.EPOCH,
-        RequestDeadline.start(Duration.ofNanos(1), deadlineTicker::get),
+        requireNonNull(Instant.EPOCH),
+        RequestDeadline.start(requireNonNull(Duration.ofNanos(1)), deadlineTicker::get),
         "deadline-first",
         System.nanoTime());
     deadlineTicker.set(1L);
@@ -50,10 +52,14 @@ class InvoiceDraftRequestDeadlineHandlerTest {
             InvoiceDraftApplicationException.class,
             () ->
                 handler
-                    .race(Uni.createFrom().nothing(), deadlineState)
+                    .race(requireNonNull(Uni.createFrom().nothing()), deadlineState)
                     .await()
                     .atMost(Duration.ofSeconds(1)));
     assertEquals(InvoiceDraftFailure.Code.REQUEST_TIMEOUT, failure.failure().code());
     assertFalse(deadlineState.acceptTerminal());
+  }
+
+  private static <T> Uni<T> item(T value) {
+    return requireNonNull(Uni.createFrom().item(value));
   }
 }
