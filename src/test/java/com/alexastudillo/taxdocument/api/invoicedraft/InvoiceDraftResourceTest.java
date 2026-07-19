@@ -5,13 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetry;
 import com.alexastudillo.taxdocument.application.invoicedraft.ApplicationTestFixtures;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftService;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftCandidate;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftRepository;
 import com.alexastudillo.taxdocument.application.invoicedraft.PersistedInvoiceDraft;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
-import com.alexastudillo.taxdocument.infrastructure.invoicedraft.InvoiceDraftTelemetry;
 import com.alexastudillo.taxdocument.infrastructure.invoicedraft.PostgreSqlTestResource;
 import com.alexastudillo.taxdocument.support.FixedRequestClock;
 import com.fasterxml.jackson.databind.JsonNode;

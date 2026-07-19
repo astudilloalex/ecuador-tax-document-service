@@ -19,10 +19,7 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.microprofile.config.ConfigProvider;
 
-/**
- * Captures immutable request time, deadline, and safe correlation before body
- * consumption.
- */
+/** Captures immutable request time, deadline, and safe correlation before body consumption. */
 @ApplicationScoped
 public final class InvoiceDraftRequestBoundary {
   private static final String PATH = "/api/v1/invoice-drafts";
@@ -44,7 +41,8 @@ public final class InvoiceDraftRequestBoundary {
     this.correlationHeader = correlationHeader;
     this.objectMapper = objectMapper;
     this.telemetry = telemetry;
-    requestDeadline = ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class);
+    requestDeadline =
+        ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class);
   }
 
   void install(@Observes Router router) {
@@ -55,11 +53,12 @@ public final class InvoiceDraftRequestBoundary {
             context -> {
               BoundaryState state = capture(context);
               context.put(STATE_KEY, state);
-              long timerId = context
-                  .vertx()
-                  .setTimer(
-                      Math.max(1L, requestDeadline.toMillis()),
-                      ignored -> deadlineReached(context, state));
+              long timerId =
+                  context
+                      .vertx()
+                      .setTimer(
+                          Math.max(1L, requestDeadline.toMillis()),
+                          ignored -> deadlineReached(context, state));
               state.timerId(timerId);
               context.addEndHandler(ignored -> context.vertx().cancelTimer(state.timerId()));
               context.next();
@@ -79,8 +78,8 @@ public final class InvoiceDraftRequestBoundary {
     long startedNanos = System.nanoTime();
     Instant requestInstant = clock.requestTime();
     RequestDeadline deadline = RequestDeadline.start(requestDeadline);
-    CorrelationHeader.Classification correlation = correlationHeader
-        .classify(context.request().headers().getAll("X-Correlation-Id"));
+    CorrelationHeader.Classification correlation =
+        correlationHeader.classify(context.request().headers().getAll("X-Correlation-Id"));
     return new BoundaryState(requestInstant, deadline, correlation, startedNanos);
   }
 
@@ -98,15 +97,16 @@ public final class InvoiceDraftRequestBoundary {
     if (!state.acceptTerminal()) {
       return;
     }
-    ProblemDetails problem = new ProblemDetails(
-        URI.create("urn:ecuador-tax-document-service:problem:request_timeout"),
-        "Request timeout",
-        504,
-        "REQUEST_TIMEOUT",
-        "The Invoice Draft request exceeded its deadline",
-        URI.create(PATH),
-        state.correlation().safeValue(),
-        null);
+    ProblemDetails problem =
+        new ProblemDetails(
+            URI.create("urn:ecuador-tax-document-service:problem:request_timeout"),
+            "Request timeout",
+            504,
+            "REQUEST_TIMEOUT",
+            "The Invoice Draft request exceeded its deadline",
+            URI.create(PATH),
+            state.correlation().safeValue(),
+            null);
     try {
       Buffer body = Buffer.buffer(objectMapper.writeValueAsBytes(problem));
       context

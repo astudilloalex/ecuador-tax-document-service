@@ -47,12 +47,13 @@ public final class InvoiceDraftResource {
 
   @POST
   public Uni<Response> create(JsonNode decodedRequest) {
-    Uni<CreateInvoiceDraftResult> application = Uni.createFrom()
-        .item(() -> bind(decodedRequest))
-        .onItem()
-        .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
-        .onItem()
-        .transformToUni(useCase::create);
+    Uni<CreateInvoiceDraftResult> application =
+        Uni.createFrom()
+            .item(() -> bind(decodedRequest))
+            .onItem()
+            .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
+            .onItem()
+            .transformToUni(useCase::create);
     return deadlineHandler
         .race(application, state)
         .onItem()

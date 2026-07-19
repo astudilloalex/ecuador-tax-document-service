@@ -13,7 +13,7 @@ class SensitiveDataExposureTest {
     String source =
         Files.readString(
             Path.of(
-                "src/main/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/InvoiceDraftTelemetry.java"));
+                "src/main/java/com/alexastudillo/taxdocument/api/invoicedraft/telemetry/InvoiceDraftTelemetry.java"));
     assertTrue(source.contains("request_deadline_exceeded_after_response_commit"));
     assertTrue(source.contains("correlationId"));
     assertTrue(source.contains("draftId"));
