@@ -34,8 +34,8 @@ import org.junit.jupiter.api.Test;
 class FiscalPreparationJvmSmokeIT {
   private static final String COMPANY = "b1111111-1111-4111-8111-111111111111";
   private static final UUID EMISSION_POINT =
-      UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-  private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules();
+      Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"));
+  private static final ObjectMapper JSON = Objects.requireNonNull(new ObjectMapper().findAndRegisterModules());
   private static AuthoritativeFiscalContextFixture fixture;
   private static @Nullable DevServicesContext devServicesContext;
 

@@ -5,7 +5,10 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalDesignation;
 import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalPreparation;
 import jakarta.enterprise.context.ApplicationScoped;
 
-/** Copies a committed immutable domain result into the exact API success representation. */
+/**
+ * Copies a committed immutable domain result into the exact API success
+ * representation.
+ */
 @ApplicationScoped
 public final class FiscalPreparationApiMapper {
   public FiscalPreparationResponse toResponse(FiscalPreparation preparation) {

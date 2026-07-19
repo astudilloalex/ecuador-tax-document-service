@@ -12,6 +12,8 @@ import java.net.URI;
 import java.util.Locale;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /** Maps stable Fiscal Preparation failures without exposing causes, SQL, or fiscal values. */
 @Provider
 @ApplicationScoped
@@ -28,7 +30,10 @@ public final class FiscalPreparationExceptionMapper
   }
 
   @Override
-  public Response toResponse(FiscalPreparationApplicationException exception) {
+  public Response toResponse(@Nullable FiscalPreparationApplicationException exception) {
+    if (exception == null) {
+      return Response.status(500).build();
+    }
     FiscalPreparationFailure failure = exception.failure();
     int status = status(failure.code());
     String correlation = state.safeCorrelationOrGenerated();

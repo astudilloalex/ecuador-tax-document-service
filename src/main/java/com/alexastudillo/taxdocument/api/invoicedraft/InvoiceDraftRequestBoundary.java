@@ -18,6 +18,7 @@ import jakarta.enterprise.event.Observes;
 import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jspecify.annotations.NullMarked;
@@ -56,7 +57,7 @@ public final class InvoiceDraftRequestBoundary {
         .order(RouteConstants.ROUTE_ORDER_BODY_HANDLER - 1)
         .handler(
             context -> {
-              BoundaryState state = capture(context);
+              BoundaryState state = capture(Objects.requireNonNull(context, "context"));
               context.put(STATE_KEY, state);
               long timerId =
                   context

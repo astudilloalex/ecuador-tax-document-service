@@ -59,7 +59,7 @@ public final class FiscalPreparationResource {
                     new FiscalPreparationApplicationException(
                         FiscalPreparationFailure.of(FiscalPreparationFailure.Code.INTERNAL_ERROR),
                         error));
-    return deadlineHandler.race(application, state).onItem().transform(this::successResponse);
+    return deadlineHandler.race(application, state).onItem().transform(res -> successResponse(res));
   }
 
   private Response successResponse(PrepareInvoiceForFiscalIssuanceResult result) {

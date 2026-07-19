@@ -35,8 +35,8 @@ public final class InvoiceDraftApiMapper {
               request.buyer().address(),
               request.buyer().email(),
               request.buyer().telephone()),
-          request.lines().stream().map(this::lineInput).toList(),
-          request.payments().stream().map(this::paymentInput).toList(),
+          request.lines().stream().map(line -> lineInput(line)).toList(),
+          request.payments().stream().map(payment -> paymentInput(payment)).toList(),
           additionalInformationInputs(request));
     } catch (NullPointerException | NumberFormatException exception) {
       throw new ProblemDetails.ApiException(
@@ -63,10 +63,10 @@ public final class InvoiceDraftApiMapper {
             draft.buyer().address(),
             draft.buyer().email(),
             draft.buyer().telephone()),
-        draft.lines().stream().map(this::lineResponse).toList(),
-        draft.taxTotals().stream().map(this::taxResponse).toList(),
-        draft.payments().stream().map(this::paymentResponse).toList(),
-        draft.additionalInformation().stream().map(this::additionalInformationResponse).toList(),
+        draft.lines().stream().map(line -> lineResponse(line)).toList(),
+        draft.taxTotals().stream().map(tax -> taxResponse(tax)).toList(),
+        draft.payments().stream().map(payment -> paymentResponse(payment)).toList(),
+        draft.additionalInformation().stream().map(info -> additionalInformationResponse(info)).toList(),
         draft.subtotalBeforeTaxes(),
         draft.totalDiscount(),
         draft.grandTotal(),
@@ -96,7 +96,7 @@ public final class InvoiceDraftApiMapper {
     if (request.additionalInformation() == null) {
       return List.of();
     }
-    return request.additionalInformation().stream().map(this::additionalInformationInput).toList();
+    return request.additionalInformation().stream().map(info -> additionalInformationInput(info)).toList();
   }
 
   private CreateInvoiceDraftCommand.AdditionalInformationInput additionalInformationInput(

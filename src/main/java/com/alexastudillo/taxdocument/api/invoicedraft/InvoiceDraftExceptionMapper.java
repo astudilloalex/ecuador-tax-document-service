@@ -14,6 +14,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import java.util.UUID;
 import org.jspecify.annotations.NullMarked;
 
@@ -33,7 +34,10 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
   }
 
   @Override
-  public Response toResponse(Throwable exception) {
+  public Response toResponse(@Nullable Throwable exception) {
+    if (exception == null) {
+      return Response.status(500).build();
+    }
     Mapping mapping = mapping(exception);
     String correlation = safeCorrelation();
     state.acceptTerminal();
