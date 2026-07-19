@@ -84,7 +84,7 @@ class FiscalPreparationOpenApiContractTest {
     assertFalse(contract.contains("\"401\""));
     assertFalse(contract.contains("\"403\""));
     assertFalse(contract.contains("companyId"));
-    for (String path : runtime.required("paths").propertyStream().map(Map.Entry::getKey).toList()) {
+    for (String path : runtime.required("paths").propertyStream().map(entry -> entry.getKey()).toList()) {
       assertFalse(
           path.matches(
               ".*(xml|sign|certificate|sri|ride|pdf|email|webhook|queue|cancel|baseline).*"));

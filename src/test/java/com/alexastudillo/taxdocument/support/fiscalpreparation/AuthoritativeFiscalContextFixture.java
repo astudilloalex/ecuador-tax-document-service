@@ -189,7 +189,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
 
   @Override
   public void close() {
-    connections.forEach(HttpConnection::close);
+    connections.forEach(connection -> connection.close());
     server
         .close()
         .toCompletionStage()

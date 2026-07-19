@@ -83,7 +83,7 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
 
   @Override
   public void close() {
-    connections.forEach(NetSocket::close);
+    connections.forEach(socket -> socket.close());
     vertx
         .close()
         .toCompletionStage()
