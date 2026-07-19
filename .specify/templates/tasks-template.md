@@ -32,10 +32,12 @@ independently testable increment of the single bounded feature outcome.
 - All target names, paths, comments, fixtures, and documentation MUST use approved English
   terminology.
 - A Company-scoped API feature MUST include tasks for the `X-Company-Id` header contract,
-  application-level Company UUID mapping, ownership/idempotency scoping, and boundary tests. It
-  MUST NOT include Company lookup ports or clients, authentication or authorization, Company
-  master-data CRUD or tables, cross-service foreign keys/repositories/transactions, Company caches,
-  background replication, or draft-time fiscal snapshots.
+  request-body/input-schema exclusion, any explicitly contracted response Company identifier,
+  application-level Company UUID mapping, Company-owned aggregate/persistence/idempotency scoping,
+  immutable global-SRI-catalog non-scoping, and boundary tests. It MUST NOT include Company lookup
+  ports or clients, authentication or authorization, Company master-data CRUD or tables,
+  cross-service foreign keys/repositories/transactions, Company caches, background replication, or
+  draft-time fiscal snapshots.
 
 ## Path Conventions
 

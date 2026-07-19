@@ -5,6 +5,9 @@ traceability before task generation
 
 **Created**: 2026-07-12
 
+**Regenerated**: 2026-07-15 against Constitution v2.0.1 and the reconciled specification, plan,
+contract, reference baseline, data model, and supporting design artifacts
+
 **Feature**: [`spec.md`](../spec.md) and [`plan.md`](../plan.md)
 
 **Audience/Timing**: Owner and peer reviewer; formal pre-task gate
@@ -13,12 +16,17 @@ traceability before task generation
 implementation test. `[x]` means the cited documents objectively satisfy the criterion; it does
 not assert that code, migrations, or runtime evidence already exist.
 
+**Governance supersession**: The historical requirements-quality PASS did not satisfy or evidence
+the later mandatory post-task `$speckit-analyze` gate. `astudilloalex` approved the retrospective
+and `GATE-GOV-001` is released; the checked items below remain requirement-quality evidence, not a
+substitute for the current analysis or T017/T018 implementation evidence.
+
 ## Governance and Authority
 
-- [ ] CHK001 Is Constitution v2.0.0 approved on the authoritative main branch as required before
-  feature task generation? [Dependency, Governance]
-  - Evidence: `plan.md` §Constitution Check records local `main` and `origin/main` at v1.0.0;
-    `.specify/memory/constitution.md` on `6-ft-1` is v2.0.0.
+- [x] CHK001 Is the historical v2.0.0 baseline preserved and the requested Company-boundary
+  clarification applied through a formal PATCH amendment? [Dependency, Governance]
+  - Evidence: historical commit `137d1c8c59cc98402f0a1fed211a6caccad4c883`; current
+    `.specify/memory/constitution.md` v2.0.1 Sync Impact Report/version/date and aligned templates.
 - [x] CHK002 Is the source-authority order applied and are official facts distinguished from
   target-service decisions? [Consistency, Evidence]
   - Evidence: `spec.md` §Authority and Evidence/Source Conflicts;
@@ -37,8 +45,9 @@ not assert that code, migrations, or runtime evidence already exist.
   `POST /api/v1/invoice-drafts`? [Consistency]
   - Evidence: `spec.md` §In Scope; `plan.md` §Summary/API and Error Contract; OpenAPI `servers` and
     `paths./invoice-drafts.post`.
-- [x] CHK006 Is CompanyId accepted exclusively through required `X-Company-Id`, with path, query,
-  body, token, session, and thread-local alternatives prohibited? [Coverage]
+- [x] CHK006 Is authoritative CompanyId input accepted exclusively through required
+  `X-Company-Id`, with request-body/input/path/query/token/session/thread-local alternatives
+  prohibited while explicitly contracted response CompanyId remains allowed? [Coverage]
   - Evidence: `spec.md` FR-001–FR-003/FR-040; OpenAPI `CompanyContext` and
     `CreateInvoiceDraftRequest`; `plan.md` §Company Context and Sensitive-Data Design.
 - [x] CHK007 Are header presence, one-value cardinality, trimming, nonblank content, UUID syntax,
@@ -53,8 +62,8 @@ not assert that code, migrations, or runtime evidence already exist.
   without leaking HTTP abstractions below the API boundary? [Traceability]
   - Evidence: `spec.md` FR-037/FR-040; `plan.md` §Clean Architecture Mapping;
     `data-model.md` §Invoice Draft Aggregate Root/Boundary Rules.
-- [x] CHK010 Is CompanyId consistently described as persistence/idempotency partitioning rather
-  than authentication, authorization, or proof of entitlement? [Consistency]
+- [x] CHK010 Does every aggregate/binding repository query or mutation enforce CompanyId as
+  partitioning—not authorization—while global SRI reference catalogs remain unscoped? [Consistency]
   - Evidence: `spec.md` FR-024/DR-018/Key Entities; `plan.md` §Company Ownership Scoping;
     `docs/migration/terminology-mapping.md` Company entries.
 
@@ -68,7 +77,8 @@ not assert that code, migrations, or runtime evidence already exist.
 - [x] CHK012 Does the API contract explicitly omit security schemes, security requirements,
   Authorization headers, and 401/403 outcomes? [Consistency]
   - Evidence: `spec.md` FR-039/SC-024; `plan.md` §API and Error Contract; OpenAPI root,
-    components, and response map.
+    components, and response map; `mp.openapi.scan.disable=true` plus packaged `/q/openapi`
+    semantic-equality evidence planned in T012/T042.
 - [x] CHK013 Are Company existence, state, eligibility, caller entitlement, tenant ownership, and
   Company/Issuer/establishment/emission-point relationship checks explicitly absent? [Completeness]
   - Evidence: `spec.md` FR-003/FR-036/Scenario 35; `plan.md` §Company Master-Data Boundary;
@@ -104,8 +114,8 @@ not assert that code, migrations, or runtime evidence already exist.
 ## Reference-Data Baseline
 
 - [x] CHK020 Is the supported buyer-identification baseline complete for official codes 04–08,
-  with labels, English names, validation strategies, target validity, activity, version, source,
-  and approval? [Completeness]
+  with labels, English names, executable ASCII repertoires, case/normalization rules, validation
+  strategies, target validity, activity, version, source, and approval? [Completeness]
   - Evidence: `reference-data-baseline.md` §Approved Buyer-Identification Types.
 - [x] CHK021 Are buyer strategies evidence-bounded and explicit that RUC/Cédula checksum and online
   registry/name verification are outside this feature? [Evidence, Clarity]
@@ -155,21 +165,29 @@ not assert that code, migrations, or runtime evidence already exist.
   aggregation, and reconciliation ownership unambiguous? [Clarity]
   - Evidence: `spec.md` FR-012–FR-016/DR-002–DR-011; `plan.md` §Technical Context;
     `data-model.md` monetary fields.
-- [x] CHK033 Are one IVA rule per line, four treatment classes, separate zero-tax grouping, and
-  non-IVA/multiple-tax rejection complete? [Coverage]
+- [x] CHK033 Are one active/effective `family=IVA` rule per line, four treatment classes, separate
+  zero-tax grouping, and non-IVA/multiple-tax rejection complete without inventing a parent
+  tax-category entity? [Coverage]
   - Evidence: `spec.md` FR-010–FR-011/DR-005/DR-008; OpenAPI `TaxTreatment`;
-    `data-model.md` §Invoice Line Tax Selection/Grouped Tax Total.
+    `data-model.md` §Invoice Line Tax Selection/Grouped Tax Total; `persistence-design.md` exact IVA
+    catalog structure.
 - [x] CHK034 Are zero-value drafts, explicit tax selection, exactly one zero payment, positive
-  payment rules, exact reconciliation, and duplicate-method rejection complete? [Coverage]
+  payment rules including the eight-method maximum, exact reconciliation, and duplicate-method
+  rejection complete? [Coverage]
   - Evidence: `spec.md` FR-013–FR-014/DR-016/DR-022; `data-model.md` §Payment;
-    `quickstart.md` §Fiscal, Monetary, and Boundary Vectors.
-- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing,
-  commit-instant timestamp, and replay-date semantics complete? [Clarity]
+    `reference-data-baseline.md` eight approved payment methods; `quickstart.md` §Fiscal, Monetary,
+    and Boundary Vectors.
+- [x] CHK035 Are one-request-instant, America/Guayaquil current-date, midnight crossing, one
+  T076-owned in-transaction clock invocation assigned equally to `createdAt`/`updatedAt`,
+  timestamp-free candidate, rollback/non-physical-commit semantics, and replay-date/timestamp
+  semantics complete? [Clarity]
   - Evidence: `spec.md` FR-006/DR-012; `plan.md` §Time Boundary;
     `operational-requirements.md` §Measurement Boundary; `quickstart.md` dynamic date.
-- [x] CHK036 Are text trimming, limits, contact formats, control-character rejection, collection
-  maxima, uniqueness, and collection order semantics complete? [Coverage]
-  - Evidence: `spec.md` FR-008–FR-010/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
+- [x] CHK036 Are Application-only Stage-6 normalization, unchanged API handoff, zero downstream
+  normalization, exact product/passport/foreign ASCII patterns, canonical 300-code-point/
+  `CANONICAL_NAME_TOO_LONG` behavior, case/normalization, contact formats, control-character
+  rejection, collection maxima, uniqueness, and order semantics complete? [Coverage]
+  - Evidence: `spec.md` FR-008–FR-010/FR-013/FR-015/FR-035/DR-019/DR-021; OpenAPI request schemas;
     `quickstart.md` §Strict Request Fields/Boundary Vectors.
 - [x] CHK037 Is every caller-supplied calculated field rejected consistently rather than ignored,
   compared, or persisted? [Consistency]
@@ -178,7 +196,8 @@ not assert that code, migrations, or runtime evidence already exist.
 
 ## Persistence, Idempotency, and Failure Semantics
 
-- [x] CHK038 Is Company-scoped idempotency exactly CompanyId plus key hash, with uniqueness
+- [x] CHK038 Is Idempotency-Key mandatory/exactly single-valued with stable missing/invalid/multiple
+  outcomes and one-time normalization, then scoped exactly by CompanyId plus key hash with
   `UNIQUE (company_id, idempotency_key_hash)`? [Clarity]
   - Evidence: `spec.md` FR-027–FR-030; `data-model.md` §Local Idempotency Binding;
     `persistence-design.md` §Concurrency Arbitration.
@@ -197,7 +216,8 @@ not assert that code, migrations, or runtime evidence already exist.
 - [x] CHK042 Are stable errors, HTTP statuses, retry actions, persistence guarantees, and the exact
   12-stage failure precedence aligned? [Consistency]
   - Evidence: `spec.md` FR-025/FR-041–FR-044; `error-catalog.md` §Stable Outcomes/Failure
-    Precedence; OpenAPI responses.
+    Precedence; `plan.md` §Failure-Precedence Ownership ordered upload/pre-entity/entity pipeline;
+    OpenAPI responses; T032–T034/T083–T084/T086–T089.
 
 ## Sensitive Data, Correlation, Operations, and Runtime
 
@@ -230,12 +250,39 @@ not assert that code, migrations, or runtime evidence already exist.
   - Evidence: `traceability.md` §Functional Requirements/Domain Rules/Success Criteria/Acceptance
     Scenario Coverage/Stable Error Coverage/Cross-Cutting Constitutional Evidence.
 
+## Latest Analysis Remediation Quality
+
+- [x] CHK049 Does the governance record contain an inspected row for every T001–T016 task and leave
+  owner fields empty? [Governance] — Evidence: `governance-retrospective-review.md`,
+  `governance-owner-approval.md`.
+- [x] CHK050 Are immutable V3, pending T017 V5, pending T018 cross-layer/PostgreSQL vectors, and the
+  block before T017 explicit? [Persistence] — Evidence: `tasks.md`, `persistence-design.md`, GOV-001.
+- [x] CHK051 Is FR-041 executable as Stage 10, Stage 11A, exact ordered Stage 11B, with deadline and
+  HTTP ownership exclusively in API? [Architecture] — Evidence: spec/plan/error catalog/tasks.
+- [x] CHK052 Does the general-text policy define NFC, prohibited categories/separators, only
+  `U+0020`, code-point lengths, comparison, emoji, and persisted Java `canonicalName` vectors?
+  [Clarity] — Evidence: spec, OpenAPI, data model, quickstart, traceability.
+- [x] CHK053 Does payment lookup use `(paymentMethodId, emissionDate)` with inclusive boundaries and
+  all required activity/effectivity vectors? [Consistency] — Evidence: FR-013, scenarios 62–68,
+  reference baseline, plan/tasks.
+- [x] CHK054 Is T076 the sole persistence-clock invocation owner and T063 explicitly unable to
+  invoke/supply/replace `createdAt`? [Ownership] — Evidence: FR-019/DR-012, plan/data/persistence,
+  tasks T027/T036/T059/T063/T076/T077.
+- [x] CHK055 Are Constitution v2.0.1 Company request/response and owned-aggregate/global-catalog
+  semantics aligned without Company columns/predicates on global SRI catalogs? [Governance] —
+  Evidence: Constitution, spec, plan, data model, tasks, OpenAPI.
+
 ## Gate Result
 
-- Total items: 48
-- Checked items: 47
-- Unchecked items: 1
-- Remaining material item: CHK001 — Constitution v2.0.0 is not yet approved on `main`.
+- Total items: 55
+- Checked items: 55
+- Unchecked items: 0
+- Remaining requirements-quality items: 0
+- Remaining implementation-governance conditions: current analysis before T017; pending T017/T018
 
-The checklist MUST NOT be fully checked until the owner merges Constitution v2.0.0 to `main` and
-rebases `6-ft-1`. No other material requirements-quality gap is recorded.
+**Historical requirements-quality result**: PASS — the written requirements have no remaining
+material quality gap.
+
+**Current implementation progression**: `GATE-GOV-001` is **RELEASED**. The current analysis gate
+remains before T017; T017/T018 are pending, and T019 remains blocked until both pass. This
+checklist does not satisfy those implementation conditions.

@@ -41,6 +41,25 @@
 
 ## Notes
 
-- After reconciliation with Constitution v2.0.0, 23 of 23 items pass.
-- Fiscal, date, identification, tax, zero-value, idempotency, size, calculated-field, and Company
-  header/ownership-boundary ambiguities are resolved in the specification.
+- All 23 quality items were reevaluated after the specification-boundary rewrite.
+- **No premature implementation choices**: `spec.md` now states stakeholder goals, observable HTTP
+  contract behavior, business rules, official evidence, exclusions, assumptions, and measurable
+  outcomes only. Architecture, runtime, storage, migration, internal-model, and task decisions remain
+  in planning and design artifacts.
+- **Written for non-technical stakeholders**: timestamp, all-or-nothing save, normalization,
+  idempotency, Company isolation, reference data, deadline, and failure rules are expressed as
+  externally observable outcomes understandable by product, fiscal, QA, and API stakeholders.
+- **Technology-agnostic success criteria**: SC-001 through SC-033 measure request/response results,
+  saved or absent state, deterministic calculations, isolation, timing, and prohibited side effects;
+  they name no framework, language, database, migration tool, architecture layer, internal model,
+  task, source path, or test class.
+- **No planning detail leakage**: the mandatory term scan finds no framework or language name,
+  storage or migration technology, internal component/model, architecture ownership, task ID,
+  source path, physical storage type, or workflow command in `spec.md`. The approved route and HTTP
+  headers remain because they are externally observable contract requirements.
+- Technical decisions were preserved in `plan.md`, `data-model.md`, `persistence-design.md`,
+  `reference-data-baseline.md`, `research.md`, `operational-requirements.md`, and `tasks.md`; no
+  approved feature behavior was removed or weakened.
+- Fiscal, date, identification, tax, zero-value, idempotency, size, calculated-field, text,
+  timestamp, deadline, reference-data, and Company-boundary decisions remain explicit and traceable
+  under their original FR, DR, SC, and acceptance-scenario identifiers.

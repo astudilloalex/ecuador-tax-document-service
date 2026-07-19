@@ -1,7 +1,7 @@
 # Data Model: Create Invoice Draft
 
 **Feature**: `001-create-invoice-draft`
-**Constitution**: v2.0.0
+**Constitution**: v2.0.1
 **Source**: `specs/001-create-invoice-draft/spec.md`
 
 ## Boundary Rules
@@ -10,36 +10,98 @@
   no HTTP, JSON, Quarkus, Panache, PostgreSQL, security, or Mutiny types.
 - The API maps `X-Company-Id` to an application `CompanyId`. The application command carries
   CompanyId explicitly. The aggregate stores it as immutable ownership data.
+- The API decodes JSON and validates transport representation but forwards business text without
+  NFC normalization, trimming, internal-space collapse, lowercase conversion, or `canonicalName`
+  derivation. Application owns exactly one Stage-6 `BusinessTextNormalizer` invocation for each
+  supplied applicable value and invokes it zero times for an absent optional value; Domain and
+  Infrastructure receive only normalized output and do not normalize again.
 - Panache models are infrastructure persistence models and are mapped explicitly to/from domain
   objects.
 - Flyway is the only schema and reference-data evolution mechanism.
 - No Company Service, identity provider, SRI service, cache, or other external datastore
   participates in this model.
 
-## Aggregate Root: Invoice Draft
+## Application Persistence Models
+
+### InvoiceDraftCandidate
+
+`InvoiceDraftCandidate` is the fully normalized, validated, and calculated Application model passed
+to the persistence port for a logically new draft. It contains all approved business data but no
+`createdAt`, `updatedAt`, Panache/database entity, HTTP information, physical commit metadata, or
+provisional timestamp. Null, zero, placeholder, provisional, and fabricated timestamps are not
+valid candidate state. Application obtains every local root and child UUID through
+`DraftIdentifierGenerator` after validation/calculation and before constructing this model; the
+candidate therefore carries the final identifiers that persistence must preserve. It also carries
+authoritative CompanyId and the already derived idempotency key hash, request fingerprint, and
+normalization version required to persist the binding atomically, but never the raw key or an HTTP
+header representation.
+
+### PersistedInvoiceDraft
+
+`PersistedInvoiceDraft` is the successful persistence-port result returned only after commit. It
+contains the final local identifier, the persisted business values required by the application
+response, `createdAt`, and `updatedAt`. On initial creation, both timestamp properties contain the
+exact same `java.time.Instant` obtained by the persistence adapter's single transactional-clock
+invocation. A replay loads and returns the originally persisted result without invoking the clock or
+changing either timestamp.
+
+Neither conceptual model is an HTTP DTO or Panache entity. Application constructs the candidate;
+Infrastructure constructs the persisted result from committed persistence state. Application,
+Domain, API, and mapping components never generate either timestamp; mappers only copy the values
+carried by `PersistedInvoiceDraft`.
+
+The conceptual application-owned persistence-port operation is:
+
+```text
+persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>
+```
+
+The port accepts no HTTP type, timestamped candidate, placeholder timestamp, Panache entity, or
+commit metadata and returns no persistence entity or HTTP error. Application is the sole local
+identifier-allocation owner; Infrastructure never generates, replaces, or repairs a candidate
+identifier. The persistence adapter is the sole timestamp owner and returns the final committed
+representation. Domain objects still enforce invariants over normalized values; the candidate is
+the Application handoff assembled from those accepted domain/calculation results, not a transport
+DTO or replacement persistence entity.
+
+Mapper responsibilities are intentionally asymmetric:
+
+- API request mapping decodes transport structure and preserves raw decoded business text;
+- Application mapping consumes Stage-6 normalized values, accepted domain values, calculations,
+  and Application-owned identifiers to construct the candidate;
+- Infrastructure mapping copies candidate values into Panache records, copies the adapter's single
+  clock result into both root timestamp fields and the binding creation timestamp, and reconstructs
+  `PersistedInvoiceDraft` from committed state;
+- Application response mapping copies the persisted result into a transport-neutral result, and API
+  response mapping alone produces the HTTP representation.
+
+No mapper normalizes text, derives `canonicalName`, allocates an identifier, fabricates a
+timestamp, invokes a clock, or maps a persistence failure to HTTP.
+
+## Persisted Aggregate Root: Invoice Draft
 
 Logical persistence name: `invoice_draft`.
 
 | Field | Domain type | PostgreSQL type | Required | Rule |
 |-------|-------------|-----------------|----------|------|
-| `id` | `UUID` | `uuid` | Yes | Local primary key; not a fiscal identifier |
+| `id` | `UUID` | `uuid` | Yes | Final local primary key allocated by Application through `DraftIdentifierGenerator` and preserved by persistence; not a fiscal identifier |
 | `companyId` | `CompanyId` | `uuid` | Yes | Canonical non-nil UUID; immutable ownership partition |
-| `emissionPointId` | `UUID` | `uuid` | Yes | Canonical non-nil opaque external reference; no ownership/status inference |
-| `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from `requestCreationInstant` in `America/Guayaquil` |
+| `emissionPointId` | `UUID` | `uuid` | Yes | Application first trims surrounding ASCII SP/HTAB once, validates nonblank/non-nil UUID syntax, and supplies the canonical lowercase hyphenated opaque reference; blank/malformed/nil decoded strings return value-free `EMISSION_POINT_INVALID`; no ownership/status inference |
+| `emissionDate` | `LocalDate` | `date` | Yes | Date derived once from the earliest-boundary `requestCreationInstant` captured before body consumption in `America/Guayaquil` |
 | `buyerIdentificationTypeCode` | approved code | `varchar(2)` | Yes | One active/effective supported code |
 | `buyerIdentificationCatalogVersion` | approved version | `varchar(64)` | Yes | Version of the identification rule used for validation |
-| `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation |
-| `buyerLegalName` | validated text | `varchar(300)` | Yes | Trimmed, nonblank, no control characters |
-| `buyerAddress` | optional text | `varchar(300)` | No | Trimmed and valid when present |
-| `buyerEmail` | optional text | `varchar(254)` | No | One syntactically valid address |
+| `buyerIdentification` | validated text | `varchar(20)` | Yes | Type-specific official validation; codes `06`/`08` use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` |
+| `buyerLegalName` | normalized text | `varchar(300)` | Yes | NFC once, surrounding `U+0020` trimmed, 1–300 code points, prohibited categories/separators rejected |
+| `buyerAddress` | optional normalized text | `varchar(300)` | No | Same general-text policy; 1–300 code points when supplied |
+| `buyerEmail` | optional normalized text | `varchar(254)` | No | Case-preserved value satisfying the exact ASCII dot-atom profile after the one general-text pass: local part 1–64, DNS-style labels 1–63 with at least one dot, total 254 code points; invalid profile returns value-free `EMAIL_INVALID` |
 | `buyerTelephone` | optional text | `varchar(20)` | No | Approved character and digit-count rules |
 | `status` | `DraftStatus` | `varchar(16)` | Yes | Exactly `DRAFT` |
 | `currency` | `CurrencyCode` | `char(3)` | Yes | Exactly `USD` |
 | `subtotalBeforeTaxes` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
 | `totalDiscount` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
 | `grandTotal` | `BigDecimal` | `numeric(17,2)` | Yes | System-calculated; `0.00`–`999999999999999.99` |
-| `createdAt` | `Instant` | `timestamptz` | Yes | Unambiguous commit-time audit instant |
-| `updatedAt` | `Instant` | `timestamptz` | Yes | Initially equal to or after `createdAt` |
+| `createdAt` | `Instant` | `timestamptz` | Yes | UTC value captured once inside the transaction after successful business validation and immediately before root persistence; persisted/returned unchanged after commit |
+| `updatedAt` | `Instant` | `timestamptz` | Yes | On initial creation, exactly the same immutable `Instant` as `createdAt` |
 
 Mandatory root constraints:
 
@@ -50,11 +112,28 @@ Mandatory root constraints:
 - non-negative stored totals;
 - a local composite reference from buyer identification code and catalog version to the approved
   identification-type catalog row;
-- `updated_at >= created_at`;
+- type-conditional locale-independent ASCII checks, including `^[A-Za-z0-9]{1,20}$` for buyer
+  codes `06` and `08`;
+- `updated_at >= created_at` remains V3's immutable database guard; the stricter feature creation
+  invariant is enforced by T076 assigning `updated_at = created_at` from one clock result;
 - `UNIQUE (company_id, id)` to support local Company-consistent composite references.
 
-Every repository read or mutation that addresses an existing draft carries both CompanyId and
-draftId. This is persistence partitioning and aggregate consistency, not authorization.
+Every repository query or mutation involving the Invoice Draft aggregate or its idempotency binding
+includes and enforces authoritative CompanyId. Draft lookup uses CompanyId plus draftId; binding
+lookup uses CompanyId plus key hash; creation/mutation enforces CompanyId on root and composite
+binding integrity. Global VAT, payment-method, identification-type, and other immutable SRI
+reference catalogs are not Company-owned and have no Company filter or column. This is persistence
+partitioning and aggregate consistency, not authorization.
+
+Neither `createdAt` nor `updatedAt` is PostgreSQL's physical commit timestamp. Persistence does not
+query or reconstruct either value after commit and does not require `track_commit_timestamp`. The
+T076 transactional persistence operation is the sole persistence-clock owner: it accepts the
+timestamp-free `InvoiceDraftCandidate`, obtains one `java.time.Instant` inside the active
+transaction at the point above, and writes that same value to root `created_at`, root `updated_at`,
+and binding `created_at`. It returns a `PersistedInvoiceDraft` carrying both equal root timestamps.
+T063 orchestration neither calls this clock nor supplies, replaces, or overwrites either value. A
+second call in one creation attempt is prohibited; rollback prevents exposure, and replay returns
+both originally persisted root values without another clock invocation.
 
 Correlation identifiers are not persisted on the aggregate. They remain request/response,
 structured-log, trace, and operational-event evidence because no approved business requirement
@@ -66,11 +145,11 @@ Logical persistence name: `invoice_line`.
 
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
-| `id` | `uuid` | Local primary key |
+| `id` | `uuid` | Final local key allocated by Application through `DraftIdentifierGenerator`; persistence preserves it |
 | `invoiceDraftId` | `uuid` | Required local foreign key to `invoice_draft.id` |
 | `position` | `integer` | 1–500; unique within the draft; business-significant order |
-| `productCode` | `varchar(25)` | Trimmed approved alphanumeric value |
-| `description` | `varchar(300)` | Trimmed, nonblank text |
+| `productCode` | `varchar(25)` | Case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` after one surrounding SP/HTAB trim; no other normalization |
+| `description` | `varchar(300)` | General NFC/U+0020 policy; 1–300 Unicode code points |
 | `quantity` | `numeric(12,6)` | `0.000001`–`999999.999999` |
 | `unitPrice` | `numeric(12,6)` | `0.000000`–`999999.999999` |
 | `discount` | `numeric(17,2)` | `0.00`–`999999999999999.99`; no greater than gross amount |
@@ -78,7 +157,9 @@ Logical persistence name: `invoice_line`.
 | `netAmount` | `numeric(17,2)` | System-calculated; `0.00`–`999999999999999.99` |
 | `lineTotal` | `numeric(17,2)` | Net plus tax; `0.00`–`999999999999999.99` |
 
-Constraints include `UNIQUE (invoice_draft_id, position)` and row-local non-negative/scale checks.
+The final V3→V5 schema includes `UNIQUE (invoice_draft_id, position)`, locale-independent
+`CHECK (product_code ~ '^[A-Za-z0-9]{1,25}$')`, and row-local non-negative/scale checks. V3 is
+immutable; pending V5 replaces only the affected product/buyer constraints with exact ASCII rules.
 The maximum collection count is enforced before persistence and verified after aggregate loading;
 no speculative trigger is introduced.
 
@@ -90,7 +171,7 @@ Each line has exactly one persisted IVA selection and calculated result.
 
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
-| `id` | `uuid` | Local primary key |
+| `id` | `uuid` | Final local key allocated by Application through `DraftIdentifierGenerator`; persistence preserves it |
 | `invoiceLineId` | `uuid` | Unique required local foreign key to `invoice_line.id` |
 | `taxRuleId` | `uuid` | Selected local catalog rule |
 | `family` | `varchar(16)` | Exactly `IVA` |
@@ -110,7 +191,7 @@ Logical persistence name: `invoice_tax_total`.
 
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
-| `id` | `uuid` | Local primary key |
+| `id` | `uuid` | Final local key allocated by Application through `DraftIdentifierGenerator`; persistence preserves it |
 | `invoiceDraftId` | `uuid` | Required local foreign key |
 | `family` | `varchar(16)` | Exactly `IVA` |
 | `treatment` | `varchar(32)` | Approved treatment |
@@ -131,7 +212,7 @@ Logical persistence name: `invoice_payment`.
 
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
-| `id` | `uuid` | Local primary key |
+| `id` | `uuid` | Final local key allocated by Application through `DraftIdentifierGenerator`; persistence preserves it |
 | `invoiceDraftId` | `uuid` | Required local foreign key |
 | `paymentMethodId` | `uuid` | Selected local catalog method |
 | `officialCode` | `varchar(8)` | Versioned catalog value |
@@ -140,7 +221,10 @@ Logical persistence name: `invoice_payment`.
 | `catalogVersion` | `varchar(64)` | Applied catalog version |
 
 `UNIQUE (invoice_draft_id, payment_method_id)` prevents duplicate payment methods. Cross-row
-payment reconciliation remains a domain/application invariant verified before commit.
+payment reconciliation remains a calculated-value invariant verified in Stage 11B. The selected
+catalog row must exist, be active, and satisfy `target_valid_from <= emission_date` and
+`target_valid_to IS NULL OR emission_date <= target_valid_to`; lookup receives `emissionDate`, not
+server current date, request/transaction time, or `createdAt`.
 
 ## Child: Additional Information
 
@@ -148,15 +232,22 @@ Logical persistence name: `invoice_additional_information`.
 
 | Field | PostgreSQL type | Rule |
 |-------|-----------------|------|
-| `id` | `uuid` | Local primary key |
+| `id` | `uuid` | Final local key allocated by Application through `DraftIdentifierGenerator`; persistence preserves it |
 | `invoiceDraftId` | `uuid` | Required local foreign key |
 | `position` | `integer` | Stable response order |
-| `name` | `varchar(300)` | Trimmed, nonblank, no control characters |
-| `canonicalName` | `varchar(300)` | Canonical uniqueness value |
-| `value` | `varchar(300)` | Trimmed, nonblank, no control characters |
+| `name` | `varchar(300)` | NFC once, surrounding `U+0020` trimmed, display case/internal punctuation/spaces preserved, 1–300 code points |
+| `canonicalName` | `varchar(300)` | Persisted Application-produced value: reuse the display name's one NFC + U+0020-trim result → collapse U+0020 runs → `Locale.ROOT` lowercase → count 1–300 Unicode code points; never truncate |
+| `value` | `varchar(300)` | Same general display-text policy, 1–300 code points |
 
 Constraints include `UNIQUE (invoice_draft_id, canonical_name)` and
-`UNIQUE (invoice_draft_id, position)`. At most 15 entries are accepted.
+`UNIQUE (invoice_draft_id, position)`. At most 15 entries are accepted. PostgreSQL requires stored
+non-null/nonempty/bounded canonical values but never recalculates Java NFC or `Locale.ROOT` behavior.
+Application validates the derived value before fingerprinting, binding lookup, Domain entry, or
+persistence. Lowercase expansion can make a valid display name invalid: 150 occurrences of
+`U+0130` produce exactly 300 canonical code points and are accepted, while 151 produce 302 and are
+rejected without truncation using `BUSINESS_VALIDATION_FAILED` with violation
+`CANONICAL_NAME_TOO_LONG`, the original request field, maximum `300`, counting unit
+`UNICODE_CODE_POINTS`, and stage `CANONICALIZATION`.
 
 ## Local Idempotency Binding
 
@@ -169,7 +260,7 @@ Logical persistence name: `invoice_draft_idempotency`.
 | `requestFingerprint` | `bytea` | Yes | 32-byte SHA-256 of normalized client business content |
 | `normalizationVersion` | `smallint` | Yes | Positive version; initial value `1` |
 | `invoiceDraftId` | `uuid` | Yes | Bound local draft identifier |
-| `createdAt` | `timestamptz` | Yes | Successful binding instant |
+| `createdAt` | `timestamptz` | Yes | Same immutable transaction-captured UTC value as the bound draft |
 
 Required constraints:
 
@@ -284,8 +375,47 @@ Every column is `NOT NULL` except `source_valid_to` and `target_valid_to`.
 Flyway alone owns schema creation, initial baseline rows, and later catalog versions. The runtime
 has no catalog administration write path. A later official change adds a new immutable migration
 and versioned rows; it does not rewrite a committed migration or silently reinterpret a row used
-by an existing draft. These catalogs are local tax-document reference data, not Company master
-data.
+by an existing draft. These catalogs are locally persisted but globally governed tax-document
+reference data, not Company master data. They contain no `company_id`, and aggregate Company
+scoping does not apply to their reference lookups.
+
+## General Unicode Storage Boundary
+
+API decodes HTTP/JSON, rejects malformed representation, validates transport structure, and passes
+business text to Application unchanged. It does not perform NFC normalization, trim business text,
+collapse spaces, lowercase values, or calculate `canonicalName`.
+
+At the beginning of FR-041 Stage 6, Application first performs the emission-point trim, nonblank/
+non-nil UUID validation, and canonicalization; failure returns transport-neutral
+`EMISSION_POINT_INVALID` before any text transformation or lookup. After that succeeds,
+Application invokes one `BusinessTextNormalizer` exactly once for each supplied applicable value
+and zero times for an absent optional value. In exact order, that invocation normalizes to NFC;
+trims surrounding `U+0020`; rejects categories `Cc`, `Cf`, `Cs`,
+`Co`, `Cn`, `U+2028`, and `U+2029`; accepts only `U+0020` as spacing and rejects tabs, CR, LF,
+NBSP, and every other Unicode separator; preserves internal punctuation, internal `U+0020`, and
+display case; then counts and validates display length in Unicode code points. Comparison is
+case-sensitive unless a field rule overrides it. Assigned emoji such as `U+1F600` (`So`) is
+accepted when field format/length permits. When a canonical name applies, the same invocation
+reuses that already NFC-normalized and trimmed display value, collapses internal `U+0020`,
+lowercases with Java `Locale.ROOT`, counts the derived result, and rejects values over 300 code
+points using `CANONICAL_NAME_TOO_LONG` without truncation. It never repeats NFC or trimming.
+
+After that single normalization pass, Stage 10 applies the exact buyer-email ASCII dot-atom rule
+``^(?=.{1,254}$)(?=[^@]{1,64}@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$``
+to `buyerEmail`. It performs no additional trim, normalization, lowercase conversion, or truncation;
+case is stored and compared exactly. Accepted values have a 1–64-character local part, 1–63-
+character DNS-style labels, at least one domain dot, and at most 254 ASCII code points. Quoted local
+parts, comments, domain literals, internationalized text, internal whitespace, and multiple
+addresses return value-free `EMAIL_INVALID` for `buyer.email`. Persistence stores only the accepted
+normalized value and does not reproduce the grammar.
+
+Domain receives normalized values and Infrastructure receives supplied normalized/canonical values;
+neither normalizes again. PostgreSQL enforces nullability, nonempty values, maximum stored length,
+and required `canonical_name` but does not claim to reproduce Java Unicode normalization.
+Cross-layer tests use identical accented/decomposed, `U+0020`, tab/newline/NBSP, zero-width, emoji,
+case, code-point-boundary, and `U+0130` expansion vectors. Explicit ASCII
+product/passport/foreign-identification rules override the Unicode transformation but their one
+permitted SP/HTAB trim remains Application-owned.
 
 ## Numeric Storage Boundary
 
@@ -300,14 +430,17 @@ integrity barrier but do not replace pre-persistence validation.
 ## Aggregate Relationships
 
 ```text
-InvoiceDraft (companyId, id)
+PersistedInvoiceDraft / InvoiceDraft (companyId, id, createdAt, updatedAt)
 ├── 1..500 InvoiceLine
 │   └── exactly 1 InvoiceLineTax
 ├── 1..n InvoiceTaxTotal
-├── 1..10 InvoicePayment
+├── 1..8 InvoicePayment
 ├── 0..15 InvoiceAdditionalInformation
 └── exactly 1 InvoiceDraftIdempotency after successful creation
 ```
+
+`InvoiceDraftCandidate` is intentionally absent from this persistence relationship diagram because
+it is an Application handoff model, not a stored root or child record.
 
 Child foreign keys are local to the Tax Document Service database. There are no cross-service or
 cross-database foreign keys. Because update/deletion is outside this feature, destructive cascade
@@ -315,25 +448,51 @@ behavior is not introduced by this plan.
 
 ## Creation and Replay Lifecycle
 
-1. Capture `requestCreationInstant` exactly once and initialize safe correlation at the API
-   boundary.
-2. Validate and normalize CompanyId, then validate correlation, idempotency key, and request
-   representation in the FR-041 order.
-3. Derive the expected emission date once in `America/Guayaquil`, then compute the key hash and
-   request fingerprint under normalization version 1.
-4. Look up a binding by CompanyId and key hash.
-5. Return the original Company-scoped draft when the stored fingerprint is equal, or return
-   `IDEMPOTENCY_CONFLICT` when different.
-6. For an unbound command, validate local catalogs/domain rules and calculate all amounts using the
-   fixed expected date.
-7. Persist root, children, and binding in one reactive PostgreSQL transaction; `createdAt` is the
-   confirmed commit instant, not the emission-date source.
-8. If uniqueness arbitration loses, roll back all tentative rows and resolve the committed winner
-   in a fresh Company-scoped read.
+### Logically New Creation Flow
 
-Every pre-commit failure leaves no aggregate or binding. A committed binding remains authoritative
-after response loss and has no time-based expiration while its draft exists. Equivalent replay
-returns the original emission date without current-date revalidation.
+1. The earliest API boundary captures the fixed request instant before body consumption; API then
+   decodes the request after the payload/header gates and forwards decoded `emissionPointId` and
+   business text without normalization.
+2. Application performs the FR-041 ordered validation stages using mapped Company, request-time,
+   idempotency, correlation, and neutral deadline context.
+3. At Stage 6, Application trims, validates, and canonicalizes `emissionPointId` exactly once, then
+   invokes `BusinessTextNormalizer` exactly once for every supplied applicable business-text value
+   and derives/validates canonical text values.
+4. Application performs Stage 11A deterministic monetary calculation after Stage 10 and before
+   the ordered Stage 11B calculated-value checks.
+5. Application obtains all final local root and child identifiers from `DraftIdentifierGenerator`
+   and constructs the timestamp-free `InvoiceDraftCandidate`.
+6. Application passes the candidate to the persistence port.
+7. The persistence adapter opens or joins one bounded reactive PostgreSQL transaction.
+8. After all business validations have succeeded and immediately before root persistence, the
+   persistence adapter invokes the injected transactional clock exactly once.
+9. The persistence adapter assigns that same `java.time.Instant` to root `created_at` and
+   `updated_at` and uses it as binding `created_at` where the creation timestamp is required.
+10. The persistence adapter copies the candidate's supplied normalized values, calculated values,
+    and final identifiers into the complete root, children, and Company-scoped idempotency binding
+    and persists them atomically.
+11. After successful commit, the persistence adapter reconstructs and returns
+    `PersistedInvoiceDraft` with the original identifiers and equal creation timestamps.
+12. Application maps the persisted representation to a transport-neutral result without
+    regenerating identifiers, timestamps, or canonical values.
+13. API alone arbitrates the terminal result and maps the accepted result to HTTP.
+
+If uniqueness arbitration loses, the tentative transaction rolls back completely and a fresh
+Company-scoped read resolves the committed winner. Every confirmed rollback exposes neither
+timestamp and no created resource. The transaction may join an adapter-owned reactive transaction
+context supplied by the repository implementation, but the port itself exposes no transaction,
+Panache, or HTTP type.
+
+### Equivalent Replay Flow
+
+After Stage-6 normalization/fingerprinting and the Company-scoped binding match, the repository
+loads the existing persisted representation. Replay returns the original root identifier,
+persisted business values, `createdAt`, and `updatedAt`; it does not obtain new root/child
+identifiers, invoke the clock, rebuild `canonicalName`, construct another aggregate, change either
+timestamp, or revalidate emission date against the current date. A committed binding remains
+authoritative after response loss and has no time-based expiration while its draft exists. The
+retry request's one Stage-6 pass exists only to compute the comparable fingerprint; a matching
+binding never causes reconstruction of the stored aggregate's canonical values.
 
 ## Explicitly Excluded Data
 

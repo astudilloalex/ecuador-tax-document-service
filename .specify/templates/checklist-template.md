@@ -57,9 +57,9 @@ requirements; it MUST NOT test whether an implementation works or whether a task
 
 ## Service Data Ownership
 
-- [ ] CHK019 Is `X-Company-Id` the sole Company-context input, with exact cardinality, UUID, nil-value, normalization, placement, and stable-error rules? [Completeness, Spec §Functional Requirements]
+- [ ] CHK019 Is `X-Company-Id` the sole Company-context input, with exact cardinality, UUID, nil-value, normalization, placement, stable-error rules, request-body/input-schema exclusion, and any explicitly contracted response representation? [Completeness, Spec §Functional Requirements]
 - [ ] CHK020 Is the immutable external Company UUID clearly distinguished from authentication, authorization, Company master data, and a fiscal snapshot, with draft-time snapshots excluded? [Clarity, Spec §Key Entities]
-- [ ] CHK021 Are Company lookup/dependencies, authentication/authorization, Company administration, shared persistence, cross-service foreign keys or transactions, caching, background replication, and draft-time fiscal snapshots explicitly excluded? [Coverage, Spec §Exclusions and Non-Goals]
+- [ ] CHK021 Are Company-owned aggregate/persistence/idempotency operations scoped by the authoritative identifier while immutable global SRI catalogs remain outside automatic Company scope, and are Company lookup/dependencies, authentication/authorization, Company administration, shared persistence, cross-service foreign keys or transactions, caching, background replication, and draft-time fiscal snapshots explicitly excluded? [Coverage, Spec §Exclusions and Non-Goals]
 
 ## Notes
 

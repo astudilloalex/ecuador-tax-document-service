@@ -81,8 +81,6 @@ Execution steps:
    - Identity & uniqueness rules
    - Lifecycle/state transitions
    - Data volume / scale assumptions
-   - Company ownership scoping and the constitutional separation between draft data and later
-     fiscal-issuance snapshots
 
    Interaction & UX Flow:
    - Critical user journeys / sequences
@@ -94,8 +92,7 @@ Execution steps:
    - Scalability (horizontal/vertical, limits)
    - Reliability & availability (uptime, recovery expectations)
    - Observability (logging, metrics, tracing signals)
-   - Sensitive-data protection and threat assumptions; authentication and authorization inside
-     this repository are constitutionally out of scope and MUST NOT become clarification questions
+   - Security & privacy (authN/Z, data protection, threat assumptions)
    - Compliance / regulatory constraints (if any)
 
    Integration & External Dependencies:
@@ -136,9 +133,7 @@ Execution steps:
     - Only include questions whose answers materially impact architecture, data modeling, task decomposition, test design, UX behavior, operational readiness, or compliance validation.
     - Ensure category coverage balance: attempt to cover the highest impact unresolved categories first; avoid asking two low-impact questions when a single high-impact area (e.g., security posture) is unresolved.
     - Exclude questions already answered, trivial stylistic preferences, or plan-level execution details (unless blocking correctness).
-   - Favor clarifications that reduce downstream rework risk or prevent misaligned acceptance tests.
-   - Treat the constitutional `X-Company-Id`, no-authentication, no-Company-lookup, and no
-     draft-time-fiscal-snapshot decisions as already resolved. Never reopen them as questions.
+    - Favor clarifications that reduce downstream rework risk or prevent misaligned acceptance tests.
     - If more than 5 categories remain unresolved, select the top 5 by (Impact * Uncertainty) heuristic.
 
 5. Sequential questioning loop (interactive):

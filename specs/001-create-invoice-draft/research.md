@@ -1,11 +1,10 @@
 # Research: Create Invoice Draft
 
 **Feature**: `001-create-invoice-draft`
-**Date**: 2026-07-12
-**Constitution**: v2.0.0
+**Date**: 2026-07-16
+**Constitution**: v2.0.1
 **Status**: Complete — official evidence and target mappings are approved in
-`reference-data-baseline.md`; the separate Constitution-on-main governance gate remains outside
-this research status
+`reference-data-baseline.md`, and no material research Pending Functional Validation remains
 
 ## 1. Runtime and Framework Baseline
 
@@ -34,22 +33,47 @@ release baseline; native execution remains an optional evidence-based capability
 
 ## 2. Required Quarkus Capabilities
 
-**Decision**: Plan only the capabilities required for the approved feature:
+**Decision**: Use only these exact build capabilities. Every Quarkus artifact is version-managed by
+the Quarkus `3.33.2.1` platform BOM; no independently versioned Quarkus extension is permitted.
 
-- Quarkus REST with Jackson;
-- Hibernate Reactive with Panache;
-- reactive PostgreSQL client;
-- Flyway and the PostgreSQL JDBC migration driver;
-- Hibernate Validator;
-- SmallRye OpenAPI and Health;
-- Micrometer and OpenTelemetry when enabled by the operational profile;
-- JUnit 5, REST Assured, `UniAsserter`, and PostgreSQL test support.
+| Scope | Approved artifact or mechanism | Reason |
+|-------|--------------------------------|--------|
+| HTTP and JSON | `io.quarkus:quarkus-rest-jackson` | Implements the target-first synchronous JSON operation and distinct transport DTOs |
+| Validation | `io.quarkus:quarkus-hibernate-validator` | Enforces bounded transport representation before application mapping |
+| Reactive persistence | `io.quarkus:quarkus-hibernate-reactive-panache`, `io.quarkus:quarkus-reactive-pg-client` | Implements the required non-blocking PostgreSQL adapter while keeping Panache in infrastructure |
+| Migrations | `io.quarkus:quarkus-flyway`, `io.quarkus:quarkus-jdbc-postgresql` | Runs authoritative Flyway migrations during controlled startup; JDBC is migration-only |
+| Contract and health | `io.quarkus:quarkus-smallrye-openapi`, `io.quarkus:quarkus-smallrye-health` | Publishes the approved contract and distinct liveness/readiness behavior |
+| Observability | `io.quarkus:quarkus-micrometer`, `io.quarkus:quarkus-opentelemetry` | Supplies bounded metrics and safe trace correlation; exporters remain profile-controlled |
+| Quarkus/API tests | `io.quarkus:quarkus-junit`, `io.rest-assured:rest-assured` | Provides JUnit 5 Quarkus runtime tests and HTTP contract evidence |
+| Reactive tests | `io.quarkus:quarkus-test-vertx`, `io.quarkus:quarkus-test-hibernate-reactive-panache` | Provides `UniAsserter`, event-loop execution, and reactive transactional assertions |
+| PostgreSQL tests | Quarkus Database Dev Services supplied by the PostgreSQL extensions, pinned in test configuration to `docker.io/library/postgres:18.4` | Provides real PostgreSQL without a direct Testcontainers dependency or a second lifecycle mechanism |
+| Formatting | Gradle plugin `com.diffplug.spotless` `8.8.0` with `google-java-format` `1.35.0` | Provides one reproducible Java/Kotlin-Gradle formatting gate |
+| Static analysis | JDK 25 `javac -Xlint:all -Werror` plus the planned architecture tests | Uses the approved JDK and focused boundary evidence without another analyzer dependency |
 
 No OIDC, OAuth, JWT, Keycloak, security, token-propagation, Company REST client, cache, broker,
 SOAP, XML, signature, certificate, PDF, notification, or SRI adapter capability is in scope.
 
 **Rationale**: The capability set implements the approved Clean Architecture boundaries and local
 reactive persistence without introducing a distributed interaction or identity layer.
+
+**Alternatives considered**:
+
+- A directly declared Testcontainers PostgreSQL dependency and custom container lifecycle were
+  rejected because Quarkus Database Dev Services already supplies the required real PostgreSQL
+  lifecycle and permits an exact image pin.
+- Checkstyle, PMD, Error Prone, and a second formatter were rejected because JDK lint, Spotless,
+  focused architecture tests, and the required risk suites satisfy the current feature without
+  overlapping analyzers or configuration files.
+- An unversioned formatter engine was rejected because it would make formatting outcomes depend on
+  a future plugin default.
+
+**Official evidence**:
+
+- [Quarkus Hibernate Reactive with Panache and reactive-test artifacts](https://quarkus.io/guides/hibernate-reactive-panache)
+- [Quarkus testing and test-resource model](https://quarkus.io/guides/getting-started-testing)
+- [Quarkus Database Dev Services](https://quarkus.io/guides/databases-dev-services)
+- [Spotless Gradle plugin 8.8.0](https://plugins.gradle.org/plugin/com.diffplug.spotless/8.8.0)
+- [google-java-format 1.35.0](https://github.com/google/google-java-format/releases/tag/v1.35.0)
 
 ## 3. PostgreSQL Baseline
 
@@ -74,15 +98,18 @@ running the current minor for a supported major. It provides the UUID, exact num
 ## 4. Company Context and API Shape
 
 **Decision**: Expose `POST /invoice-drafts` under the existing `/api/v1` base. Require exactly one
-`X-Company-Id` header and one `Idempotency-Key` header. Accept an optional `X-Correlation-Id`.
+`X-Company-Id` header and exactly one parsed field value for the mandatory `Idempotency-Key`
+header. Accept an optional `X-Correlation-Id`.
 
 The Company header is trimmed, parsed as a non-nil UUID, and normalized to lowercase hyphenated
 form. It is mapped by the API layer to an application `CompanyId`; the application command carries
 that value explicitly; the aggregate stores it immutably.
 
 **Rationale**: This is the definitive constitutional business-context boundary. CompanyId is an
-ownership and idempotency partition, not a credential. No Company path, query, body, token,
-session, principal, or thread-local source is allowed.
+ownership and idempotency partition, not a credential. Company identifiers are forbidden in
+request bodies and input schemas; no path, query, token, session, principal, or thread-local source
+is allowed. Canonical CompanyId appears in the response only because the feature contract
+explicitly requires it.
 
 **Alternatives considered**:
 
@@ -91,6 +118,15 @@ session, principal, or thread-local source is allowed.
 - Body or query CompanyId: prohibited by the approved API contract.
 - Authentication-derived Company context: impossible by design because this feature has no
   application identity state.
+
+**Idempotency header decision**: The API trims leading/trailing ASCII SP/HTAB once, preserves
+internal characters and case, validates 1–128 normalized characters against
+`^[\x21-\x2B\x2D-\x7E](?:[\x20-\x2B\x2D-\x7E]{0,126}[\x21-\x2B\x2D-\x7E])?$`,
+and passes only the normalized value onward. Missing uses `IDEMPOTENCY_KEY_REQUIRED`; a single
+blank/whitespace-only, over-length, control, non-ASCII, or other non-comma grammar failure uses
+`IDEMPOTENCY_KEY_INVALID`; repeated/parser-multiple or any comma-containing/comma-combined
+ambiguous value uses `IDEMPOTENCY_KEY_MULTIPLE`. Choosing the first value is prohibited. This is
+an API concern; the domain receives already normalized and validated values.
 
 ## 5. Correlation Contract
 
@@ -118,6 +154,9 @@ generated identifiers remain UUIDs.
 |------|-------------|----------------------|
 | `COMPANY_CONTEXT_REQUIRED` | 400 | Correct request |
 | `COMPANY_CONTEXT_INVALID` | 400 | Correct request |
+| `IDEMPOTENCY_KEY_REQUIRED` | 400 | Supply exactly one key |
+| `IDEMPOTENCY_KEY_INVALID` | 400 | Correct the normalized key |
+| `IDEMPOTENCY_KEY_MULTIPLE` | 400 | Remove repeated/comma-combined values |
 | `INVALID_REQUEST` | 400 | Correct request |
 | `PROHIBITED_CALCULATED_FIELD` | 422 | Correct request |
 | `IDEMPOTENCY_CONFLICT` | 409 | Use a new key or original content |
@@ -129,14 +168,16 @@ generated identifiers remain UUIDs.
 
 **Rationale**: `400` covers representation/header syntax, `422` covers well-formed content rejected
 by approved validation, `409` covers the idempotency binding conflict, and `503`/`504` identify
-retryable local infrastructure outcomes. A retry uses the same Company and key because commit may
-have succeeded before response loss.
+retryable local infrastructure outcomes. `503` covers PostgreSQL unavailability or a configured
+database-operation timeout that becomes conclusive while shared request budget remains; `504` is
+reserved for expiry of the cross-cutting request deadline before the current outcome is conclusive.
+A retry uses the same Company and key because commit may have succeeded before response loss.
 
 ## 7. Deterministic Request Fingerprinting
 
 **Decision**: Persist two separate 32-byte SHA-256 values:
 
-- a domain-separated hash of the trimmed `Idempotency-Key`;
+- a domain-separated hash of the API-normalized `Idempotency-Key`;
 - a domain-separated fingerprint of normalized client-controlled business content.
 
 Persist `normalization_version = 1`. Do not persist the raw idempotency key or complete normalized
@@ -150,7 +191,7 @@ Normalization version 1:
 
 - canonical lowercase hyphenated UUIDs;
 - ISO `YYYY-MM-DD` emission date;
-- trimmed validated text;
+- Application Stage-6 normalized and validated business text; API does not normalize it;
 - canonical plain decimal representations with numerical equivalents normalized identically;
 - absent optional collections normalized to empty collections;
 - invoice-line order preserved;
@@ -176,10 +217,17 @@ records, and the idempotency binding. Use `UNIQUE (company_id, idempotency_key_h
 arbiter under PostgreSQL `READ COMMITTED`.
 
 Before the transaction, perform the approved request/fingerprint checks and a Company-scoped
-binding lookup. If no binding exists, validate local catalogs and domain rules, calculate, then
-write the aggregate and binding atomically. If concurrent insertion loses the uniqueness race, its
-transaction rolls back completely; a fresh Company-scoped lookup compares the winner's
-fingerprint and returns replay or conflict.
+binding lookup. If no binding exists, Stage 10 validates independent structure/catalog rules
+(including payment methods against `emissionDate`), Stage 11A calculates, and Stage 11B applies the
+exact derived-value order. Application allocates final local root/child identifiers through
+`DraftIdentifierGenerator`, constructs a timestamp-free `InvoiceDraftCandidate`, and delegates
+through `persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. T063 invokes no persistence
+clock and supplies neither timestamp. T076 alone captures one Instant inside its active transaction
+after validation and immediately before root persistence, assigns it to both `createdAt` and
+`updatedAt`, and writes the aggregate/binding atomically without replacing candidate identifiers.
+If concurrent insertion loses the uniqueness race, its transaction rolls back completely; a fresh
+Company-scoped lookup compares the winner's fingerprint and returns the winner's persisted result
+as replay or conflict.
 
 **Rationale**: The uniqueness constraint provides cross-process arbitration without application
 locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordination.
@@ -188,11 +236,17 @@ locks, cache, `SERIALIZABLE`, a reservation state machine, or distributed coordi
 
 **Decision**: Store `company_id uuid NOT NULL` on `invoice_draft`, enforce a non-nil check, and add
 `UNIQUE (company_id, id)` so idempotency can reference the root through a composite local foreign
-key. Every existing-draft repository operation requires CompanyId and draftId.
+key. Every repository query or mutation involving the aggregate or binding includes and enforces
+authoritative CompanyId, including creation, draft/duplicate/idempotency lookup, binding
+create/read, persistence mutation, and future feature operations for the aggregate.
 
 Children store only local foreign keys to the root or owning line. They do not repeat CompanyId and
 do not represent Company master data. Deletion behavior is not invented because draft deletion is
 out of scope.
+
+Global VAT, payment-method, identification-type, and other immutable SRI reference catalogs are
+not Company-owned; their lookups do not receive Company filters and their tables have no Company
+column.
 
 No tenant, subject, role, authorization, Company/Issuer/establishment/emission master table,
 Company-context version/time, fiscal snapshot, or cross-database foreign key is allowed.
@@ -216,9 +270,44 @@ through `100.00`. Every input, intermediate, rounded, grouped, payment-sum, or f
 rejected before persistence as `BUSINESS_VALIDATION_FAILED` with
 `MONETARY_RANGE_EXCEEDED`.
 
-Capture one `requestCreationInstant` at the request boundary and derive the expected emission date
-once using `America/Guayaquil`. Commit crossing midnight does not change the accepted date;
-`createdAt` records the confirmed commit instant; equivalent replay does not revalidate the date.
+`productCode` uses case-sensitive ASCII `^[A-Za-z0-9]{1,25}$`; passport (`06`) and foreign
+identification (`08`) use case-sensitive ASCII `^[A-Za-z0-9]{1,20}$`. Each receives one
+Application-owned leading/trailing ASCII SP/HTAB trim and no other normalization; API only decodes
+and forwards the value. OpenAPI, Java Application validation, domain invariants over accepted
+values, locale-independent PostgreSQL checks, and test vectors use those exact
+expressions; POSIX `[[:alnum:]]`, Unicode classes, case folding, and locale-dependent matching are
+rejected because no approved fiscal evidence justifies a broader repertoire.
+
+Capture one `requestCreationInstant` at the earliest request boundary before body consumption and
+derive the expected emission date once using `America/Guayaquil`. Body consumption or commit
+crossing midnight does not change the accepted date;
+`createdAt` and `updatedAt` are separately assigned by the persistence adapter from one exact UTC
+`java.time.Instant` captured inside the active transaction after all business validations succeed
+and immediately before root persistence. Both immutable values are persisted/returned after commit
+and replayed unchanged; rollback exposes neither. They are not physical PostgreSQL commit
+timestamps, use no post-commit reconstruction or `track_commit_timestamp`, and the injectable clock
+stays deterministic for tests. Equivalent replay does not invoke the clock or revalidate the date.
+
+Stage 6 first trims, validates, and canonicalizes `emissionPointId`; only after that succeeds does
+Application alone invoke `BusinessTextNormalizer` once per supplied applicable business-text
+value. General human-readable text uses one NFC pass, rejects
+`Cc`/`Cf`/`Cs`/`Co`/`Cn` and
+`U+2028`/`U+2029`, permits only `U+0020` spacing, trims surrounding `U+0020`, preserves internal
+punctuation/case, and counts Unicode code points. Assigned emoji `So` is allowed within field
+format/length. Additional `canonicalName` uses NFC → trim → collapse U+0020 runs → Java
+`Locale.ROOT` lowercase, is limited to 300 Unicode code points after lowercase, and is persisted;
+overflow returns `CANONICAL_NAME_TOO_LONG` before fingerprinting/persistence and is never
+truncated. PostgreSQL never recalculates Java normalization. API only decodes/forwards business
+text; Domain and Infrastructure receive accepted normalized values and never normalize again.
+After that pass, buyer email is checked in Stage 10 against the exact case-sensitive ASCII
+dot-atom profile in `spec.md` and OpenAPI: local part 1–64, DNS-style labels 1–63 with at least one
+dot, total length at most 254, case preserved, and no quoted/comment/domain-literal,
+internationalized, whitespace, or multiple-address form. Failure is value-free `EMAIL_INVALID` for
+`buyer.email`; no extra trim, case fold, normalization, or truncation occurs.
+
+Payment lookup receives `(paymentMethodId, emissionDate)` and requires existence, activity,
+inclusive `effectiveFrom <= emissionDate`, and null-or-inclusive `effectiveTo`. It never uses
+server current date, request arrival, transaction time, or `createdAt`.
 Versioned local reference catalogs are managed and seeded only by Flyway; codes, rates, validity,
 and identifiers are not hard-coded or startup-generated.
 
@@ -281,3 +370,102 @@ No exact governing checksum algorithm was located in the approved sources for dr
 Ecuadorian identity-card validation. Under the approved feature policy, both use explicitly named
 `FORMAT_ONLY` strategies. This is a resolved scope decision: checksum and registry verification are
 outside Create Invoice Draft, not deferred implementation work.
+
+## 14. Ordered HTTP Gate and Authoritative Runtime OpenAPI
+
+**Decision**: Enforce the 2,097,152-byte request limit at the Quarkus HTTP upload-limit route,
+before Quarkus REST dispatch. A CDI `Router` observer registers a Vert.x failure handler that owns
+only status `413` for `POST /api/v1/invoice-drafts`, converts that failure into the approved Problem
+Details response, and uses the shared absent/valid/invalid correlation classifier solely to choose
+a safe response identifier: absent input generates a UUID, one valid value is preserved, and blank,
+malformed, unsafe, over-length, or repeated input is replaced and never echoed. Once payload size
+is conclusively over the limit, the handler emits only `REQUEST_PAYLOAD_TOO_LARGE`; it does not
+execute or emit normal Company or stage-3 correlation validation, perform deserialization, or allow
+any idempotency, reference-data, validation, calculation, or persistence work. Every other failure
+continues to its existing handler. After routing and before entity deserialization, one
+`@ServerRequestFilter(nonBlocking = true)` restricted to the create resource method by a custom
+Jakarta REST `@NameBinding` evaluates Company, correlation, and idempotency-key headers in FR-041
+order. Only a request that passes those header stages reaches Jackson deserialization and Bean
+Validation. Strict unknown-property rejection is explicitly enabled, and Quarkus' built-in Jackson
+input mapper is disabled so the feature's stable mapper owns representation failures.
+
+The same earliest API routing boundary exclusively owns the monotonic deadline race and terminal
+arbitration. It races the application `Uni`, accepts exactly one terminal result, discards late
+application/database results, prevents a second response, and only then maps HTTP/Problem Details.
+Application and repositories carry neutral deadline context/results only. Expiry first maps to
+`REQUEST_TIMEOUT`/`504` only in API; Company `400` and every other HTTP mapping are also API-only.
+Unresolved commit is reconciled by same-scope replay. After response commit, expiry is telemetry-
+only and cannot emit another response, mutate state, or compensate committed data.
+
+The canonical OpenAPI file remains the only independently authored contract. Runtime publication
+sets `mp.openapi.scan.disable=true`, because Quarkus otherwise combines a static document with a
+model scanned from application endpoints. Static-file equality is verified separately from a
+packaged-runtime test that fetches `/q/openapi`, resolves the served document, and proves semantic
+equality plus the SC-024 Company-header and security-absence invariants.
+
+**Rationale**: The upload-limit route precedes REST processing, so a Jakarta REST mapper alone
+cannot prove the required earliest failure or safe correlation response. Safe classification on the
+413 path avoids echoing hostile input without allowing correlation invalidity to overtake payload
+precedence. One pre-entity header gate prevents typed DTO decoding from overtaking header
+precedence. Atomic outcome selection makes slow-body, header, idempotency, validation, calculation,
+and persistence races deterministic without compensating a committed draft. Disabling OpenAPI
+scanning prevents runtime annotations or extension defaults from silently augmenting the approved
+static contract.
+
+**Official evidence**:
+
+- [Quarkus HTTP route ordering and upload-limit route](https://quarkus.io/guides/http-reference#built-in-route-order-values)
+- [Quarkus CDI `Router` observation](https://quarkus.io/guides/reactive-routes#using-the-vert-x-web-router)
+- [Quarkus REST request filters and Jackson exception mapping](https://quarkus.io/guides/rest#request-or-response-filters)
+- [Quarkus strict Jackson unknown-property configuration](https://quarkus.io/guides/rest-json#configuring-json-support)
+- [Quarkus static OpenAPI publication and scan disabling](https://quarkus.io/guides/openapi-swaggerui#loading-openapi-schema-from-static-files)
+
+## 15. Normalization and Persistence Boundary Ownership
+
+**Decision**: Application is the sole business-text normalization owner. API decodes HTTP/JSON,
+rejects malformed representation, validates transport structure and headers, and forwards decoded
+business values unchanged. At the beginning of FR-041 Stage 6, Application first performs the one
+approved surrounding SP/HTAB trim and UUID validation/canonicalization for `emissionPointId`, with
+transport-neutral `EMISSION_POINT_INVALID` for blank-after-trim, malformed, or nil decoded input.
+Only after that passes does Application invoke one `BusinessTextNormalizer` exactly once for each
+supplied applicable value, perform the complete Unicode/display/canonical validation, and return
+transport-neutral failures. Domain receives normalized values and enforces business invariants;
+Infrastructure persists supplied values. No other layer repeats NFC, business trim, internal-space
+collapse, lowercase conversion, or `canonicalName` derivation.
+
+**Decision**: The Application-to-persistence creation contract is conceptually
+`persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>`. Application owns all final local
+draft/child identifier allocation through `DraftIdentifierGenerator` and constructs the candidate
+after validation and calculation. The candidate contains no timestamp, HTTP type, commit metadata,
+or persistence entity. T076 opens or joins the reactive transaction, invokes the injected
+transactional clock once immediately before root persistence, assigns the same Instant to
+`createdAt` and `updatedAt`, commits aggregate and binding atomically, and returns the persisted
+representation. Persistence preserves candidate identifiers; it never generates or replaces them.
+
+**Decision**: Equivalent replay loads the committed `PersistedInvoiceDraft` and returns its original
+identifier, business values, `createdAt`, and `updatedAt`. Replay performs no identifier allocation,
+clock invocation, canonical-value rebuild, aggregate creation, timestamp mutation, or current-date
+revalidation. The retry request still receives the one mandatory Application Stage-6 pass needed
+to compute its comparison fingerprint; a matching binding loads rather than reconstructs the
+persisted canonical values.
+
+**Rationale**: A timestamp-free candidate makes impossible states unrepresentable at the port and
+keeps transaction-only time inside the adapter that owns atomic persistence. Application-owned
+identifier allocation preserves deterministic use-case tests without leaking infrastructure
+entities. One normalization owner prevents cross-layer Unicode and locale drift, while the
+committed-result model makes replay semantics explicit.
+
+**Alternatives considered**:
+
+- API normalization was rejected because it mixes business canonicalization with transport
+  decoding and makes the application depend on an undocumented pre-normalized input assumption.
+- Domain or PostgreSQL normalization was rejected because Domain must remain independent of Unicode
+  mechanics and PostgreSQL cannot reproduce Java NFC/`Locale.ROOT` semantics reliably.
+- A candidate carrying null, zero, placeholder, provisional, or API-generated timestamps was
+  rejected because timestamps exist only after the adapter's in-transaction clock invocation.
+- Infrastructure-generated draft/child identifiers were rejected because the approved
+  `DraftIdentifierGenerator` is an Application port and the candidate must identify the complete
+  aggregate before persistence; reference/fiscal identifiers remain separately governed and are
+  never generated by this port.
+- Returning Panache entities or HTTP errors from the persistence port was rejected because it
+  violates Clean Architecture and transport-neutral orchestration.

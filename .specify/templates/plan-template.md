@@ -93,7 +93,7 @@ design. A deviation requires recorded approval under the constitution before imp
 | Reactive safety: every blocking or CPU-intensive operation is isolated, bounded, timed out, and testable | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Fiscal correctness: official rules, `BigDecimal` policies, time semantics, and invalid-data behavior are explicit | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Internal caller boundary: no authentication, authorization, identity, token, security scheme, `401`, or `403` behavior is introduced | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
-| Company boundary: Company context is the mandatory single `X-Company-Id` UUID header; owned-resource paths exclude Company; the service stores the immutable external UUID but performs no Company lookup and creates no draft-time fiscal snapshot, shared persistence, cache, or replication | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
+| Company boundary: Company context uses the mandatory single `X-Company-Id` UUID header; Company identifiers are absent from request bodies/input schemas and appear in responses only when explicitly contracted; Company-owned aggregate/persistence/idempotency operations enforce the UUID while immutable global SRI catalogs remain outside automatic Company scope; no Company lookup, snapshot, shared persistence, cache, or replication exists | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
 | Boundary consistency: states, retries, idempotency, duplicates, timeouts, recovery, reconciliation, and terminal outcomes are defined | [PASS/FAIL and evidence] | [PASS/FAIL and evidence] |
@@ -121,12 +121,13 @@ Reactive wrappers MUST NOT be accepted as evidence that an underlying operation 
 interpret identity, or define security schemes, Authorization headers, `401`, or `403` responses.]
 
 **Company Header Contract**: [Presence, single-value cardinality, UUID syntax, non-nil validation,
-canonicalization, stable errors, and prohibition from resource paths, query strings, bodies,
-tokens, or sessions.]
+canonicalization, stable errors, prohibition from resource paths, query strings, request bodies,
+input schemas, tokens, or sessions, and any explicitly contracted response representation.]
 
-**Company Ownership Scoping**: [How the application-level Company identifier scopes every owned
-query, mutation, child relationship, and idempotency lookup without being described as caller
-authorization or security isolation.]
+**Company Ownership Scoping**: [How the application-level Company identifier scopes every query or
+mutation involving the Company-owned aggregate, its persistence records, child relationships, and
+idempotency binding without becoming caller authorization; identify immutable global SRI catalogs
+that remain outside automatic Company scope.]
 
 **Company Master-Data Boundary**: [Confirm no Company/Issuer/establishment/emission-point lookup,
 port, client, repository, table, cache, replication, shared persistence, cross-service foreign key

@@ -23,7 +23,7 @@ legal origin date of an SRI rule. Official source dates are retained separately.
 | ID | Exact title | Publisher | Version/date | Exact locator | Supported official fact |
 |----|-------------|-----------|--------------|---------------|-------------------------|
 | `SRI-FE-CURRENT` | Facturación Electrónica — Información técnica y guías | Servicio de Rentas Internas (SRI) | Current page observed 2026-07-12; technical-sheet link updated November 2025 | “Esquema actual” and “Recuerde” sections | Publishes Technical Sheet v2.32 and states that some SRI-issued RUC classes have no specific validation algorithm. |
-| `SRI-FT-2.32` | Ficha Técnica de Comprobantes Electrónicos Esquema Off-line | Servicio de Rentas Internas (SRI) | Version 2.32, document update 2025-10-08 | §5.7 Table 6, p. 11; §9.10, p. 27; §9.12 Table 16 and §9.13 Table 17, pp. 27–28; invoice XML field table, pp. 65–66; Table 24, p. 79 | Official buyer-type codes and labels; final-consumer identifier and USD 50.00 ceiling; invoice buyer identifier is mandatory alphanumeric, maximum 20 characters; IVA tax and percentage codes; payment codes, labels, and source dates. |
+| `SRI-FT-2.32` | Ficha Técnica de Comprobantes Electrónicos Esquema Off-line | Servicio de Rentas Internas (SRI) | Version 2.32, document update 2025-10-08 | §5.7 Table 6, p. 11; §9.10, p. 27; §9.12 Table 16 and §9.13 Table 17, pp. 27–28; invoice XML field table, pp. 65–66; Table 24, p. 79 | Official buyer-type codes and labels; final-consumer identifier and USD 50.00 ceiling; invoice buyer identifier source prose says “alphanumeric” with maximum 20 characters, resolved for this target baseline to the executable ASCII rule below; IVA tax and percentage codes; payment codes, labels, and source dates. |
 | `SRI-IVA-CURRENT` | Impuesto al Valor Agregado (IVA) | Servicio de Rentas Internas (SRI) | Current page observed 2026-07-12 | “¿Cuál es la tarifa?”, lines identifying 0%, 13%, 5%, non-object and exempt transactions | Current public guidance identifies 0% and 13% for goods/services, 5% for construction materials, non-object transactions, and exempt transactions. |
 | `SRI-RES-24-13` | Resolución Nro. NAC-DGERCGC24-00000013 | Servicio de Rentas Internas (SRI) | Signed 2024-03-28; effective on publication in Registro Oficial Supplement 529, 2024-04-01 | Article 1 and Final Provision, pp. 3–4 | Local transfers of the listed construction materials use IVA 5% from the resolution's effective date. |
 | `SRI-CIR-25-06` | Circular No. NAC-DGECCGC25-00000006 | Servicio de Rentas Internas (SRI) | Signed 2025-12-26 | §2 “Pronunciamiento”, pp. 2–3 | States that IVA 15% remains applicable until modified by executive decree. |
@@ -75,13 +75,17 @@ UUID is introduced.
 |------|------------------------------|-------------------------------|----------------------------|--------------------------|-----------------|--------|-----------------|----------------|--------|
 | `04` | RUC | RUC | `FORMAT_ONLY_NUMERIC_13`: exactly 13 ASCII digits; no checksum in this feature | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 and Table 5 RUC shape; `SRI-FE-CURRENT` RUC algorithm notice | APPROVED |
 | `05` | CÉDULA | Ecuadorian identity card | `FORMAT_ONLY_NUMERIC_10`: exactly 10 ASCII digits; no checksum in this feature | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 and Table 5 Cédula shape | APPROVED |
-| `06` | PASAPORTE | Passport | `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`: one through 20 alphanumeric characters; no checksum or country rule | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 and invoice `identificacionComprador` field, pp. 65–66 | APPROVED |
+| `06` | PASAPORTE | Passport | `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`: case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` after one leading/trailing SP/HTAB trim; no other normalization, checksum, or country rule | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 and invoice `identificacionComprador` field, pp. 65–66 | APPROVED |
 | `07` | VENTA A CONSUMIDOR FINAL | Final consumer sale | `FINAL_CONSUMER_EXACT`: identifier `9999999999999`, buyer name `CONSUMIDOR FINAL`, rounded grand total no greater than USD `50.00` | No row dates in Table 6; threshold stated in §9.10 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 note and §9.10, p. 27 | APPROVED |
-| `08` | IDENTIFICACIÓN DEL EXTERIOR | Foreign identification | `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`: tax-authority identifier from the buyer's fiscal-residence country, one through 20 alphanumeric characters; no checksum | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 note and invoice `identificacionComprador` field, pp. 65–66 | APPROVED |
+| `08` | IDENTIFICACIÓN DEL EXTERIOR | Foreign identification | `FORMAT_ONLY_ALPHANUMERIC_1_TO_20`: tax-authority identifier from the buyer's fiscal-residence country; case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` after one leading/trailing SP/HTAB trim; no other normalization or checksum | No row dates in Table 6 | 2026-07-12 to open | true | `SRI-OFFLINE-2.32-TARGET-1` | `SRI-FT-2.32` Table 6 note and invoice `identificacionComprador` field, pp. 65–66 | APPROVED |
 
 `FORMAT_ONLY` is an approved feature-scope decision, not an SRI checksum algorithm. Draft creation
 does not perform online registry existence checks or buyer-name registry matching. Checksum and
 registry verification are outside this draft feature; they are not hidden implementation work.
+For codes `06` and `08`, comparison is case-sensitive. Valid examples are `A1234567` and `EC9Z`;
+invalid examples are `A-123`, `A 123`, `Á123`, empty, and 21 characters. OpenAPI, Java/API
+validation, domain rules, locale-independent PostgreSQL constraints, and test vectors MUST enforce
+the same target repertoire; a broader Unicode or locale-dependent character class is not approved.
 
 ## Approved IVA Tax Rules
 
@@ -123,6 +127,13 @@ target validity, and target active state are target-service decisions.
 
 Payment methods remain unique per draft. The zero-value invoice example uses the approved UUID in
 the payment-code `01` row above with amount `0.00`.
+
+For Invoice Draft validation, repository lookup receives `(paymentMethodId, emissionDate)`. A row
+is usable only when it exists, is active, `target_valid_from <= emissionDate`, and
+`target_valid_to IS NULL OR emissionDate <= target_valid_to`; both boundaries are inclusive.
+Server current date, request arrival time, transaction time, and `createdAt` are not validity
+inputs. Shared vectors cover both exact boundaries, before/after, open end, inactive-but-effective,
+and active-but-ineffective rows.
 
 ## Excluded Initial Rows
 

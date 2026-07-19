@@ -10,10 +10,32 @@ Persistence owns only the local Invoice Draft aggregate, local tax-document refe
 and the local idempotency binding. It does not own or validate Company, Issuer, establishment, or
 emission-point master data.
 
+The reference catalogs are locally stored but globally governed and immutable for their published
+version. They are not Company-owned, have no `company_id`, and are not filtered by Company.
+
 Hibernate Reactive with Panache is used for business persistence. Panache models remain in
 `infrastructure` and are never returned through the API or used as domain entities. Flyway uses its
 supported migration datasource during controlled startup; production schema auto-generation is
 disabled except for non-mutating validation where supported.
+
+For creation, Infrastructure implements the Application-owned conceptual port contract:
+
+```text
+persist(InvoiceDraftCandidate) -> Uni<PersistedInvoiceDraft>
+```
+
+`InvoiceDraftCandidate` contains final Application-allocated root/child identifiers and all
+normalized, validated, calculated business values, plus authoritative CompanyId and safe binding
+inputs (key hash, request fingerprint, normalization version), but no raw key or timestamp. The
+adapter accepts no HTTP type, placeholder timestamp, commit metadata, or Panache entity from its
+caller. It must not generate or replace candidate identifiers. `PersistedInvoiceDraft` is built
+only from committed state and contains the original final identifier, response-relevant business
+values, `createdAt`, and `updatedAt`.
+
+The persistence mapper copies supplied candidate values into infrastructure entities, applies the
+single adapter-owned clock result to the required timestamp columns, and maps committed rows back
+to `PersistedInvoiceDraft`. It does not normalize, trim, lowercase, derive `canonicalName`, allocate
+an identifier, invoke another clock, fabricate a timestamp, expose an entity, or map an HTTP error.
 
 ## Flyway Migration Design
 
@@ -34,7 +56,15 @@ The runtime exposes no reference-data administration write path. Each official c
 delivered by a new immutable migration containing versioned rows and a verification query that
 fails on duplicate or overlapping active target-effective intervals. The later seed migration MUST
 reproduce exactly the 5 buyer, 6 IVA, and 8 payment rows approved in
-`reference-data-baseline.md`; no migration is created by this remediation.
+`reference-data-baseline.md`.
+
+V3 is immutable and its two affected ASCII constraints are nonconforming. After gate release,
+T017 creates V5 to inspect/drop/replace only `ck_invoice_draft_buyer_identification` and
+`ck_invoice_line_product_code` with the exact explicit ASCII expressions in spec/OpenAPI. It must
+not use POSIX/locale/Unicode shorthand and relies on PostgreSQL transactional-DDL
+rollback-by-failure where supported. T018 proves V3→V5, empty-database migration, Flyway validation,
+and identical OpenAPI/Java/PostgreSQL vectors. Neither task is complete; T017 remains subject to the
+current mandatory analysis condition and T018 remains dependent on successful T017.
 
 ## Exact Local Catalog Structures
 
@@ -64,6 +94,10 @@ independently ordered; `source_valid_to` requires `source_valid_from`; and Flywa
 overlapping active target intervals for the same official tax/percentage code. Every column is
 `NOT NULL` except `source_valid_from`, `source_valid_to`, and `target_valid_to`.
 
+There is no separate tax-category table or lifecycle. The rule's immutable `family=IVA` value is
+the complete category representation for this feature, while the rule row owns activity and
+effectivity.
+
 `payment_method_catalog` contains exactly: `id uuid`, `official_code varchar(8)`,
 `official_label varchar(160)`, `display_name varchar(100)`, `source_valid_from date`, nullable
 `source_valid_to date`, `target_valid_from date`, nullable `target_valid_to date`, `active boolean`,
@@ -82,25 +116,58 @@ catalog versions MUST NOT reinterpret historical drafts.
 
 ## Aggregate Write Transaction
 
-For a logically new command:
+Payload/header/representation gates, Stage-6 emission-point validation followed by business-text
+normalization/fingerprinting, Company-scoped binding lookup, Stage 10, Stage 11A, and Stage 11B all
+complete before the new-write transaction is opened. Application's Stage-6
+`BusinessTextNormalizer` is the only business-text normalization owner.
+Infrastructure receives normalized/canonical values and never performs NFC, trim, space collapse,
+lowercase conversion, or canonical derivation. Payment lookup receives
+`(paymentMethodId, emissionDate)` and applies inclusive start/end plus activity, never a server,
+request, transaction, or creation clock. Every reference-data invocation receives the explicit
+remaining `Duration` and is clamped as described below.
 
-1. Complete payload/header/key/body validation and fingerprint generation before opening the write
-   transaction.
-2. Resolve applicable local reference-catalog rows and domain values without external calls.
-3. Start one bounded reactive PostgreSQL transaction.
-4. Persist the Invoice Draft root.
-5. Persist every line and exactly one line-tax selection per line.
-6. Persist grouped tax totals, payments, and additional-information rows.
-7. Persist the idempotency binding last.
-8. Commit once; return `201` only after commit is confirmed.
+For a logically new command, the authoritative creation sequence is:
+
+1. Before body consumption, API captures the fixed request instant and starts the request deadline;
+   after payload/header gates it decodes the request and forwards decoded values unchanged.
+2. Application performs ordered validation.
+3. Application first trims/validates/canonicalizes `emissionPointId` at Stage 6, returning the
+   transport-neutral `EMISSION_POINT_INVALID` violation for blank-after-trim, malformed, or nil
+   decoded strings; only after that passes does it normalize business text exactly once per
+   supplied applicable value.
+4. Application completes idempotency/reference validation and calculates monetary values.
+5. Application allocates all final local root/child UUIDs through `DraftIdentifierGenerator` and
+   constructs `InvoiceDraftCandidate`.
+6. Application calls `persist(InvoiceDraftCandidate)` on the persistence port.
+7. T076 opens or joins one bounded reactive PostgreSQL transaction.
+8. After all validations have succeeded and immediately before root persistence, T076 invokes the
+   injected transactional clock exactly once.
+9. T076 assigns that same UTC `java.time.Instant` to root `created_at` and `updated_at`, and to
+   binding `created_at` where the creation timestamp is required.
+10. T076 persists the complete root, every line and line tax, grouped tax totals, payments,
+    additional-information rows, and idempotency binding atomically, preserving all supplied
+    identifiers and Application-produced canonical values.
+11. After successful commit, T076 returns `PersistedInvoiceDraft` with the original root identifier,
+    response-relevant persisted business values, `createdAt`, and `updatedAt`.
+12. Application maps that representation to a transport-neutral result.
+13. API alone arbitrates the terminal result and maps the accepted result to HTTP.
 
 A failure at any write step rolls back the root, all children, and the binding. No external call,
 filesystem write, event publication, SRI operation, or Company operation occurs within or adjacent
 to this transaction.
 
 Catalog resolution MUST reject an inactive, not-yet-target-effective, target-expired, unknown, or
-ambiguous row before persistence. Initial valid references are exactly those published in
+ambiguous row before persistence. Payment effectiveness is evaluated inclusively against invoice
+`emissionDate`. Initial valid references are exactly those published in
 `SRI-OFFLINE-2.32-TARGET-1`; product/tax legal classification remains upstream responsibility.
+
+Neither `createdAt` nor `updatedAt` is PostgreSQL's physical commit timestamp. Persistence MUST NOT
+query or reconstruct either value after commit and MUST NOT require `track_commit_timestamp`.
+Rollback means neither value is exposed as a created resource. Equivalent replay loads the
+original `PersistedInvoiceDraft`, returns the original identifier and both timestamps, and performs
+no clock invocation, persisted-canonical-value rebuild, identifier allocation, or aggregate
+creation. The incoming retry's Stage-6 emission-point validation followed by business-text
+normalization is completed before lookup solely to produce the comparison fingerprint.
 
 ## Concurrency Arbitration
 
@@ -119,22 +186,29 @@ PostgreSQL `READ COMMITTED` plus the unique constraint is sufficient. `SERIALIZA
 locks, application mutexes, caches, and reservation rows are not introduced without evidence that
 the approved invariant cannot otherwise be met.
 
-## Company-Scoped Reads and Mutations
+## Company-Scoped Aggregate and Binding Operations
 
-Any repository operation that addresses an existing draft uses both CompanyId and draftId. A
-binding-to-draft load also uses CompanyId. The binding composite foreign key guarantees that a
-binding cannot reference a draft in another Company partition.
+Every repository query or mutation involving the Invoice Draft aggregate or its idempotency binding
+includes and enforces authoritative CompanyId. This covers creation, draft lookup, duplicate and
+idempotency lookup, binding creation/retrieval, aggregate persistence mutations, and any future
+repository operation introduced by this feature for the aggregate. Existing-draft access uses
+CompanyId plus draftId; binding access uses CompanyId plus key hash; binding-to-draft load uses
+CompanyId. The composite foreign key prevents a cross-Company binding.
 
 Child loads occur through the already Company-scoped root and local foreign keys; CompanyId is not
 duplicated on children. This is aggregate consistency and data partitioning, not caller
 authorization.
 
+This scope does not automatically apply to global VAT, payment-method, identification-type, or
+other immutable global SRI reference catalogs. Their reads use the applicable global code/version/
+effective-date keys and their tables contain no Company column.
+
 ## Required Constraints and Indexes
 
 | Structure | Required persistence evidence |
 |-----------|-------------------------------|
-| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; fixed status/currency; non-negative totals |
-| `invoice_line` | Local FK; `UNIQUE (invoice_draft_id,position)`; `numeric(12,6)` quantity/unit-price and `numeric(17,2)` money checks; FK index |
+| `invoice_draft` | PK `id`; `UNIQUE (company_id,id)`; non-nil Company/emission UUID checks; type-conditional case-sensitive ASCII `^[A-Za-z0-9]{1,20}$` for buyer codes 06/08; fixed status/currency; non-null `created_at`/`updated_at` with V3's defensive `updated_at >= created_at` guard and application creation invariant `updated_at = created_at`; non-negative totals |
+| `invoice_line` | Local FK; `UNIQUE (invoice_draft_id,position)`; locale-independent case-sensitive ASCII `^[A-Za-z0-9]{1,25}$` product code; `numeric(12,6)` quantity/unit-price and `numeric(17,2)` money checks; FK index |
 | `invoice_line_tax` | Local FK; `UNIQUE (invoice_line_id)`; IVA treatment/rate checks |
 | `invoice_tax_total` | Local FK; unique complete grouping key; non-negative totals |
 | `invoice_payment` | Local FK; `UNIQUE (invoice_draft_id,payment_method_id)`; amount checks |
@@ -165,13 +239,32 @@ root, child, or idempotency row is written.
 
 - Overall create request deadline: 10 seconds.
 - Local write-transaction timeout: 5 seconds.
-- PostgreSQL pool acquisition/query timeouts MUST be bounded beneath the overall request deadline.
-- Confirmed pre-commit database unavailability maps to `PERSISTENCE_UNAVAILABLE` (`503`).
-- Deadline exhaustion maps to `REQUEST_TIMEOUT` (`504`).
+- Every aggregate and buyer/IVA/payment reference-data repository operation receives an explicit
+  remaining monotonic `Duration`; no persistence port depends on HTTP or Quarkus request objects.
+- Each adapter bounds PostgreSQL pool acquisition and every reactive query subscription by
+  `minimum(configured database operation timeout, remaining request budget)` and starts no database
+  operation when the supplied remainder is zero or negative.
+- A configured database-operation timeout or exhausted neutral budget returns a transport-neutral
+  typed outcome; repositories do not map HTTP or arbitrate terminal responses.
+- A write transaction uses the lesser of the remaining request budget and 5 seconds, and no new
+  persistence operation starts after the request budget is exhausted.
+- Confirmed pre-commit database unavailability is a neutral persistence-unavailable failure.
+- Deadline exhaustion before a result is conclusive is a neutral deadline/uncertain outcome;
+  confirmed rollback/failure or confirmed commit is reported neutrally to the caller.
+- Only the API adapter races the application `Uni`, accepts one terminal result, discards late
+  database/application completion, and maps accepted outcomes to HTTP including `503`/`504`.
 - SQL state, query text, table/column names, connection details, and stack traces are never exposed.
 
-If commit status is uncertain or a response is lost after commit, the client retries the same
-CompanyId, idempotency key, and content. The local binding resolves the authoritative result.
+Zero-state guarantees apply only to a confirmed pre-commit failure or a transaction confirmed fully
+rolled back. If commit status is uncertain or a response is lost after commit, the service does not
+claim zero state or attempt compensating deletion; the client retries the same CompanyId,
+idempotency key, and content, and the local binding resolves the authoritative result.
+
+Once the HTTP response is committed, deadline expiry is transport telemetry only. Persistence does
+not receive another write command, mutate aggregate/domain status, delete the draft or binding, or
+perform compensation. Existing response serialization may complete, and the safe
+`request_deadline_exceeded_after_response_commit` event records the already selected status without
+buyer data, request body, or raw idempotency key.
 
 ## Readiness
 
@@ -190,21 +283,44 @@ Liveness remains independent of PostgreSQL availability.
 - migration repeatability and production auto-generation disabled;
 - real PostgreSQL constraint tests;
 - aggregate load through CompanyId plus draftId;
+- every aggregate/binding query and mutation enforces CompanyId while global catalogs have no
+  Company column or filter;
 - composite binding-to-draft Company integrity;
 - same key independent across Companies;
 - 50-way equivalent concurrency yields one root/binding;
 - conflicting concurrency yields one winner and stable conflict;
-- injected failure after every write phase leaves zero partial rows/binding;
+- injected confirmed pre-commit failure after every write phase leaves zero partial rows/binding;
 - unavailable/timeout outcomes are safe and correlated;
+- reference-data timeout clamping proves both sides of the configured-timeout/remaining-budget
+  minimum, exhausted-before-invocation with no query, and expiry during lookup with no state;
+- unresolved-at-deadline commit makes no zero-state claim and same-scope replay creates at most one
+  draft;
+- post-response-commit expiry causes no second response-driven database write or compensation;
 - no buyer payload, raw idempotency key, or normalized request stored in the binding;
 - schema inspection confirms every prohibited Company/identity/snapshot structure is absent;
 - numeric boundary tests confirm overflow and excess precision are rejected before persistence and
   never surface as PostgreSQL errors.
+- product/passport/foreign-identification database checks use the same locale-independent ASCII
+  expressions as OpenAPI/Java/domain tests, never POSIX `[[:alnum:]]`;
+- one T076 transactional-clock invocation occurs at the defined in-transaction point; its exact
+  Instant is assigned to both `createdAt` and `updatedAt`, persists/returns unchanged, is absent
+  from rolled-back resources, replays unchanged, and uses no physical commit timestamp; T063 and
+  mappers never supply/overwrite either value;
+- candidate/port evidence proves Application alone allocates final local root/child identifiers,
+  `InvoiceDraftCandidate` carries no timestamp, persistence preserves every supplied identifier,
+  and committed `PersistedInvoiceDraft` returns the original identifier plus both timestamps;
+- general Unicode display values and Application-produced `canonicalName` use identical shared
+  vectors, including 150/151 `U+0130` expansion and `CANONICAL_NAME_TOO_LONG`; PostgreSQL enforces
+  stored barriers without claiming Java NFC/Locale.ROOT equivalence;
+- payment lookup proves inclusive `emissionDate` effectiveness and never uses current/server/
+  transaction/createdAt time.
 
-## Planning Gate
+## Governance and Planning Gate
 
 The reference-data planning gate is complete. `reference-data-baseline.md` separates official
 facts from target decisions, publishes UUIDv5 namespace
 `32576bbf-b70d-5c24-98ff-d5f9b48e8826`, and approves every initial row. Flyway remains the sole
-future schema/seed owner. Task generation is still governed by the independent Constitution-on-main
-gate recorded in `plan.md`.
+future schema/seed owner. Constitution v2.0.1 is approved. `astudilloalex` approved D1–D3 and
+released `GATE-GOV-001`; the current analysis gate remains before T017. V3 is untouched, correction
+is assigned to pending T017 V5 plus pending T018 validation, and T019 remains blocked until both
+corrective tasks complete successfully.

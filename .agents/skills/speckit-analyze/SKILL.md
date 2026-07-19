@@ -139,9 +139,6 @@ Focus on high-signal findings. Limit to 50 findings total; aggregate remainder i
 
 - Any requirement or plan element conflicting with a MUST principle
 - Missing mandated sections or quality gates from constitution
-- Authentication or authorization inside the service; Company lookup ports, clients, readiness,
-  local ownership, administration, exposure, caching, or replication of Company master data;
-  draft-time fiscal snapshots; or shared Company/Tax Document persistence
 
 #### E. Coverage Gaps
 

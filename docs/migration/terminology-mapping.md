@@ -4,7 +4,9 @@
 
 **Created**: 2026-07-12
 
-**Authority**: `.specify/memory/constitution.md` v2.0.0
+**Last verified**: 2026-07-18
+
+**Authority**: `.specify/memory/constitution.md` v2.0.1
 
 This file is the canonical mapping from historical or official source terminology to target
 English terminology. A target name in this table is approved only for the scope described in its
@@ -17,7 +19,7 @@ otherwise.
 | `borrador de factura` | Invoice Draft | Target Domain | An internal, pre-issuance record with no official fiscal identifier or SRI status. |
 | `comprobante` | Tax Document | Target Domain | Generic target concept for a document governed by Ecuadorian tax rules. |
 | `empresa` | Company | Target Domain | Externally owned legal entity. This service accepts only its opaque UUID through `X-Company-Id`; that value scopes owned tax-document data but is not authentication, authorization, or locally owned Company master data. |
-| `identificador de empresa` | Company Identifier | Target API | Mandatory single non-nil UUID supplied only through `X-Company-Id` for Company-scoped operations and normalized to an application-level ownership reference. |
+| `identificador de empresa` | Company Identifier | Target API | Mandatory single non-nil UUID supplied only through `X-Company-Id`; forbidden in request bodies/input schemas; permitted in a response only when explicitly contracted. It scopes Company-owned aggregate/record/binding operations, never immutable global SRI catalogs by default. |
 | `emisor` | Issuer | Target Domain | Externally owned fiscal profile. Create Invoice Draft does not resolve or snapshot Issuer data; a later fiscal-issuance specification must define any immutable Issuer evidence. |
 | `establecimiento` | Establishment | Target Domain | Externally owned Issuer subdivision. Create Invoice Draft neither resolves nor snapshots it. |
 | `razón social` | Legal Name | Target Domain | Registered legal identity. It is outside Create Invoice Draft input and belongs to later authoritative fiscal-context resolution. |
@@ -30,7 +32,7 @@ otherwise.
 | `impuesto` | Tax Category | Target Domain | Governing tax type or code; exact SRI catalog values remain official terms. |
 | `tarifa de impuesto` | Tax Rate | Target Domain | Percentage or rate associated with an effective tax rule. |
 | `regla tributaria` | Tax Rule | Target Domain | Effective combination of tax category, rate, validity, and calculation behavior; the initial IVA rules use immutable deterministic UUIDv5 mappings from the approved reference-data baseline. |
-| `forma de pago` | Payment Method | Target Domain | Active catalog method selected for a draft payment; the initial Table 24 methods use immutable deterministic UUIDv5 mappings from the approved reference-data baseline. |
+| `forma de pago` | Payment Method | Target Domain | Existing active catalog method effective inclusively on invoice `emissionDate`; the initial Table 24 methods use immutable deterministic UUIDv5 mappings from the approved reference-data baseline. |
 | `pago` | Payment | Target Domain | Amount allocated to one payment method for an invoice draft. |
 | `información adicional` | Additional Information | Target Domain | Optional named information captured for later review. |
 | `clave de idempotencia` | Idempotency Key | Target API | Caller-generated key scoped exactly by normalized Company UUID plus key for deduplicating invoice-draft creation commands. |
@@ -40,3 +42,16 @@ otherwise.
 ## Feature References
 
 - `specs/001-create-invoice-draft/spec.md`
+
+## Final Classification Verification — 2026-07-18
+
+The completed Create Invoice Draft implementation, OpenAPI contract, migrations, source packages,
+tests, and final Spec Kit artifacts were checked against this table. All target names remain in
+English or are approved exact official terms such as RUC and SRI identifiers. Company Identifier,
+Emission Point, Invoice Draft, Tax Rule, Payment Method, Idempotency Key, and Fiscal Context
+Snapshot retain the scopes recorded above.
+
+No implemented term changed ownership or crossed an approved classification boundary, so no table
+row required reclassification. In particular, Company remains an opaque externally owned context,
+global SRI catalogs remain unscoped by Company, and Fiscal Context Snapshot, Access Key, and
+Official Sequential Number remain excluded from draft creation.
