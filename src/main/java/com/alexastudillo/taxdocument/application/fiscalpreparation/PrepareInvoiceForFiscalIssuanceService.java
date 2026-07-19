@@ -43,6 +43,7 @@ public final class PrepareInvoiceForFiscalIssuanceService
         "fiscal preparation lookup result");
   }
 
+  @SuppressWarnings("null")
   private Uni<PrepareInvoiceForFiscalIssuanceResult> afterLookup(
       PrepareInvoiceForFiscalIssuanceCommand command, FiscalPreparationLookup lookup) {
     return requireResult(
@@ -50,10 +51,10 @@ public final class PrepareInvoiceForFiscalIssuanceService
           case FiscalPreparationLookup.Existing existing ->
               Uni.createFrom()
                   .item(new PrepareInvoiceForFiscalIssuanceResult(existing.preparation(), true));
-          case FiscalPreparationLookup.NotFound ignored ->
+          case FiscalPreparationLookup.NotFound _ ->
               Uni.createFrom()
                   .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_FOUND));
-          case FiscalPreparationLookup.NotPreparable ignored ->
+          case FiscalPreparationLookup.NotPreparable _ ->
               Uni.createFrom()
                   .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE));
           case FiscalPreparationLookup.EligibleDraft eligible ->
@@ -103,24 +104,27 @@ public final class PrepareInvoiceForFiscalIssuanceService
         "fiscal preparation result");
   }
 
+  @SuppressWarnings("null")
   private Uni<PrepareInvoiceForFiscalIssuanceResult> commit(
       PrepareInvoiceForFiscalIssuanceCommand command,
       InvoiceDraftPreparationView draft,
       FiscalContextSnapshot snapshot) {
-    return store
-        .commit(
-            new FiscalPreparationCommitIntent(draft, snapshot),
-            requireRemaining(command),
-            command.commitTracker())
-        .onItem()
-        .transform(
-            result ->
-                switch (result) {
-                  case FiscalPreparationCommitResult.Created created ->
-                      new PrepareInvoiceForFiscalIssuanceResult(created.preparation(), false);
-                  case FiscalPreparationCommitResult.Replay replay ->
-                      new PrepareInvoiceForFiscalIssuanceResult(replay.preparation(), true);
-                });
+    return requireResult(
+        store
+            .commit(
+                new FiscalPreparationCommitIntent(draft, snapshot),
+                requireRemaining(command),
+                command.commitTracker())
+            .onItem()
+            .transform(
+                result ->
+                    switch (result) {
+                      case FiscalPreparationCommitResult.Created created ->
+                          new PrepareInvoiceForFiscalIssuanceResult(created.preparation(), false);
+                      case FiscalPreparationCommitResult.Replay replay ->
+                          new PrepareInvoiceForFiscalIssuanceResult(replay.preparation(), true);
+                    }),
+        "commit result");
   }
 
   private static Duration requireRemaining(PrepareInvoiceForFiscalIssuanceCommand command) {
