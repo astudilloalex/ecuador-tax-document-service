@@ -144,7 +144,7 @@ class InvoiceDraftJvmPerformanceIT {
                   ignored -> CompletableFuture.supplyAsync(() -> postStatus(key, body), executor))
               .toList();
       CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).get(10, TimeUnit.SECONDS);
-      statuses = requests.stream().map(CompletableFuture::join).toList();
+      statuses = requests.stream().map(future -> future.join()).toList();
     }
     double elapsedMillis = elapsedMillis(started);
     long created = statuses.stream().filter(status -> status == 201).count();
