@@ -5,6 +5,7 @@ import java.io.Serializable;
 import java.net.URI;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /** Safe RFC 9457-style problem representation with stable English codes. */
@@ -43,17 +44,17 @@ public record ProblemDetails(
     private static final long serialVersionUID = 1L;
     private final int status;
     private final String code;
-    private final transient List<Violation> violations;
+    private final transient List<@NonNull Violation> violations;
 
     public ApiException(int status, String code, String message) {
-      this(status, code, message, List.<Violation>of());
+      this(status, code, message, Objects.requireNonNull(List.<@NonNull Violation>of()));
     }
 
-    public ApiException(int status, String code, String message, List<Violation> violations) {
+    public ApiException(int status, String code, String message, List<@NonNull Violation> violations) {
       super(message);
       this.status = status;
       this.code = Objects.requireNonNull(code, "code");
-      this.violations = List.<Violation>copyOf(Objects.requireNonNull(violations, "violations"));
+      this.violations = Objects.requireNonNull(List.<@NonNull Violation>copyOf(Objects.requireNonNull(violations, "violations")));
     }
 
     public int status() {
@@ -64,7 +65,7 @@ public record ProblemDetails(
       return code;
     }
 
-    public List<Violation> violations() {
+    public List<@NonNull Violation> violations() {
       return violations;
     }
   }

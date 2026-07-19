@@ -4,14 +4,16 @@ import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.Nullable;
+
 /** Buyer data captured by an Invoice Draft after Application normalization. */
 public record Buyer(
     String identificationType,
     String identification,
     String legalName,
-    String address,
-    String email,
-    String telephone,
+    @Nullable String address,
+    @Nullable String email,
+    @Nullable String telephone,
     String catalogVersion) {
   private static final Pattern NUMERIC_13 = Pattern.compile("^[0-9]{13}$");
   private static final Pattern NUMERIC_10 = Pattern.compile("^[0-9]{10}$");

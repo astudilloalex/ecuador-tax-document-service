@@ -14,9 +14,10 @@ import java.net.URI;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
-import org.jspecify.annotations.Nullable;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Maps only an API-accepted terminal outcome to HTTP. */
 @NullMarked
@@ -43,7 +44,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     state.acceptTerminal();
     state.acceptedStatus(mapping.status());
     telemetry.failed(state, telemetryOutcome(mapping), mapping.status());
-    List<ProblemDetails.Violation> violations = mapping.violations();
+    List<ProblemDetails.@NonNull Violation> violations = mapping.violations();
     String codeLower = Objects.requireNonNull(mapping.code().toLowerCase(Locale.ROOT));
     ProblemDetails problem =
         new ProblemDetails(
@@ -79,24 +80,27 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
           api.status(),
           api.code(),
           title(api.code()),
-          Objects.requireNonNullElse(api.getMessage(), "The request failed"),
+          Objects.requireNonNull(Objects.requireNonNullElse(api.getMessage(), "The request failed")),
           api.violations());
     }
     if (exception instanceof InvoiceDraftApplicationException application) {
       InvoiceDraftFailure failure = application.failure();
       int status = status(failure.code());
       String codeName = Objects.requireNonNull(failure.code().name());
-      List<ProblemDetails.Violation> violations =
-          failure.violations().stream()
-              .<ProblemDetails.Violation>map(
-                  value ->
-                      new ProblemDetails.Violation(
-                          value.code(),
-                          value.field(),
-                          value.validationStage(),
-                          value.maximum(),
-                          value.countingUnit()))
-              .toList();
+      List<ProblemDetails.@NonNull Violation> violations =
+          Objects.requireNonNull(
+              failure
+                  .violations()
+                  .stream()
+                  .map(
+                      value ->
+                          new ProblemDetails.Violation(
+                              value.code(),
+                              value.field(),
+                              value.validationStage(),
+                              value.maximum(),
+                              value.countingUnit()))
+                  .toList());
       return new Mapping(
           status,
           codeName,
@@ -106,7 +110,11 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     }
     if (exception instanceof JsonProcessingException) {
       return new Mapping(
-          400, "INVALID_REQUEST", title("INVALID_REQUEST"), "The request is invalid", List.of());
+          400,
+          "INVALID_REQUEST",
+          title("INVALID_REQUEST"),
+          "The request is invalid",
+          Objects.requireNonNull(List.<ProblemDetails.@NonNull Violation>of()));
     }
     if (exception instanceof WebApplicationException web && web.getResponse().getStatus() == 413) {
       return new Mapping(
@@ -114,14 +122,14 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
           "REQUEST_PAYLOAD_TOO_LARGE",
           title("REQUEST_PAYLOAD_TOO_LARGE"),
           "The request body exceeds 2 MiB",
-          List.of());
+          Objects.requireNonNull(List.<ProblemDetails.@NonNull Violation>of()));
     }
     return new Mapping(
         500,
         "INTERNAL_ERROR",
         title("INTERNAL_ERROR"),
         "The request could not be completed",
-        List.of());
+        Objects.requireNonNull(List.<ProblemDetails.@NonNull Violation>of()));
   }
 
   private String safeCorrelation() {
@@ -162,5 +170,5 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
       String code,
       String title,
       String detail,
-      List<ProblemDetails.Violation> violations) {}
+      List<ProblemDetails.@NonNull Violation> violations) {}
 }

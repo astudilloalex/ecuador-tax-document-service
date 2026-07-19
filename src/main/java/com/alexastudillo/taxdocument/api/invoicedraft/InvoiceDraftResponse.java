@@ -9,6 +9,7 @@ import java.util.UUID;
 
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Complete externally visible Invoice Draft representation. */
 @NullMarked
@@ -24,18 +25,18 @@ public record InvoiceDraftResponse(
     List<@NonNull TaxResponse> taxTotals,
     List<@NonNull PaymentResponse> payments,
     List<@NonNull AdditionalInformationResponse> additionalInformation,
-    @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal subtotalBeforeTaxes,
-    @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal totalDiscount,
-    @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal grandTotal,
+    @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal subtotalBeforeTaxes,
+    @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal totalDiscount,
+    @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal grandTotal,
     Instant createdAt,
     Instant updatedAt) {
   public record BuyerResponse(
       String identificationType,
       String identification,
       String legalName,
-      String address,
-      String email,
-      String telephone) {}
+      @Nullable String address,
+      @Nullable String email,
+      @Nullable String telephone) {}
 
   public record LineResponse(
       int position,
@@ -44,10 +45,10 @@ public record InvoiceDraftResponse(
       @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal quantity,
       @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal unitPrice,
       @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal discount,
-      @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal grossAmount,
-      @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal netAmount,
+      @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal grossAmount,
+      @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal netAmount,
       LineTaxResponse tax,
-      @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal lineTotal) {}
+      @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal lineTotal) {}
 
   public record LineTaxResponse(
       UUID taxRuleId,
@@ -56,8 +57,8 @@ public record InvoiceDraftResponse(
       String officialTaxCode,
       String officialPercentageCode,
       @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal rate,
-      @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal base,
-      @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal amount,
+      @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal base,
+      @JsonFormat(shape = JsonFormat.Shape.STRING) @Nullable BigDecimal amount,
       String catalogVersion) {}
 
   public record TaxResponse(

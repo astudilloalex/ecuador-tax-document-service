@@ -85,6 +85,6 @@ public final class InvoiceDraftRequestDeadlineHandler {
             InvoiceDraftFailure.Code.REQUEST_TIMEOUT,
             "The Invoice Draft request exceeded its deadline",
             true,
-            List.of()));
+            Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())));
   }
 }

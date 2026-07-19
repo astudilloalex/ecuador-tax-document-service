@@ -50,67 +50,71 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
 
   @Override
   public Uni<CreateInvoiceDraftResult> create(CreateInvoiceDraftCommand command) {
-    return Uni.createFrom()
-        .item(() -> normalize(command))
-        .onItem()
-        .transformToUni(this::createNormalized)
-        .onFailure(DraftValidationException.class)
-        .transform(this::mapValidationFailure);
+    return Objects.requireNonNull(
+        Uni.createFrom()
+            .item(() -> normalize(command))
+            .onItem()
+            .transformToUni(this::createNormalized)
+            .onFailure(DraftValidationException.class)
+            .transform(this::mapValidationFailure));
   }
 
   private Uni<CreateInvoiceDraftResult> createNormalized(CreateInvoiceDraftCommand normalized) {
     requireBudget(normalized);
     byte[] keyHash = fingerprint.keyHash(normalized.idempotencyKey());
     byte[] requestFingerprint = fingerprint.requestFingerprint(normalized);
-    return repository
-        .findByIdempotency(
-            normalized.companyId(), keyHash, requestFingerprint, normalized.deadline().remaining())
-        .onItem()
-        .transformToUni(
-            lookup -> {
-              if (lookup
-                  instanceof InvoiceDraftRepository.IdempotencyLookup.Equivalent equivalent) {
-                return Uni.createFrom()
-                    .item(CreateInvoiceDraftResult.replay(equivalent.persisted()));
-              }
-              if (lookup instanceof InvoiceDraftRepository.IdempotencyLookup.Conflict) {
-                return Uni.createFrom()
-                    .failure(
-                        new InvoiceDraftApplicationException(
-                            new InvoiceDraftFailure(
-                                InvoiceDraftFailure.Code.IDEMPOTENCY_CONFLICT,
-                                "The idempotency key is already bound to different content",
-                                false,
-                                List.of())));
-              }
-              return prepareAndPersist(normalized, keyHash, requestFingerprint);
-            });
+    return Objects.requireNonNull(
+        repository
+            .findByIdempotency(
+                normalized.companyId(), keyHash, requestFingerprint, normalized.deadline().remaining())
+            .onItem()
+            .transformToUni(
+                lookup -> {
+                  if (lookup
+                      instanceof InvoiceDraftRepository.IdempotencyLookup.Equivalent equivalent) {
+                    return Objects.requireNonNull(
+                        Uni.createFrom().item(CreateInvoiceDraftResult.replay(equivalent.persisted())));
+                  }
+                  if (lookup instanceof InvoiceDraftRepository.IdempotencyLookup.Conflict) {
+                    return Objects.requireNonNull(
+                        Uni.createFrom()
+                            .failure(
+                                new InvoiceDraftApplicationException(
+                                    new InvoiceDraftFailure(
+                                        InvoiceDraftFailure.Code.IDEMPOTENCY_CONFLICT,
+                                        "The idempotency key is already bound to different content",
+                                        false,
+                                        Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())))));
+                  }
+                  return prepareAndPersist(normalized, keyHash, requestFingerprint);
+                }));
   }
 
   private Uni<CreateInvoiceDraftResult> prepareAndPersist(
       CreateInvoiceDraftCommand command, byte[] keyHash, byte[] requestFingerprint) {
     requireBudget(command);
-    return referenceData
-        .buyerIdentificationRule(
-            command.buyer().identificationType(), command.deadline().remaining())
-        .onItem()
-        .transformToUni(
-            buyerRule ->
-                resolveTaxes(command, 0, new ArrayList<>())
-                    .onItem()
-                    .transformToUni(
-                        taxes ->
-                            resolvePayments(command, 0, new ArrayList<>())
-                                .onItem()
-                                .transformToUni(
-                                    paymentMethods ->
-                                        persistPrepared(
-                                            command,
-                                            buyerRule,
-                                            taxes,
-                                            paymentMethods,
-                                            keyHash,
-                                            requestFingerprint))));
+    return Objects.requireNonNull(
+        referenceData
+            .buyerIdentificationRule(
+                command.buyer().identificationType(), command.deadline().remaining())
+            .onItem()
+            .transformToUni(
+                buyerRule ->
+                    resolveTaxes(command, 0, new ArrayList<>())
+                        .onItem()
+                        .transformToUni(
+                            taxes ->
+                                resolvePayments(command, 0, new ArrayList<>())
+                                    .onItem()
+                                    .transformToUni(
+                                        paymentMethods ->
+                                            persistPrepared(
+                                                command,
+                                                buyerRule,
+                                                taxes,
+                                                paymentMethods,
+                                                keyHash,
+                                                requestFingerprint)))));
   }
 
   private Uni<CreateInvoiceDraftResult> persistPrepared(
@@ -120,143 +124,148 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
       List<ReferenceDataPort.PaymentMethod> paymentMethods,
       byte[] keyHash,
       byte[] requestFingerprint) {
-    return Uni.createFrom()
-        .item(
-            () -> {
-              Buyer buyer =
-                  new Buyer(
-                      command.buyer().identificationType(),
-                      command.buyer().identification(),
-                      command.buyer().legalName(),
-                      command.buyer().address(),
-                      command.buyer().email(),
-                      command.buyer().telephone(),
-                      buyerRule.catalogVersion());
-              List<InvoiceLine> lineInputs = new ArrayList<>(command.lines().size());
-              for (int index = 0; index < command.lines().size(); index++) {
-                CreateInvoiceDraftCommand.LineInput input = command.lines().get(index);
-                lineInputs.add(
-                    new InvoiceLine(
-                        identifiers.nextIdentifier(),
-                        index + 1,
-                        input.productCode(),
-                        input.description(),
-                        input.quantity(),
-                        input.unitPrice(),
-                        input.discount(),
-                        taxes.get(index),
-                        null,
-                        null,
-                        null,
-                        null,
-                        null));
-              }
-              List<Payment> payments = new ArrayList<>(command.payments().size());
-              for (int index = 0; index < command.payments().size(); index++) {
-                CreateInvoiceDraftCommand.PaymentInput input = command.payments().get(index);
-                ReferenceDataPort.PaymentMethod method = paymentMethods.get(index);
-                payments.add(
-                    new Payment(
-                        identifiers.nextIdentifier(),
-                        method.id(),
-                        method.officialCode(),
-                        method.name(),
-                        input.amount(),
-                        method.catalogVersion()));
-              }
-              List<AdditionalInformation> additional = new ArrayList<>();
-              for (int index = 0; index < command.additionalInformation().size(); index++) {
-                CreateInvoiceDraftCommand.AdditionalInformationInput input =
-                    command.additionalInformation().get(index);
-                additional.add(
-                    new AdditionalInformation(
-                        identifiers.nextIdentifier(),
-                        index + 1,
-                        input.name(),
-                        input.canonicalName(),
-                        input.value()));
-              }
-              InvoiceDraftCalculator.Calculation calculation =
-                  calculator.calculate(buyer, lineInputs, payments);
-              InvoiceDraft draft =
-                  new InvoiceDraft(
-                      identifiers.nextIdentifier(),
-                      command.companyId(),
-                      UUID.fromString(command.emissionPointId()),
-                      command.emissionDate(),
-                      buyer,
-                      calculation.lines(),
-                      calculation.taxTotals(),
-                      payments,
-                      additional,
-                      calculation.subtotalBeforeTaxes(),
-                      calculation.totalDiscount(),
-                      calculation.grandTotal());
-              Map<UUID, UUID> lineTaxIdentifiers = new LinkedHashMap<>();
-              calculation
-                  .lines()
-                  .forEach(line -> lineTaxIdentifiers.put(line.id(), identifiers.nextIdentifier()));
-              Map<String, UUID> taxTotalIdentifiers = new LinkedHashMap<>();
-              calculation
-                  .taxTotals()
-                  .forEach(
-                      total ->
-                          taxTotalIdentifiers.put(total.groupKey(), identifiers.nextIdentifier()));
-              return new InvoiceDraftCandidate(
-                  draft,
-                  lineTaxIdentifiers,
-                  taxTotalIdentifiers,
-                  keyHash,
-                  requestFingerprint,
-                  IdempotencyFingerprint.NORMALIZATION_VERSION);
-            })
-        .onItem()
-        .transformToUni(
-            candidate ->
-                repository
-                    .persist(candidate, command.deadline().remaining())
-                    .map(
-                        persisted ->
-                            candidate.draft().id().equals(persisted.draft().id())
-                                ? CreateInvoiceDraftResult.newResult(persisted)
-                                : CreateInvoiceDraftResult.replay(persisted)));
+    return Objects.requireNonNull(
+        Uni.createFrom()
+            .item(
+                () -> {
+                  Buyer buyer =
+                      new Buyer(
+                          command.buyer().identificationType(),
+                          command.buyer().identification(),
+                          command.buyer().legalName(),
+                          command.buyer().address(),
+                          command.buyer().email(),
+                          command.buyer().telephone(),
+                          buyerRule.catalogVersion());
+                  List<@NonNull InvoiceLine> lineInputs = new ArrayList<>(command.lines().size());
+                  for (int index = 0; index < command.lines().size(); index++) {
+                    CreateInvoiceDraftCommand.LineInput input = command.lines().get(index);
+                    lineInputs.add(
+                        new InvoiceLine(
+                            identifiers.nextIdentifier(),
+                            index + 1,
+                            input.productCode(),
+                            input.description(),
+                            input.quantity(),
+                            input.unitPrice(),
+                            input.discount(),
+                            taxes.get(index),
+                            null,
+                            null,
+                            null,
+                            null,
+                            null));
+                  }
+                  List<@NonNull Payment> payments = new ArrayList<>(command.payments().size());
+                  for (int index = 0; index < command.payments().size(); index++) {
+                    CreateInvoiceDraftCommand.PaymentInput input = command.payments().get(index);
+                    ReferenceDataPort.PaymentMethod method = paymentMethods.get(index);
+                    payments.add(
+                        new Payment(
+                            identifiers.nextIdentifier(),
+                            method.id(),
+                            method.officialCode(),
+                            method.name(),
+                            input.amount(),
+                            method.catalogVersion()));
+                  }
+                  List<@NonNull AdditionalInformation> additional = new ArrayList<>();
+                  for (int index = 0; index < command.additionalInformation().size(); index++) {
+                    CreateInvoiceDraftCommand.AdditionalInformationInput input =
+                        command.additionalInformation().get(index);
+                    additional.add(
+                        new AdditionalInformation(
+                            identifiers.nextIdentifier(),
+                            index + 1,
+                            input.name(),
+                            input.canonicalName(),
+                            input.value()));
+                  }
+                  InvoiceDraftCalculator.Calculation calculation =
+                      calculator.calculate(buyer, lineInputs, payments);
+                  InvoiceDraft draft =
+                      new InvoiceDraft(
+                          identifiers.nextIdentifier(),
+                          command.companyId(),
+                          Objects.requireNonNull(UUID.fromString(command.emissionPointId())),
+                          command.emissionDate(),
+                          buyer,
+                          calculation.lines(),
+                          calculation.taxTotals(),
+                          payments,
+                          additional,
+                          calculation.subtotalBeforeTaxes(),
+                          calculation.totalDiscount(),
+                          calculation.grandTotal());
+                  Map<UUID, UUID> lineTaxIdentifiers = new LinkedHashMap<>();
+                  calculation
+                      .lines()
+                      .forEach(line -> lineTaxIdentifiers.put(line.id(), identifiers.nextIdentifier()));
+                  Map<String, UUID> taxTotalIdentifiers = new LinkedHashMap<>();
+                  calculation
+                      .taxTotals()
+                      .forEach(
+                          total ->
+                              taxTotalIdentifiers.put(total.groupKey(), identifiers.nextIdentifier()));
+                  return new InvoiceDraftCandidate(
+                      draft,
+                      lineTaxIdentifiers,
+                      taxTotalIdentifiers,
+                      keyHash,
+                      requestFingerprint,
+                      IdempotencyFingerprint.NORMALIZATION_VERSION);
+                })
+            .onItem()
+            .transformToUni(
+                candidate ->
+                    repository
+                        .persist(candidate, command.deadline().remaining())
+                        .map(
+                            persisted ->
+                                candidate.draft().id().equals(persisted.draft().id())
+                                    ? CreateInvoiceDraftResult.newResult(persisted)
+                                    : CreateInvoiceDraftResult.replay(persisted))));
   }
 
   private Uni<List<TaxSelection>> resolveTaxes(
       CreateInvoiceDraftCommand command, int index, List<TaxSelection> values) {
     if (index == command.lines().size()) {
-      return Uni.createFrom().item(List.copyOf(values));
+      return Objects.requireNonNull(
+          Uni.createFrom().item(Objects.requireNonNull(List.copyOf(values))));
     }
-    return referenceData
-        .ivaRule(
-            command.lines().get(index).taxRuleId(),
-            command.emissionDate(),
-            command.deadline().remaining())
-        .onItem()
-        .transformToUni(
-            value -> {
-              value.requireEffectiveOn(command.emissionDate());
-              values.add(value);
-              return resolveTaxes(command, index + 1, values);
-            });
+    return Objects.requireNonNull(
+        referenceData
+            .ivaRule(
+                command.lines().get(index).taxRuleId(),
+                command.emissionDate(),
+                command.deadline().remaining())
+            .onItem()
+            .transformToUni(
+                value -> {
+                  value.requireEffectiveOn(command.emissionDate());
+                  values.add(value);
+                  return resolveTaxes(command, index + 1, values);
+                }));
   }
 
   private Uni<List<ReferenceDataPort.PaymentMethod>> resolvePayments(
       CreateInvoiceDraftCommand command, int index, List<ReferenceDataPort.PaymentMethod> values) {
     if (index == command.payments().size()) {
-      return Uni.createFrom().item(List.copyOf(values));
+      return Objects.requireNonNull(
+          Uni.createFrom().item(Objects.requireNonNull(List.copyOf(values))));
     }
-    return referenceData
-        .paymentMethod(
-            command.payments().get(index).paymentMethodId(),
-            command.emissionDate(),
-            command.deadline().remaining())
-        .onItem()
-        .transformToUni(
-            value -> {
-              values.add(value);
-              return resolvePayments(command, index + 1, values);
-            });
+    return Objects.requireNonNull(
+        referenceData
+            .paymentMethod(
+                command.payments().get(index).paymentMethodId(),
+                command.emissionDate(),
+                command.deadline().remaining())
+            .onItem()
+            .transformToUni(
+                value -> {
+                  values.add(value);
+                  return resolvePayments(command, index + 1, values);
+                }));
   }
 
   private CreateInvoiceDraftCommand normalize(CreateInvoiceDraftCommand command) {
@@ -337,11 +346,11 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
     if (!UUID_TEXT.matcher(normalized).matches()) {
       throw emissionPointFailure();
     }
-    UUID value = UUID.fromString(normalized);
+    UUID value = Objects.requireNonNull(UUID.fromString(normalized));
     if (NIL.equals(value)) {
       throw emissionPointFailure();
     }
-    return value.toString();
+    return Objects.requireNonNull(value.toString());
   }
 
   private static DraftValidationException emissionPointFailure() {
@@ -356,7 +365,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
               InvoiceDraftFailure.Code.REQUEST_TIMEOUT,
               "The request deadline expired",
               true,
-              List.of()));
+              Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())));
     }
   }
 
@@ -367,6 +376,9 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
             ? "NORMALIZATION"
             : "BUSINESS_VALIDATION";
     return new InvoiceDraftApplicationException(
-        InvoiceDraftFailure.validation(validation.code(), validation.field(), stage));
+        InvoiceDraftFailure.validation(
+            Objects.requireNonNull(validation.code()),
+            Objects.requireNonNull(validation.field()),
+            stage));
   }
 }

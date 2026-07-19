@@ -5,6 +5,8 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import org.jspecify.annotations.Nullable;
+
 /** Ordered commercial line with one selected IVA rule and optional calculated values. */
 public record InvoiceLine(
     UUID id,
@@ -15,11 +17,11 @@ public record InvoiceLine(
     BigDecimal unitPrice,
     BigDecimal discount,
     TaxSelection taxSelection,
-    BigDecimal grossAmount,
-    BigDecimal netAmount,
-    BigDecimal taxBase,
-    BigDecimal taxAmount,
-    BigDecimal lineTotal) {
+    @Nullable BigDecimal grossAmount,
+    @Nullable BigDecimal netAmount,
+    @Nullable BigDecimal taxBase,
+    @Nullable BigDecimal taxAmount,
+    @Nullable BigDecimal lineTotal) {
   private static final Pattern PRODUCT_CODE = Pattern.compile("^[A-Za-z0-9]{1,25}$");
   private static final BigDecimal MAX_QUANTITY = new BigDecimal("999999.999999");
 
