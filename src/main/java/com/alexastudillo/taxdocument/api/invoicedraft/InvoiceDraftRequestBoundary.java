@@ -48,7 +48,8 @@ public final class InvoiceDraftRequestBoundary {
     this.objectMapper = objectMapper;
     this.telemetry = telemetry;
     requestDeadline =
-        ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class);
+        Objects.requireNonNull(
+            ConfigProvider.getConfig().getValue("invoice-draft.request-deadline", Duration.class));
   }
 
   void install(@Observes Router router) {
@@ -82,10 +83,11 @@ public final class InvoiceDraftRequestBoundary {
 
   private BoundaryState capture(RoutingContext context) {
     long startedNanos = System.nanoTime();
-    Instant requestInstant = clock.requestTime();
-    RequestDeadline deadline = RequestDeadline.start(requestDeadline);
+    Instant requestInstant = Objects.requireNonNull(clock.requestTime());
+    RequestDeadline deadline = Objects.requireNonNull(RequestDeadline.start(requestDeadline));
     CorrelationHeader.Classification correlation =
-        correlationHeader.classify(context.request().headers().getAll("X-Correlation-Id"));
+        Objects.requireNonNull(
+            correlationHeader.classify(context.request().headers().getAll("X-Correlation-Id")));
     return new BoundaryState(requestInstant, deadline, correlation, startedNanos);
   }
 
@@ -112,7 +114,7 @@ public final class InvoiceDraftRequestBoundary {
             "REQUEST_TIMEOUT",
             "The Invoice Draft request exceeded its deadline",
             Objects.requireNonNull(URI.create(PATH)),
-            state.correlation().safeValue(),
+            Objects.requireNonNull(state.correlation().safeValue()),
             null);
     try {
       Buffer body = Buffer.buffer(objectMapper.writeValueAsBytes(problem));

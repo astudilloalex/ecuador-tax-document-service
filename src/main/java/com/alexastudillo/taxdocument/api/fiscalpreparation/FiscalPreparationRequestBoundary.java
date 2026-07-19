@@ -20,8 +20,10 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
 
 /** Validates the bodyless Company-scoped request before any Company-owned application read. */
+@NullMarked
 @ApplicationScoped
 public final class FiscalPreparationRequestBoundary {
   private static final Pattern UUID_TEXT =
@@ -59,7 +61,7 @@ public final class FiscalPreparationRequestBoundary {
     CorrelationHeader.Classification correlation =
         correlationHeader.classify(correlationHeaders);
     FiscalPreparationCommitTracker commitTracker = new FiscalPreparationCommitTracker();
-    state.initialize(context, correlation.safeValue(), commitTracker);
+    state.initialize(context, Objects.requireNonNull(correlation.safeValue()), commitTracker);
     List<String> companyHeaders =
         Objects.requireNonNull(routing.request().headers().getAll("X-Company-Id"));
     CompanyId companyId = parseCompany(companyHeaders);
@@ -108,6 +110,6 @@ public final class FiscalPreparationRequestBoundary {
   }
 
   private static FiscalPreparationApplicationException failure(FiscalPreparationFailure.Code code) {
-    return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(code));
+    return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(Objects.requireNonNull(code)));
   }
 }
