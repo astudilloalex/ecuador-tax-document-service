@@ -26,7 +26,7 @@ class CreateInvoiceDraftUseCaseTest {
               byte[] keyHash,
               byte[] requestFingerprint,
               Duration remaining) {
-            return Uni.createFrom().item(new IdempotencyLookup.Missing());
+            return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
           }
 
           @Override
@@ -34,7 +34,8 @@ class CreateInvoiceDraftUseCaseTest {
               InvoiceDraftCandidate candidate, Duration remaining) {
             captured.set(candidate);
             return Uni.createFrom()
-                .item(new PersistedInvoiceDraft(candidate.draft(), timestamp, timestamp));
+                .<PersistedInvoiceDraft>item(
+                    new PersistedInvoiceDraft(candidate.draft(), timestamp, timestamp));
           }
         };
     CreateInvoiceDraftResult result =
@@ -75,7 +76,7 @@ class CreateInvoiceDraftUseCaseTest {
               byte[] requestFingerprint,
               Duration remaining) {
             calls.incrementAndGet();
-            return Uni.createFrom().item(new IdempotencyLookup.Missing());
+            return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
           }
 
           @Override

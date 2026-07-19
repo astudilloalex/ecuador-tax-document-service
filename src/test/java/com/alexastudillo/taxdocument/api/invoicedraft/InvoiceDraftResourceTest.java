@@ -187,12 +187,13 @@ class InvoiceDraftResourceTest {
     public Uni<IdempotencyLookup> findByIdempotency(
         CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
       if (stored == null) {
-        return Uni.createFrom().item(new IdempotencyLookup.Missing());
+        return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
       }
       if (!Arrays.equals(fingerprint, requestFingerprint)) {
-        return Uni.createFrom().item(new IdempotencyLookup.Conflict(fingerprint));
+        return Uni.createFrom()
+            .<IdempotencyLookup>item(new IdempotencyLookup.Conflict(fingerprint));
       }
-      return Uni.createFrom().item(new IdempotencyLookup.Equivalent(stored));
+      return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Equivalent(stored));
     }
 
     @Override

@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -35,7 +36,8 @@ class InvoiceDraftRequestValidationTest {
     String rawEmission = "\t123E4567-E89B-12D3-A456-426614174000\t";
     String rawName = " Cafe\u0301 Buyer ";
     JsonNode json = mapper.readTree(validJson(rawEmission, rawName));
-    CreateInvoiceDraftRequest request = mapper.treeToValue(json, CreateInvoiceDraftRequest.class);
+    CreateInvoiceDraftRequest request =
+        Objects.requireNonNull(mapper.treeToValue(json, CreateInvoiceDraftRequest.class));
     InvoiceDraftRequestState state = new InvoiceDraftRequestState();
     state.initialize(
         Instant.parse("2026-07-17T12:00:00Z"),
