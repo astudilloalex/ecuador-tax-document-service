@@ -19,9 +19,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Company-scoped reactive aggregate repository and sole transactional timestamp owner. */
 @NullMarked
@@ -47,7 +50,7 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
   public Uni<IdempotencyLookup> findByIdempotency(
       CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return Uni.createFrom().failure(deadlineExhausted());
+      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
     Uni<IdempotencyLookup> operation =
         Panache.withSession(
@@ -65,19 +68,28 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
                           if (!Arrays.equals(binding.requestFingerprint, requestFingerprint)) {
                             return Uni.createFrom()
                                 .<IdempotencyLookup>item(
-                                    new IdempotencyLookup.Conflict(binding.requestFingerprint));
+                                    new IdempotencyLookup.Conflict(
+                                        requireHydrated(
+                                            binding.requestFingerprint,
+                                            "idempotency.requestFingerprint")));
                           }
-                          return load(companyId, binding.invoiceDraftId)
+                          return load(
+                                  companyId,
+                                  requireHydrated(
+                                      binding.invoiceDraftId, "idempotency.invoiceDraftId"))
                               .onItem()
-                              .<IdempotencyLookup>transform(IdempotencyLookup.Equivalent::new);
+                              .<IdempotencyLookup>transform(
+                                  persisted ->
+                                      new IdempotencyLookup.Equivalent(
+                                          requireHydrated(persisted, "persisted invoice draft")));
                         }));
-    return bounded(operation, remaining, queryTimeout);
+    return bounded(requireHydrated(operation, "idempotency lookup"), remaining, queryTimeout);
   }
 
   @Override
   public Uni<PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return Uni.createFrom().failure(deadlineExhausted());
+      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
     Uni<PersistedInvoiceDraft> operation =
         Panache.withTransaction(
@@ -105,20 +117,23 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
                           aggregate.additionalInformation()));
             });
     long startedNanos = System.nanoTime();
-    return bounded(operation, remaining, writeTimeout)
-        .onFailure(this::isUniqueViolation)
-        .recoverWithUni(
-            ignored ->
-                recoverIdempotencyWinner(
-                    candidate, remainingAfter(remaining, System.nanoTime() - startedNanos)));
+    return requireHydrated(
+        bounded(requireHydrated(operation, "persist operation"), remaining, writeTimeout)
+            .onFailure(
+                failure -> isUniqueViolation(requireHydrated(failure, "persistence failure")))
+            .recoverWithUni(
+                ignored ->
+                    recoverIdempotencyWinner(
+                        candidate, remainingAfter(remaining, System.nanoTime() - startedNanos))),
+        "idempotency recovery");
   }
 
   private Uni<PersistedInvoiceDraft> recoverIdempotencyWinner(
       InvoiceDraftCandidate candidate, Duration remaining) {
     return findByIdempotency(
             candidate.draft().companyId(),
-            candidate.idempotencyKeyHash(),
-            candidate.requestFingerprint(),
+            requireHydrated(candidate.idempotencyKeyHash(), "idempotencyKeyHash"),
+            requireHydrated(candidate.requestFingerprint(), "requestFingerprint"),
             remaining)
         .onItem()
         .transformToUni(
@@ -137,47 +152,59 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
   }
 
   private Uni<PersistedInvoiceDraft> load(CompanyId companyId, UUID draftId) {
-    return InvoiceDraftEntity.find("companyId = ?1 and id = ?2", companyId.value(), draftId)
-        .<InvoiceDraftEntity>firstResult()
-        .onItem()
-        .ifNull()
-        .failWith(() -> persistenceUnavailable("The idempotent draft could not be loaded"))
-        .onItem()
-        .transformToUni(root -> loadAggregate(root, draftId));
+    return requireHydrated(
+        InvoiceDraftEntity.find("companyId = ?1 and id = ?2", companyId.value(), draftId)
+            .<InvoiceDraftEntity>firstResult()
+            .onItem()
+            .ifNull()
+            .failWith(() -> persistenceUnavailable("The idempotent draft could not be loaded"))
+            .onItem()
+            .transformToUni(
+                root -> loadAggregate(requireHydrated(root, "invoice draft entity"), draftId)),
+        "loaded invoice draft");
   }
 
   private Uni<PersistedInvoiceDraft> loadAggregate(InvoiceDraftEntity root, UUID draftId) {
     LoadedAggregate loaded = new LoadedAggregate();
-    return InvoiceLineEntity.<InvoiceLineEntity>list("invoiceDraftId", draftId)
-        .invoke(lines -> loaded.lines = lines)
-        .chain(() -> loadLineTaxes(loaded.lines))
-        .invoke(lineTaxes -> loaded.lineTaxes = lineTaxes)
-        .chain(() -> InvoiceTaxTotalEntity.<InvoiceTaxTotalEntity>list("invoiceDraftId", draftId))
-        .invoke(totals -> loaded.taxTotals = totals)
-        .chain(() -> InvoicePaymentEntity.<InvoicePaymentEntity>list("invoiceDraftId", draftId))
-        .invoke(payments -> loaded.payments = payments)
-        .chain(
-            () ->
-                InvoiceAdditionalInformationEntity.<InvoiceAdditionalInformationEntity>list(
-                    "invoiceDraftId", draftId))
-        .invoke(additional -> loaded.additional = additional)
-        .map(
-            ignored ->
-                mapper.toPersisted(
-                    root,
-                    loaded.lines,
-                    loaded.lineTaxes,
-                    loaded.taxTotals,
-                    loaded.payments,
-                    loaded.additional));
+    return requireHydrated(
+        InvoiceLineEntity.<InvoiceLineEntity>list("invoiceDraftId", draftId)
+            .invoke(lines -> loaded.lines = requireHydrated(lines, "loaded invoice lines"))
+            .chain(() -> loadLineTaxes(loaded.lines))
+            .invoke(lineTaxes -> loaded.lineTaxes = requireHydrated(lineTaxes, "loaded line taxes"))
+            .chain(
+                () -> InvoiceTaxTotalEntity.<InvoiceTaxTotalEntity>list("invoiceDraftId", draftId))
+            .invoke(totals -> loaded.taxTotals = requireHydrated(totals, "loaded tax totals"))
+            .chain(() -> InvoicePaymentEntity.<InvoicePaymentEntity>list("invoiceDraftId", draftId))
+            .invoke(payments -> loaded.payments = requireHydrated(payments, "loaded payments"))
+            .chain(
+                () ->
+                    InvoiceAdditionalInformationEntity.<InvoiceAdditionalInformationEntity>list(
+                        "invoiceDraftId", draftId))
+            .invoke(
+                additional ->
+                    loaded.additional =
+                        requireHydrated(additional, "loaded additional information"))
+            .map(
+                ignored ->
+                    mapper.toPersisted(
+                        root,
+                        loaded.lines,
+                        loaded.lineTaxes,
+                        loaded.taxTotals,
+                        loaded.payments,
+                        loaded.additional)),
+        "loaded invoice draft aggregate");
   }
 
   private Uni<List<InvoiceLineTaxEntity>> loadLineTaxes(List<InvoiceLineEntity> lines) {
     if (lines.isEmpty()) {
-      return Uni.createFrom().item(List.of());
+      return requireHydrated(
+          Uni.createFrom().item(requireHydrated(List.of(), "empty line taxes")),
+          "empty line taxes result");
     }
     List<UUID> lineIds = lines.stream().map(value -> value.id).toList();
-    return InvoiceLineTaxEntity.list("invoiceLineId in ?1", lineIds);
+    return requireHydrated(
+        InvoiceLineTaxEntity.list("invoiceLineId in ?1", lineIds), "loaded line taxes");
   }
 
   private static InvoiceDraftIdempotencyEntity binding(
@@ -194,21 +221,24 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
 
   private <T> Uni<T> bounded(Uni<T> operation, Duration remaining, Duration configuredTimeout) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return Uni.createFrom().failure(deadlineExhausted());
+      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
     ReactiveOperationBudget budget = ReactiveOperationBudget.clamp(remaining, configuredTimeout);
-    return operation
-        .ifNoItem()
-        .after(budget.timeout())
-        .failWith(
-            budget.timeoutOwner() == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
-                ? this::deadlineExhausted
-                : () -> persistenceUnavailable("The persistence operation timed out"))
-        .onFailure(throwable -> !(throwable instanceof InvoiceDraftApplicationException))
-        .transform(
-            throwable ->
-                persistenceUnavailable(
-                    "Invoice Draft persistence is temporarily unavailable", throwable));
+    return requireHydrated(
+        operation
+            .ifNoItem()
+            .after(budget.timeout())
+            .failWith(
+                budget.timeoutOwner() == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
+                    ? this::deadlineExhausted
+                    : () -> persistenceUnavailable("The persistence operation timed out"))
+            .onFailure(throwable -> !(throwable instanceof InvoiceDraftApplicationException))
+            .transform(
+                throwable ->
+                    persistenceUnavailable(
+                        "Invoice Draft persistence is temporarily unavailable",
+                        requireHydrated(throwable, "persistence failure"))),
+        "bounded persistence operation");
   }
 
   private static Duration remainingAfter(Duration original, long elapsedNanos) {
@@ -216,7 +246,9 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
       return original;
     }
     Duration elapsed = Duration.ofNanos(elapsedNanos);
-    return elapsed.compareTo(original) >= 0 ? Duration.ZERO : original.minus(elapsed);
+    return elapsed.compareTo(original) >= 0
+        ? requireHydrated(Duration.ZERO, "Duration.ZERO")
+        : requireHydrated(original.minus(elapsed), "remaining duration");
   }
 
   private InvoiceDraftApplicationException deadlineExhausted() {
@@ -225,13 +257,13 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
             InvoiceDraftFailure.Code.REQUEST_TIMEOUT,
             "The remaining request budget is exhausted",
             true,
-            List.of()));
+            emptyViolations()));
   }
 
   private static InvoiceDraftApplicationException persistenceUnavailable(String detail) {
     return new InvoiceDraftApplicationException(
         new InvoiceDraftFailure(
-            InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE, detail, true, List.of()));
+            InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE, detail, true, emptyViolations()));
   }
 
   private static InvoiceDraftApplicationException idempotencyConflict() {
@@ -240,7 +272,7 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
             InvoiceDraftFailure.Code.IDEMPOTENCY_CONFLICT,
             "The idempotency key is already bound to different content",
             false,
-            List.of()));
+            emptyViolations()));
   }
 
   private boolean isUniqueViolation(Throwable failure) {
@@ -261,16 +293,25 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
       String detail, Throwable cause) {
     return new InvoiceDraftApplicationException(
         new InvoiceDraftFailure(
-            InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE, detail, true, List.of()),
+            InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE, detail, true, emptyViolations()),
         cause);
   }
 
+  private static List<InvoiceDraftFailure.@NonNull Violation> emptyViolations() {
+    return requireHydrated(List.of(), "empty violations");
+  }
+
+  private static <T> T requireHydrated(@Nullable T value, String field) {
+    return Objects.requireNonNull(value, field);
+  }
+
   private static final class LoadedAggregate {
-    private List<InvoiceLineEntity> lines = List.of();
-    private List<InvoiceLineTaxEntity> lineTaxes = List.of();
-    private List<InvoiceTaxTotalEntity> taxTotals = List.of();
-    private List<InvoicePaymentEntity> payments = List.of();
-    private List<InvoiceAdditionalInformationEntity> additional = List.of();
+    private List<InvoiceLineEntity> lines = requireHydrated(List.of(), "empty invoice lines");
+    private List<InvoiceLineTaxEntity> lineTaxes = requireHydrated(List.of(), "empty line taxes");
+    private List<InvoiceTaxTotalEntity> taxTotals = requireHydrated(List.of(), "empty tax totals");
+    private List<InvoicePaymentEntity> payments = requireHydrated(List.of(), "empty payments");
+    private List<InvoiceAdditionalInformationEntity> additional =
+        requireHydrated(List.of(), "empty additional information");
 
     private LoadedAggregate() {}
   }

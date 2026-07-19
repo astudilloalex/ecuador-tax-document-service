@@ -4,8 +4,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
+import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class InvoiceDraftCalculatorTest {
   private final InvoiceDraftCalculator calculator = new InvoiceDraftCalculator();
 
@@ -23,7 +26,9 @@ class InvoiceDraftCalculatorTest {
                     DomainTestFixtures.tax("15.00", TaxSelection.Treatment.PERCENTAGE_RATE))),
             List.of(DomainTestFixtures.payment("17.25")));
 
-    assertEquals("20.00", calculation.lines().getFirst().grossAmount().toPlainString());
+    assertEquals(
+        "20.00",
+        Objects.requireNonNull(calculation.lines().getFirst().grossAmount()).toPlainString());
     assertEquals("15.00", calculation.subtotalBeforeTaxes().toPlainString());
     assertEquals("2.25", calculation.taxTotals().getFirst().amount().toPlainString());
     assertEquals("17.25", calculation.grandTotal().toPlainString());

@@ -5,16 +5,19 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Pure SRI Offline Technical Sheet v2.33 Access Key construction and component validation. */
+@NullMarked
 public final class AccessKeyGenerator {
   public static final String INVOICE_DOCUMENT_TYPE = "01";
   public static final String NORMAL_EMISSION_TYPE = "1";
   private static final DateTimeFormatter DATE =
-      DateTimeFormatter.ofPattern("ddMMyyyy", Locale.ROOT);
-  private static final Pattern RUC = Pattern.compile("^[0-9]{13}$");
-  private static final Pattern THREE_DIGITS = Pattern.compile("^[0-9]{3}$");
-  private static final Pattern DIGITS = Pattern.compile("^[0-9]+$");
+      Objects.requireNonNull(DateTimeFormatter.ofPattern("ddMMyyyy", Locale.ROOT));
+  private static final Pattern RUC = Objects.requireNonNull(Pattern.compile("^[0-9]{13}$"));
+  private static final Pattern THREE_DIGITS = Objects.requireNonNull(Pattern.compile("^[0-9]{3}$"));
+  private static final Pattern DIGITS = Objects.requireNonNull(Pattern.compile("^[0-9]+$"));
 
   public AccessKey generate(
       LocalDate emissionDate,
@@ -73,7 +76,7 @@ public final class AccessKeyGenerator {
     }
   }
 
-  public static int verificationDigit(String digits) {
+  public static int verificationDigit(@Nullable String digits) {
     if (digits == null || digits.isEmpty() || !DIGITS.matcher(digits).matches()) {
       throw new IllegalArgumentException("Modulo 11 input must contain only ASCII digits");
     }
@@ -91,7 +94,7 @@ public final class AccessKeyGenerator {
     };
   }
 
-  private static void requireMatch(String value, Pattern pattern, String field) {
+  private static void requireMatch(@Nullable String value, Pattern pattern, String field) {
     if (value == null || !pattern.matcher(value).matches()) {
       throw new IllegalArgumentException(field + " is invalid");
     }

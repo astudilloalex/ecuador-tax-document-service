@@ -16,11 +16,15 @@ import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Explicit persistence mapping with no identifier, text, timestamp, or HTTP policy. */
+@NullMarked
 @ApplicationScoped
 public final class InvoiceDraftPersistenceMapper {
   public MappedAggregate toEntities(InvoiceDraftCandidate candidate, Instant createdAt) {
@@ -46,27 +50,51 @@ public final class InvoiceDraftPersistenceMapper {
     root.updatedAt = createdAt;
 
     List<InvoiceLineEntity> lines =
-        draft.lines().stream().map(line -> lineEntity(draft.id(), line)).toList();
+        draft.lines().stream()
+            .map(line -> lineEntity(draft.id(), requireHydrated(line, "draft.lines element")))
+            .toList();
     List<InvoiceLineTaxEntity> lineTaxes =
         draft.lines().stream()
             .map(
                 line ->
-                    lineTaxEntity(candidate.lineTaxIdentifiers().get(line.id()), line.id(), line))
+                    lineTaxEntity(
+                        requireHydrated(
+                            candidate.lineTaxIdentifiers().get(line.id()),
+                            "candidate.lineTaxIdentifiers"),
+                        line.id(),
+                        line))
             .toList();
     List<InvoiceTaxTotalEntity> totals =
         draft.taxTotals().stream()
             .map(
                 total ->
                     taxTotalEntity(
-                        candidate.taxTotalIdentifiers().get(total.groupKey()), draft.id(), total))
+                        requireHydrated(
+                            candidate.taxTotalIdentifiers().get(total.groupKey()),
+                            "candidate.taxTotalIdentifiers"),
+                        draft.id(),
+                        total))
             .toList();
     List<InvoicePaymentEntity> payments =
-        draft.payments().stream().map(payment -> paymentEntity(draft.id(), payment)).toList();
+        draft.payments().stream()
+            .map(
+                payment ->
+                    paymentEntity(draft.id(), requireHydrated(payment, "draft.payments element")))
+            .toList();
     List<InvoiceAdditionalInformationEntity> additional =
         draft.additionalInformation().stream()
-            .map(value -> additionalEntity(draft.id(), value))
+            .map(
+                value ->
+                    additionalEntity(
+                        draft.id(), requireHydrated(value, "draft.additionalInformation element")))
             .toList();
-    return new MappedAggregate(root, lines, lineTaxes, totals, payments, additional);
+    return new MappedAggregate(
+        root,
+        Objects.requireNonNull(lines, "lines"),
+        Objects.requireNonNull(lineTaxes, "lineTaxes"),
+        Objects.requireNonNull(totals, "totals"),
+        Objects.requireNonNull(payments, "payments"),
+        Objects.requireNonNull(additional, "additional"));
   }
 
   public PersistedInvoiceDraft toPersisted(
@@ -82,43 +110,59 @@ public final class InvoiceDraftPersistenceMapper {
                 Collectors.toUnmodifiableMap(value -> value.invoiceLineId, Function.identity()));
     Buyer buyer =
         new Buyer(
-            root.buyerIdentificationTypeCode,
-            root.buyerIdentification,
-            root.buyerLegalName,
+            requireHydrated(root.buyerIdentificationTypeCode, "buyerIdentificationTypeCode"),
+            requireHydrated(root.buyerIdentification, "buyerIdentification"),
+            requireHydrated(root.buyerLegalName, "buyerLegalName"),
             root.buyerAddress,
             root.buyerEmail,
             root.buyerTelephone,
-            root.buyerIdentificationCatalogVersion);
+            requireHydrated(
+                root.buyerIdentificationCatalogVersion, "buyerIdentificationCatalogVersion"));
     List<InvoiceLine> domainLines =
         lines.stream()
             .sorted(Comparator.comparingInt(value -> value.position))
-            .map(line -> domainLine(line, taxByLine.get(line.id)))
+            .map(
+                line ->
+                    domainLine(line, requireHydrated(taxByLine.get(line.id), "persisted line tax")))
             .toList();
-    List<TaxTotal> domainTotals = totals.stream().map(this::domainTaxTotal).toList();
-    List<Payment> domainPayments = payments.stream().map(this::domainPayment).toList();
+    List<TaxTotal> domainTotals =
+        totals.stream()
+            .map(value -> domainTaxTotal(requireHydrated(value, "taxTotals element")))
+            .toList();
+    List<Payment> domainPayments =
+        payments.stream()
+            .map(value -> domainPayment(requireHydrated(value, "payments element")))
+            .toList();
     List<AdditionalInformation> domainAdditional =
         additional.stream()
             .sorted(Comparator.comparingInt(value -> value.position))
             .<AdditionalInformation>map(
                 value ->
                     new AdditionalInformation(
-                        value.id, value.position, value.name, value.canonicalName, value.value))
+                        requireHydrated(value.id, "additionalInformation.id"),
+                        value.position,
+                        requireHydrated(value.name, "additionalInformation.name"),
+                        requireHydrated(value.canonicalName, "additionalInformation.canonicalName"),
+                        requireHydrated(value.value, "additionalInformation.value")))
             .toList();
     InvoiceDraft draft =
         new InvoiceDraft(
-            root.id,
-            new CompanyId(root.companyId),
-            root.emissionPointId,
-            root.emissionDate,
+            requireHydrated(root.id, "invoiceDraft.id"),
+            new CompanyId(requireHydrated(root.companyId, "invoiceDraft.companyId")),
+            requireHydrated(root.emissionPointId, "invoiceDraft.emissionPointId"),
+            requireHydrated(root.emissionDate, "invoiceDraft.emissionDate"),
             buyer,
-            domainLines,
-            domainTotals,
-            domainPayments,
-            domainAdditional,
-            root.subtotalBeforeTaxes,
-            root.totalDiscount,
-            root.grandTotal);
-    return new PersistedInvoiceDraft(draft, root.createdAt, root.updatedAt);
+            Objects.requireNonNull(domainLines, "domainLines"),
+            Objects.requireNonNull(domainTotals, "domainTotals"),
+            Objects.requireNonNull(domainPayments, "domainPayments"),
+            Objects.requireNonNull(domainAdditional, "domainAdditional"),
+            requireHydrated(root.subtotalBeforeTaxes, "invoiceDraft.subtotalBeforeTaxes"),
+            requireHydrated(root.totalDiscount, "invoiceDraft.totalDiscount"),
+            requireHydrated(root.grandTotal, "invoiceDraft.grandTotal"));
+    return new PersistedInvoiceDraft(
+        draft,
+        requireHydrated(root.createdAt, "invoiceDraft.createdAt"),
+        requireHydrated(root.updatedAt, "invoiceDraft.updatedAt"));
   }
 
   private static InvoiceLineEntity lineEntity(UUID draftId, InvoiceLine line) {
@@ -138,9 +182,6 @@ public final class InvoiceDraftPersistenceMapper {
   }
 
   private static InvoiceLineTaxEntity lineTaxEntity(UUID id, UUID lineId, InvoiceLine line) {
-    if (id == null) {
-      throw new IllegalArgumentException("A final line-tax identifier is required");
-    }
     TaxSelection tax = line.taxSelection();
     InvoiceLineTaxEntity entity = new InvoiceLineTaxEntity();
     entity.id = id;
@@ -158,9 +199,6 @@ public final class InvoiceDraftPersistenceMapper {
   }
 
   private static InvoiceTaxTotalEntity taxTotalEntity(UUID id, UUID draftId, TaxTotal total) {
-    if (id == null) {
-      throw new IllegalArgumentException("A final tax-total identifier is required");
-    }
     InvoiceTaxTotalEntity entity = new InvoiceTaxTotalEntity();
     entity.id = id;
     entity.invoiceDraftId = draftId;
@@ -200,57 +238,60 @@ public final class InvoiceDraftPersistenceMapper {
   }
 
   private InvoiceLine domainLine(InvoiceLineEntity line, InvoiceLineTaxEntity tax) {
-    if (tax == null) {
-      throw new IllegalStateException("Persisted line tax is missing");
-    }
     TaxSelection selection =
         new TaxSelection(
-            tax.taxRuleId,
-            tax.family,
-            TaxSelection.Treatment.valueOf(tax.treatment),
-            tax.officialTaxCode,
-            tax.officialPercentageCode,
-            tax.rate,
-            tax.catalogVersion,
+            requireHydrated(tax.taxRuleId, "lineTax.taxRuleId"),
+            requireHydrated(tax.family, "lineTax.family"),
+            TaxSelection.Treatment.valueOf(
+                Objects.requireNonNull(
+                    requireHydrated(tax.treatment, "lineTax.treatment"), "lineTax.treatment")),
+            requireHydrated(tax.officialTaxCode, "lineTax.officialTaxCode"),
+            requireHydrated(tax.officialPercentageCode, "lineTax.officialPercentageCode"),
+            requireHydrated(tax.rate, "lineTax.rate"),
+            requireHydrated(tax.catalogVersion, "lineTax.catalogVersion"),
             true,
-            LocalDate.MIN,
+            Objects.requireNonNull(LocalDate.MIN, "LocalDate.MIN"),
             null);
     return new InvoiceLine(
-        line.id,
+        requireHydrated(line.id, "line.id"),
         line.position,
-        line.productCode,
-        line.description,
-        line.quantity,
-        line.unitPrice,
-        line.discount,
+        requireHydrated(line.productCode, "line.productCode"),
+        requireHydrated(line.description, "line.description"),
+        requireHydrated(line.quantity, "line.quantity"),
+        requireHydrated(line.unitPrice, "line.unitPrice"),
+        requireHydrated(line.discount, "line.discount"),
         selection,
-        line.grossAmount,
-        line.netAmount,
-        tax.taxBase,
-        tax.taxAmount,
-        line.lineTotal);
+        requireHydrated(line.grossAmount, "line.grossAmount"),
+        requireHydrated(line.netAmount, "line.netAmount"),
+        requireHydrated(tax.taxBase, "lineTax.taxBase"),
+        requireHydrated(tax.taxAmount, "lineTax.taxAmount"),
+        requireHydrated(line.lineTotal, "line.lineTotal"));
   }
 
   private TaxTotal domainTaxTotal(InvoiceTaxTotalEntity value) {
     return new TaxTotal(
-        value.family,
-        TaxSelection.Treatment.valueOf(value.treatment),
-        value.officialTaxCode,
-        value.officialPercentageCode,
-        value.rate,
-        value.taxBase,
-        value.taxAmount,
-        value.catalogVersion);
+        requireHydrated(value.family, "taxTotal.family"),
+        TaxSelection.Treatment.valueOf(requireHydrated(value.treatment, "taxTotal.treatment")),
+        requireHydrated(value.officialTaxCode, "taxTotal.officialTaxCode"),
+        requireHydrated(value.officialPercentageCode, "taxTotal.officialPercentageCode"),
+        requireHydrated(value.rate, "taxTotal.rate"),
+        requireHydrated(value.taxBase, "taxTotal.taxBase"),
+        requireHydrated(value.taxAmount, "taxTotal.taxAmount"),
+        requireHydrated(value.catalogVersion, "taxTotal.catalogVersion"));
   }
 
   private Payment domainPayment(InvoicePaymentEntity value) {
     return new Payment(
-        value.id,
-        value.paymentMethodId,
-        value.officialCode,
-        value.name,
-        value.amount,
-        value.catalogVersion);
+        requireHydrated(value.id, "payment.id"),
+        requireHydrated(value.paymentMethodId, "payment.paymentMethodId"),
+        requireHydrated(value.officialCode, "payment.officialCode"),
+        requireHydrated(value.name, "payment.name"),
+        requireHydrated(value.amount, "payment.amount"),
+        requireHydrated(value.catalogVersion, "payment.catalogVersion"));
+  }
+
+  private static <T> T requireHydrated(@Nullable T value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 
   public record MappedAggregate(

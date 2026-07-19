@@ -25,17 +25,20 @@ import java.time.ZoneId;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 @QuarkusIntegrationTest
+@NullMarked
 class FiscalPreparationJvmSmokeIT {
   private static final String COMPANY = "b1111111-1111-4111-8111-111111111111";
   private static final UUID EMISSION_POINT =
       Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"));
-  private static final ObjectMapper JSON = Objects.requireNonNull(new ObjectMapper().findAndRegisterModules());
+  private static final ObjectMapper JSON =
+      Objects.requireNonNull(new ObjectMapper().findAndRegisterModules());
   private static @Nullable AuthoritativeFiscalContextFixture fixture;
   private static @Nullable DevServicesContext devServicesContext;
 
@@ -62,7 +65,10 @@ class FiscalPreparationJvmSmokeIT {
     configureProvider("issuer-" + scopeSuffix, "establishment-" + scopeSuffix, today);
     String draftId = createDraft(today, "fiscal-smoke-" + scopeSuffix);
     provisionBaseline(
-        Objects.requireNonNull(UUID.randomUUID()), "issuer-" + scopeSuffix, "establishment-" + scopeSuffix, 122);
+        Objects.requireNonNull(UUID.randomUUID()),
+        "issuer-" + scopeSuffix,
+        "establishment-" + scopeSuffix,
+        122);
     JsonNode before = invoiceDraftRow(draftId);
 
     String path = "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
@@ -142,7 +148,10 @@ class FiscalPreparationJvmSmokeIT {
     configureProvider("discarded-issuer-" + suffix, "discarded-establishment-" + suffix, today);
     String draftId = createDraft(today, "fiscal-discarded-" + suffix);
     provisionBaseline(
-        Objects.requireNonNull(UUID.randomUUID()), "discarded-issuer-" + suffix, "discarded-establishment-" + suffix, 0);
+        Objects.requireNonNull(UUID.randomUUID()),
+        "discarded-issuer-" + suffix,
+        "discarded-establishment-" + suffix,
+        0);
     String path = "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
 
     given().header("X-Company-Id", COMPANY).when().post(path).then().statusCode(201);
@@ -167,7 +176,11 @@ class FiscalPreparationJvmSmokeIT {
     String draftId = createDraft(today, "fiscal-rollback-" + suffix);
     UUID baseline = Objects.requireNonNull(UUID.randomUUID());
     provisionBaseline(
-        baseline, issuer, establishment, 7, Objects.requireNonNull(java.time.OffsetDateTime.parse("2099-01-01T00:00:00Z")));
+        baseline,
+        issuer,
+        establishment,
+        7,
+        Objects.requireNonNull(java.time.OffsetDateTime.parse("2099-01-01T00:00:00Z")));
 
     given()
         .header("X-Company-Id", COMPANY)
@@ -371,10 +384,11 @@ class FiscalPreparationJvmSmokeIT {
 
   private static void configureProvider(
       String issuerReference, String establishmentReference, LocalDate date) {
-    fixture().plan(
-        200,
-        Objects.requireNonNull(
-            """
+    fixture()
+        .plan(
+            200,
+            Objects.requireNonNull(
+                """
             {
               "issuerReference":"%s","issuerRuc":"1790012345001","legalName":"Fixture Issuer S.A.",
               "headOfficeAddress":"Quito","accountingRequired":true,"rimpeClassification":"NONE",
@@ -385,14 +399,14 @@ class FiscalPreparationJvmSmokeIT {
               "observedAt":"%s"}
             }
             """
-                .formatted(
-                    issuerReference,
-                    establishmentReference,
-                    EMISSION_POINT,
-                    issuerReference,
-                    date,
-                    Instant.now())),
-        Objects.requireNonNull(java.time.Duration.ZERO));
+                    .formatted(
+                        issuerReference,
+                        establishmentReference,
+                        EMISSION_POINT,
+                        issuerReference,
+                        date,
+                        Instant.now())),
+            Objects.requireNonNull(java.time.Duration.ZERO));
   }
 
   private static String invoiceDraftBody(LocalDate date) {

@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -7,37 +8,41 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class AccessKeyGeneratorTest {
   private static final Path VECTORS =
-      Path.of("src/test/resources/fiscalpreparation/sri-access-key-v2.33-vectors.json");
+      requireNonNull(
+          Path.of("src/test/resources/fiscalpreparation/sri-access-key-v2.33-vectors.json"));
   private final AccessKeyGenerator generator = new AccessKeyGenerator();
 
   @Test
   void consumesEveryIndependentlyRecalculatedSriV233PositiveVector() throws Exception {
     JsonNode root = new ObjectMapper().readTree(VECTORS.toFile());
-    for (JsonNode vector : root.required("positive")) {
+    for (JsonNode candidateVector : root.required("positive")) {
+      JsonNode vector = requireNonNull(candidateVector);
       AccessKey generated =
           generator.generate(
-              LocalDate.parse(vector.required("emissionDate").asText()),
-              vector.required("issuerRuc").asText(),
-              vector.required("environmentCode").asText(),
-              vector.required("establishmentCode").asText(),
-              vector.required("emissionPointCode").asText(),
-              OfficialSequentialNumber.parse(vector.required("officialSequentialNumber").asText()),
-              NumericCode.parse(vector.required("numericCode").asText()));
+              parseDate(vector),
+              requiredText(vector, "issuerRuc"),
+              requiredText(vector, "environmentCode"),
+              requiredText(vector, "establishmentCode"),
+              requiredText(vector, "emissionPointCode"),
+              OfficialSequentialNumber.parse(requiredText(vector, "officialSequentialNumber")),
+              NumericCode.parse(requiredText(vector, "numericCode")));
       assertEquals(vector.required("accessKey").asText(), generated.value());
       assertEquals(vector.required("verificationDigit").asInt(), generated.verificationDigit());
       generator.validateMatches(
           generated,
-          LocalDate.parse(vector.required("emissionDate").asText()),
-          vector.required("issuerRuc").asText(),
-          vector.required("environmentCode").asText(),
-          vector.required("establishmentCode").asText(),
-          vector.required("emissionPointCode").asText(),
-          OfficialSequentialNumber.parse(vector.required("officialSequentialNumber").asText()),
-          NumericCode.parse(vector.required("numericCode").asText()));
+          parseDate(vector),
+          requiredText(vector, "issuerRuc"),
+          requiredText(vector, "environmentCode"),
+          requiredText(vector, "establishmentCode"),
+          requiredText(vector, "emissionPointCode"),
+          OfficialSequentialNumber.parse(requiredText(vector, "officialSequentialNumber")),
+          NumericCode.parse(requiredText(vector, "numericCode")));
     }
   }
 
@@ -59,7 +64,9 @@ class AccessKeyGeneratorTest {
     JsonNode root = new ObjectMapper().readTree(VECTORS.toFile());
     assertThrows(
         IllegalArgumentException.class,
-        () -> AccessKey.parse(root.required("page64PrintedNegative").required("printed").asText()));
+        () ->
+            AccessKey.parse(
+                requiredText(requireNonNull(root.required("page64PrintedNegative")), "printed")));
 
     JsonNode vector = root.required("positive").get(0);
     String valid = vector.required("accessKey").asText();
@@ -79,15 +86,23 @@ class AccessKeyGeneratorTest {
             () ->
                 generator.validateMatches(
                     selfConsistent,
-                    LocalDate.parse(vector.required("emissionDate").asText()),
-                    vector.required("issuerRuc").asText(),
-                    vector.required("environmentCode").asText(),
-                    vector.required("establishmentCode").asText(),
-                    vector.required("emissionPointCode").asText(),
+                    parseDate(vector),
+                    requiredText(vector, "issuerRuc"),
+                    requiredText(vector, "environmentCode"),
+                    requiredText(vector, "establishmentCode"),
+                    requiredText(vector, "emissionPointCode"),
                     OfficialSequentialNumber.parse(
-                        vector.required("officialSequentialNumber").asText()),
-                    NumericCode.parse(vector.required("numericCode").asText())));
+                        requiredText(vector, "officialSequentialNumber")),
+                    NumericCode.parse(requiredText(vector, "numericCode"))));
       }
     }
+  }
+
+  private static LocalDate parseDate(JsonNode vector) {
+    return requireNonNull(LocalDate.parse(requiredText(vector, "emissionDate")));
+  }
+
+  private static String requiredText(JsonNode node, String field) {
+    return requireNonNull(node.required(field).asText(), field);
   }
 }

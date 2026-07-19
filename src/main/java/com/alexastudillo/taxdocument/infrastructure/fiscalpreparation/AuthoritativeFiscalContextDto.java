@@ -4,9 +4,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Bounded JSON representations for authoritative-fiscal-context contract 1.0.0. */
+@NullMarked
 public final class AuthoritativeFiscalContextDto {
   private AuthoritativeFiscalContextDto() {}
 

@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -18,10 +19,12 @@ import io.vertx.mutiny.sqlclient.Pool;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class FiscalPreparationRepositoryAdapterTest {
   @Inject FiscalPreparationStore store;
   @Inject FiscalPreparationPostgreSqlSupport database;
@@ -37,7 +40,7 @@ class FiscalPreparationRepositoryAdapterTest {
         FiscalPreparationTestFixtures.DRAFT,
         FiscalPreparationTestFixtures.EMISSION_POINT,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
   }
 
   @Test
@@ -47,7 +50,7 @@ class FiscalPreparationRepositoryAdapterTest {
             .lookup(
                 FiscalPreparationTestFixtures.COMPANY,
                 FiscalPreparationTestFixtures.DRAFT,
-                Duration.ofSeconds(5))
+                timeout())
             .await()
             .indefinitely();
     assertInstanceOf(FiscalPreparationLookup.EligibleDraft.class, own);
@@ -55,9 +58,10 @@ class FiscalPreparationRepositoryAdapterTest {
     FiscalPreparationLookup other =
         store
             .lookup(
-                new CompanyId(UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+                new CompanyId(
+                    requireNonNull(UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))),
                 FiscalPreparationTestFixtures.DRAFT,
-                Duration.ofSeconds(5))
+                timeout())
             .await()
             .indefinitely();
     assertInstanceOf(FiscalPreparationLookup.NotFound.class, other);
@@ -74,16 +78,13 @@ class FiscalPreparationRepositoryAdapterTest {
         "001",
         "001",
         122,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
     FiscalPreparationPostgreSqlSupport.DraftSnapshot before =
         database.draftSnapshot(
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.DRAFT);
 
     FiscalPreparationCommitResult result =
-        store
-            .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
-            .await()
-            .indefinitely();
+        store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
     FiscalPreparationCommitResult.Created created =
         assertInstanceOf(FiscalPreparationCommitResult.Created.class, result);
     assertEquals("000000123", created.preparation().officialSequentialNumber().value());
@@ -103,10 +104,7 @@ class FiscalPreparationRepositoryAdapterTest {
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.DRAFT));
 
     FiscalPreparationCommitResult replay =
-        store
-            .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
-            .await()
-            .indefinitely();
+        store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
     assertEquals(
         created.preparation(),
         assertInstanceOf(FiscalPreparationCommitResult.Replay.class, replay).preparation());
@@ -123,7 +121,7 @@ class FiscalPreparationRepositoryAdapterTest {
             FiscalPreparationApplicationException.class,
             () ->
                 store
-                    .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
+                    .commit(FiscalPreparationTestFixtures.intent(), timeout())
                     .await()
                     .indefinitely());
     assertEquals(
@@ -143,14 +141,14 @@ class FiscalPreparationRepositoryAdapterTest {
         "001",
         "001",
         999_999_999,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
 
     FiscalPreparationApplicationException failure =
         assertThrows(
             FiscalPreparationApplicationException.class,
             () ->
                 store
-                    .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
+                    .commit(FiscalPreparationTestFixtures.intent(), timeout())
                     .await()
                     .indefinitely());
     assertEquals(
@@ -179,14 +177,14 @@ class FiscalPreparationRepositoryAdapterTest {
         "001",
         "001",
         -1,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
 
     FiscalPreparationApplicationException failure =
         assertThrows(
             FiscalPreparationApplicationException.class,
             () ->
                 store
-                    .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
+                    .commit(FiscalPreparationTestFixtures.intent(), timeout())
                     .await()
                     .indefinitely());
     assertEquals(
@@ -196,5 +194,13 @@ class FiscalPreparationRepositoryAdapterTest {
         database.lastAllocated(
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.BASELINE));
     assertEquals(0L, database.rowCount("fiscal_preparation"));
+  }
+
+  private static Duration timeout() {
+    return requireNonNull(Duration.ofSeconds(5));
+  }
+
+  private static java.time.Instant beforeCreatedAt() {
+    return requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
   }
 }

@@ -5,9 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.alexastudillo.taxdocument.api.problem.ProblemDetails;
 import java.util.List;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class CompanyContextHeaderTest {
   private final CompanyContextHeader header = new CompanyContextHeader();
 

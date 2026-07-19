@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class CorrelationHeaderTest {
   private final CorrelationHeader header = new CorrelationHeader();
 

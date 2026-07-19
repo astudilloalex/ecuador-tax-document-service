@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.architecture;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,14 +10,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class FiscalPreparationBoundaryTest {
-  private static final Path ROOT = Path.of("src/main/java/com/alexastudillo/taxdocument");
+  private static final Path ROOT =
+      requireNonNull(Path.of("src/main/java/com/alexastudillo/taxdocument"));
 
   @Test
   void fiscalDomainIsSynchronousFrameworkFreeAndAllDependenciesPointInward() throws Exception {
-    for (Path file : javaFiles(ROOT.resolve("domain/fiscalpreparation"))) {
+    for (Path file : javaFiles(resolve("domain/fiscalpreparation"))) {
       String source = Files.readString(file);
       assertFalse(
           source.matches(
@@ -24,19 +28,19 @@ class FiscalPreparationBoundaryTest {
                   + "com\\.fasterxml|java\\.sql).*"),
           file.toString());
     }
-    for (Path file : javaFiles(ROOT.resolve("application/fiscalpreparation"))) {
+    for (Path file : javaFiles(resolve("application/fiscalpreparation"))) {
       String source = Files.readString(file);
       assertFalse(source.contains("taxdocument.api."), file.toString());
       assertFalse(source.contains("taxdocument.infrastructure."), file.toString());
       assertFalse(source.contains("jakarta.ws.rs"), file.toString());
     }
-    for (Path file : javaFiles(ROOT.resolve("infrastructure/fiscalpreparation"))) {
+    for (Path file : javaFiles(resolve("infrastructure/fiscalpreparation"))) {
       assertFalse(Files.readString(file).contains("taxdocument.api."), file.toString());
     }
   }
 
   @Test
-  void exactOwnedAndExtractedPackagesAndEveryRetainedModifiedTypeAreNullMarked() throws Exception {
+  void exactOwnedAndExtractedTypesAreDirectlyNullMarkedWithoutPackageDefaults() throws Exception {
     for (String packagePath :
         List.of(
             "api/fiscalpreparation",
@@ -50,8 +54,19 @@ class FiscalPreparationBoundaryTest {
             "infrastructure/requestcontext",
             "infrastructure/persistence",
             "infrastructure/health")) {
-      String packageInfo = Files.readString(ROOT.resolve(packagePath).resolve("package-info.java"));
-      assertTrue(packageInfo.contains("@NullMarked"), packagePath);
+      Path directory = ROOT.resolve(packagePath);
+      String packageInfo = Files.readString(directory.resolve("package-info.java"));
+      assertFalse(packageInfo.contains("@NullMarked"), packagePath);
+      try (Stream<Path> files = Files.list(directory)) {
+        for (Path type :
+            files
+                .filter(path -> path.toString().endsWith(".java"))
+                .filter(path -> !path.getFileName().toString().equals("package-info.java"))
+                .sorted()
+                .toList()) {
+          assertTrue(Files.readString(type).contains("@NullMarked"), type.toString());
+        }
+      }
     }
     for (String file :
         List.of(
@@ -100,7 +115,12 @@ class FiscalPreparationBoundaryTest {
 
   private static List<Path> javaFiles(Path root) throws Exception {
     try (Stream<Path> files = Files.walk(root)) {
-      return files.filter(path -> path.toString().endsWith(".java")).sorted().toList();
+      return requireNonNull(
+          files.filter(path -> path.toString().endsWith(".java")).sorted().toList());
     }
+  }
+
+  private static Path resolve(String relative) {
+    return requireNonNull(ROOT.resolve(relative));
   }
 }

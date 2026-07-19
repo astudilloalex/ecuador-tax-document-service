@@ -5,10 +5,12 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalSourceEviden
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /**
  * Transport-neutral authoritative response before consumer-side validation and snapshot mapping.
  */
+@NullMarked
 public record FiscalContextResolution(
     String issuerReference,
     String issuerRuc,

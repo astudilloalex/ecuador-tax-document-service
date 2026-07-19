@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -16,8 +17,10 @@ import org.junit.jupiter.api.Test;
 @NullMarked
 class InvoiceDraftOpenApiContractTest {
   private static final Path CANONICAL =
-      Path.of("specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml");
-  private static final Path RUNTIME = Path.of("src/main/resources/META-INF/openapi.yaml");
+      requireNonNull(
+          Path.of("specs/001-create-invoice-draft/contracts/invoice-draft-api.openapi.yaml"));
+  private static final Path RUNTIME =
+      requireNonNull(Path.of("src/main/resources/META-INF/openapi.yaml"));
   private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory());
 
   @Test
@@ -30,7 +33,8 @@ class InvoiceDraftOpenApiContractTest {
         canonical.required("paths").required("/invoice-drafts"),
         runtime.required("paths").required("/invoice-drafts"));
     assertCanonicalEntriesPreserved(
-        canonical.required("components"), runtime.required("components"));
+        requireNonNull(canonical.required("components")),
+        requireNonNull(runtime.required("components")));
     assertFalse(runtime.has("security"));
     assertFalse(
         runtime.required("paths").required("/invoice-drafts").required("post").has("security"));

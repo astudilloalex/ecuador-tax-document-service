@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,13 +18,16 @@ import io.vertx.core.Context;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @RunOnVertxContext
+@NullMarked
 class InvoiceDraftIdempotencyConcurrencyTest {
   @Inject PostgreSqlTestResource database;
   @Inject InvoiceDraftRepository repository;
@@ -32,7 +36,7 @@ class InvoiceDraftIdempotencyConcurrencyTest {
   @BeforeEach
   void prepare() {
     database.resetSchema();
-    clock.reset(Instant.parse("2026-07-17T12:00:00Z"), Instant.parse("2026-07-17T12:00:01Z"));
+    clock.reset(instant("2026-07-17T12:00:00Z"), instant("2026-07-17T12:00:01Z"));
   }
 
   @Test
@@ -47,7 +51,7 @@ class InvoiceDraftIdempotencyConcurrencyTest {
                             .mapToObj(
                                 ignored ->
                                     inIndependentContext(
-                                        () -> repository.persist(candidate, Duration.ofSeconds(5))))
+                                        () -> repository.persist(candidate, timeout())))
                             .toList())
                     .andCollectFailures(),
             values ->
@@ -69,9 +73,9 @@ class InvoiceDraftIdempotencyConcurrencyTest {
                                       () ->
                                           repository.findByIdempotency(
                                               candidate.draft().companyId(),
-                                              candidate.idempotencyKeyHash(),
-                                              candidate.requestFingerprint(),
-                                              Duration.ofSeconds(5))))
+                                              requireNonNull(candidate.idempotencyKeyHash()),
+                                              requireNonNull(candidate.requestFingerprint()),
+                                              timeout())))
                           .toList())
                   .andCollectFailures()
                   .invoke(ignored -> assertEquals(callsBeforeReplay, clock.persistenceCalls()));
@@ -100,26 +104,37 @@ class InvoiceDraftIdempotencyConcurrencyTest {
             different,
             candidate.normalizationVersion());
     asserter
-        .execute(() -> repository.persist(candidate, Duration.ofSeconds(5)))
+        .execute(() -> repository.persist(candidate, timeout()))
         .assertFailedWith(
-            () -> repository.persist(conflicting, Duration.ofSeconds(5)),
+            () -> repository.persist(conflicting, timeout()),
             InvoiceDraftApplicationException.class);
   }
 
   private <T> Uni<T> inIndependentContext(Supplier<Uni<T>> operation) {
-    return Uni.createFrom()
-        .emitter(
-            emitter -> {
-              Context context = VertxContext.createNewDuplicatedContext();
-              VertxContextSafetyToggle.setContextSafe(context, true);
-              context.runOnContext(
-                  ignored -> {
-                    try {
-                      operation.get().subscribe().with(emitter::complete, emitter::fail);
-                    } catch (RuntimeException failure) {
-                      emitter.fail(failure);
-                    }
-                  });
-            });
+    return requireNonNull(
+        Uni.createFrom()
+            .emitter(
+                emitter -> {
+                  Context context =
+                      Objects.requireNonNull(
+                          VertxContext.createNewDuplicatedContext(), "duplicated context");
+                  VertxContextSafetyToggle.setContextSafe(context, true);
+                  context.runOnContext(
+                      ignored -> {
+                        try {
+                          operation.get().subscribe().with(emitter::complete, emitter::fail);
+                        } catch (RuntimeException failure) {
+                          emitter.fail(failure);
+                        }
+                      });
+                }));
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static Duration timeout() {
+    return requireNonNull(Duration.ofSeconds(5));
   }
 }

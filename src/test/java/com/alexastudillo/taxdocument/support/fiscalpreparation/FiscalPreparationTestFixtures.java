@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.support.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
+
 import com.alexastudillo.taxdocument.application.fiscalpreparation.FiscalPreparationCommitIntent;
 import com.alexastudillo.taxdocument.application.fiscalpreparation.InvoiceDraftPreparationView;
 import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalContextSnapshot;
@@ -10,15 +12,17 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
+@NullMarked
 public final class FiscalPreparationTestFixtures {
-  public static final UUID COMPANY_UUID = UUID.fromString("11111111-1111-4111-8111-111111111111");
+  public static final UUID COMPANY_UUID = uuid("11111111-1111-4111-8111-111111111111");
   public static final CompanyId COMPANY = new CompanyId(COMPANY_UUID);
-  public static final UUID DRAFT = UUID.fromString("22222222-2222-4222-8222-222222222222");
-  public static final UUID EMISSION_POINT = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-  public static final UUID BASELINE = UUID.fromString("44444444-4444-4444-8444-444444444444");
-  public static final LocalDate DATE = LocalDate.of(2026, 7, 18);
-  public static final Instant CREATED_AT = Instant.parse("2026-07-18T12:00:00Z");
+  public static final UUID DRAFT = uuid("22222222-2222-4222-8222-222222222222");
+  public static final UUID EMISSION_POINT = uuid("123e4567-e89b-12d3-a456-426614174000");
+  public static final UUID BASELINE = uuid("44444444-4444-4444-8444-444444444444");
+  public static final LocalDate DATE = date(2026, 7, 18);
+  public static final Instant CREATED_AT = instant("2026-07-18T12:00:00Z");
 
   private FiscalPreparationTestFixtures() {}
 
@@ -44,13 +48,13 @@ public final class FiscalPreparationTestFixtures {
         issuerReference,
         "1792146739001",
         "Issuer S.A.",
-        Optional.of("Issuer"),
+        requireNonNull(Optional.of("Issuer")),
         "Head Office",
         true,
-        Optional.empty(),
-        Optional.empty(),
+        emptyOptional(),
+        emptyOptional(),
         FiscalDesignation.RimpeClassification.NONE,
-        Optional.empty(),
+        emptyOptional(),
         establishmentReference,
         establishmentCode,
         "Establishment Address",
@@ -62,11 +66,27 @@ public final class FiscalPreparationTestFixtures {
         new FiscalSourceEvidence(
             "SRI",
             "revision-1",
-            LocalDate.of(2026, 7, 1),
-            Optional.empty(),
-            Instant.parse("2026-07-18T11:59:00Z")),
+            date(2026, 7, 1),
+            emptyOptional(),
+            instant("2026-07-18T11:59:00Z")),
         "SRI-OFFLINE-2.33",
-        LocalDate.of(2026, 7, 13),
+        date(2026, 7, 13),
         "SECURE_RANDOM_8_V1");
+  }
+
+  private static UUID uuid(String value) {
+    return requireNonNull(UUID.fromString(value));
+  }
+
+  private static LocalDate date(int year, int month, int day) {
+    return requireNonNull(LocalDate.of(year, month, day));
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static <T> Optional<T> emptyOptional() {
+    return requireNonNull(Optional.empty());
   }
 }

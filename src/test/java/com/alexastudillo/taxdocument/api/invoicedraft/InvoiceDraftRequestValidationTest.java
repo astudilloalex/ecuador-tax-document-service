@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,10 +13,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class InvoiceDraftRequestValidationTest {
-  private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
+  private final ObjectMapper mapper = requireNonNull(new ObjectMapper().findAndRegisterModules());
   private final InvoiceDraftRequestPropertyClassifier classifier =
       new InvoiceDraftRequestPropertyClassifier();
 
@@ -40,11 +43,12 @@ class InvoiceDraftRequestValidationTest {
         Objects.requireNonNull(mapper.treeToValue(json, CreateInvoiceDraftRequest.class));
     InvoiceDraftRequestState state = new InvoiceDraftRequestState();
     state.initialize(
-        Instant.parse("2026-07-17T12:00:00Z"),
-        RequestDeadline.start(Duration.ofSeconds(10)),
+        requireNonNull(Instant.parse("2026-07-17T12:00:00Z")),
+        RequestDeadline.start(requireNonNull(Duration.ofSeconds(10))),
         "corr",
         System.nanoTime());
-    state.companyId(new CompanyId(UUID.fromString("11111111-1111-4111-8111-111111111111")));
+    state.companyId(
+        new CompanyId(requireNonNull(UUID.fromString("11111111-1111-4111-8111-111111111111"))));
     state.idempotencyKey("key");
     var command = new InvoiceDraftApiMapper().toCommand(request, state);
     assertEquals(rawEmission, command.emissionPointId());
@@ -67,7 +71,7 @@ class InvoiceDraftRequestValidationTest {
 
   private static String quote(String value) {
     try {
-      return new ObjectMapper().writeValueAsString(value);
+      return requireNonNull(new ObjectMapper().writeValueAsString(value));
     } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
       throw new IllegalStateException(exception);
     }

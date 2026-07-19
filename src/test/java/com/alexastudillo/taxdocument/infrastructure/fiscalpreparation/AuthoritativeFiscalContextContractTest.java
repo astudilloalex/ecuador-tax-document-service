@@ -8,8 +8,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import java.nio.file.Path;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class AuthoritativeFiscalContextContractTest {
   @Test
   void approvedContractMetadataAndNonRoutablePlanningPlaceholderAreExplicit() throws Exception {

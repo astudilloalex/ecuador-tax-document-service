@@ -6,9 +6,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Complete consumer-side authoritative response validation before transaction start. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalContextValidator {
   public FiscalContextSnapshot validate(
       FiscalContextResolution resolution, UUID selectedEmissionPointId, LocalDate emissionDate) {

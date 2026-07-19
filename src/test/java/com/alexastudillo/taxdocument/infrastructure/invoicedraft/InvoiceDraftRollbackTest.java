@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
+
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftCandidate;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftRepository;
@@ -11,11 +13,13 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @RunOnVertxContext
+@NullMarked
 class InvoiceDraftRollbackTest {
   @Inject PostgreSqlTestResource database;
   @Inject InvoiceDraftRepository repository;
@@ -39,7 +43,7 @@ class InvoiceDraftRollbackTest {
             valid.normalizationVersion());
     asserter
         .assertFailedWith(
-            () -> repository.persist(invalid, Duration.ofSeconds(5)),
+            () -> repository.persist(invalid, requireNonNull(Duration.ofSeconds(5))),
             InvoiceDraftApplicationException.class)
         .assertEquals(
             () -> Panache.withSession(() -> InvoiceDraftEntity.count("id", invalid.draft().id())),
@@ -65,7 +69,7 @@ class InvoiceDraftRollbackTest {
     InvoiceDraftCandidate candidate = InfrastructureTestFixtures.candidate();
     asserter
         .assertFailedWith(
-            () -> repository.persist(candidate, Duration.ZERO),
+            () -> repository.persist(candidate, requireNonNull(Duration.ZERO)),
             InvoiceDraftApplicationException.class)
         .assertEquals(
             () -> Panache.withSession(() -> InvoiceDraftEntity.count("id", candidate.draft().id())),

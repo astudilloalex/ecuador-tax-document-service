@@ -11,8 +11,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.Properties;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class InvoiceDraftJvmSmokeTest {
   @Test
   void mandatoryJvmRuntimeAndCanonicalOpenApiAreConfigured() throws Exception {

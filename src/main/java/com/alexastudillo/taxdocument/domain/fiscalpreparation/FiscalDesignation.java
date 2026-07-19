@@ -1,10 +1,14 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
+import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
 
 /** Explicit authoritative conditional fiscal designations and their required paired evidence. */
+@NullMarked
 public final class FiscalDesignation {
-  private static final Pattern WITHHOLDING_RESOLUTION = Pattern.compile("^(0|[1-9][0-9]{0,7})$");
+  private static final Pattern WITHHOLDING_RESOLUTION =
+      Objects.requireNonNull(Pattern.compile("^(0|[1-9][0-9]{0,7})$"));
 
   private FiscalDesignation() {}
 

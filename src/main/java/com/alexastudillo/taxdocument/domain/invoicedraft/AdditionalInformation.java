@@ -2,7 +2,6 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 

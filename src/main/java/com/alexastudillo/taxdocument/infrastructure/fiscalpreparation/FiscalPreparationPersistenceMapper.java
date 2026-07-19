@@ -15,10 +15,12 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Explicit lossless mapping between flattened persistence rows and the immutable domain. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationPersistenceMapper {
   public FiscalPreparation fromRow(Row row) {
     Objects.requireNonNull(row, "row");
@@ -27,13 +29,16 @@ public final class FiscalPreparationPersistenceMapper {
             require(row.getString("issuer_reference"), "issuerReference"),
             require(row.getString("issuer_ruc"), "issuerRuc"),
             require(row.getString("legal_name"), "legalName"),
-            Optional.ofNullable(row.getString("commercial_name")),
+            require(
+                Optional.ofNullable(row.getString("commercial_name")), "commercialName optional"),
             require(row.getString("head_office_address"), "headOfficeAddress"),
             require(row.getBoolean("accounting_required"), "accountingRequired"),
             specialTaxpayer(row.getString("special_taxpayer_resolution")),
             withholdingAgent(row.getString("withholding_agent_resolution")),
             FiscalDesignation.RimpeClassification.valueOf(
-                require(row.getString("rimpe_classification"), "rimpeClassification")),
+                Objects.requireNonNull(
+                    require(row.getString("rimpe_classification"), "rimpeClassification"),
+                    "rimpeClassification")),
             largeContributor(
                 row.getString("large_contributor_resolution"),
                 row.getString("large_contributor_legend")),
@@ -49,9 +54,13 @@ public final class FiscalPreparationPersistenceMapper {
                 require(row.getString("source_authority"), "sourceAuthority"),
                 require(row.getString("source_revision"), "sourceRevision"),
                 require(row.getLocalDate("source_effective_from"), "sourceEffectiveFrom"),
-                Optional.ofNullable(row.getLocalDate("source_effective_through")),
-                require(row.getOffsetDateTime("source_observed_at"), "sourceObservedAt")
-                    .toInstant()),
+                require(
+                    Optional.ofNullable(row.getLocalDate("source_effective_through")),
+                    "sourceEffectiveThrough optional"),
+                require(
+                    require(row.getOffsetDateTime("source_observed_at"), "sourceObservedAt")
+                        .toInstant(),
+                    "sourceObservedAt instant")),
             require(row.getString("technical_rule_id"), "technicalRuleId"),
             require(row.getLocalDate("technical_rule_modified_on"), "technicalRuleModifiedOn"),
             require(row.getString("numeric_code_policy_id"), "numericCodePolicyId"));
@@ -66,7 +75,9 @@ public final class FiscalPreparationPersistenceMapper {
             require(row.getString("official_sequential_number"), "officialSequentialNumber")),
         NumericCode.parse(require(row.getString("numeric_code"), "numericCode")),
         AccessKey.parse(require(row.getString("access_key"), "accessKey")),
-        require(row.getOffsetDateTime("created_at"), "createdAt").toInstant());
+        require(
+            require(row.getOffsetDateTime("created_at"), "createdAt").toInstant(),
+            "createdAt instant"));
   }
 
   public Tuple toInsertParameters(FiscalPreparation preparation) {
@@ -82,30 +93,36 @@ public final class FiscalPreparationPersistenceMapper {
     values.addString(snapshot.issuerReference());
     values.addString(snapshot.issuerRuc());
     values.addString(snapshot.legalName());
-    values.addValue(snapshot.commercialName().orElse(null));
+    values.addValue(orNull(snapshot.commercialName()));
     values.addString(snapshot.headOfficeAddress());
     values.addBoolean(snapshot.accountingRequired());
     values.addValue(
-        snapshot
-            .specialTaxpayer()
-            .map(FiscalDesignation.SpecialTaxpayer::resolutionIdentifier)
-            .orElse(null));
+        orNull(
+            require(
+                snapshot
+                    .specialTaxpayer()
+                    .map(FiscalDesignation.SpecialTaxpayer::resolutionIdentifier),
+                "special taxpayer resolution")));
     values.addValue(
-        snapshot
-            .withholdingAgent()
-            .map(FiscalDesignation.WithholdingAgent::resolutionIdentifier)
-            .orElse(null));
+        orNull(
+            require(
+                snapshot
+                    .withholdingAgent()
+                    .map(FiscalDesignation.WithholdingAgent::resolutionIdentifier),
+                "withholding agent resolution")));
     values.addString(snapshot.rimpeClassification().name());
     values.addValue(
-        snapshot
-            .largeContributor()
-            .map(FiscalDesignation.LargeContributor::resolutionIdentifier)
-            .orElse(null));
+        orNull(
+            require(
+                snapshot
+                    .largeContributor()
+                    .map(FiscalDesignation.LargeContributor::resolutionIdentifier),
+                "large contributor resolution")));
     values.addValue(
-        snapshot
-            .largeContributor()
-            .map(FiscalDesignation.LargeContributor::requiredLegend)
-            .orElse(null));
+        orNull(
+            require(
+                snapshot.largeContributor().map(FiscalDesignation.LargeContributor::requiredLegend),
+                "large contributor legend")));
     values.addString(snapshot.establishmentReference());
     values.addString(snapshot.establishmentCode());
     values.addString(snapshot.establishmentAddress());
@@ -117,7 +134,7 @@ public final class FiscalPreparationPersistenceMapper {
     values.addString(source.authority());
     values.addString(source.revision());
     values.addLocalDate(source.effectiveFrom());
-    values.addValue(source.effectiveThrough().orElse(null));
+    values.addValue(orNull(source.effectiveThrough()));
     values.addOffsetDateTime(OffsetDateTime.ofInstant(source.observedAt(), ZoneOffset.UTC));
     values.addString(snapshot.sriTechnicalRuleIdentifier());
     values.addLocalDate(snapshot.sriTechnicalRuleDate());
@@ -131,18 +148,26 @@ public final class FiscalPreparationPersistenceMapper {
 
   private static Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer(
       @Nullable String resolution) {
-    return Optional.ofNullable(resolution).map(FiscalDesignation.SpecialTaxpayer::new);
+    if (resolution == null) {
+      return require(Optional.empty(), "empty special taxpayer");
+    }
+    return require(
+        Optional.of(new FiscalDesignation.SpecialTaxpayer(resolution)), "special taxpayer");
   }
 
   private static Optional<FiscalDesignation.WithholdingAgent> withholdingAgent(
       @Nullable String resolution) {
-    return Optional.ofNullable(resolution).map(FiscalDesignation.WithholdingAgent::new);
+    if (resolution == null) {
+      return require(Optional.empty(), "empty withholding agent");
+    }
+    return require(
+        Optional.of(new FiscalDesignation.WithholdingAgent(resolution)), "withholding agent");
   }
 
   private static Optional<FiscalDesignation.LargeContributor> largeContributor(
       @Nullable String resolution, @Nullable String legend) {
     if (resolution == null && legend == null) {
-      return Optional.empty();
+      return require(Optional.empty(), "empty large contributor");
     }
     return Optional.of(
         new FiscalDesignation.LargeContributor(
@@ -152,5 +177,9 @@ public final class FiscalPreparationPersistenceMapper {
 
   private static <T> T require(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
+  }
+
+  private static <T> @Nullable T orNull(Optional<T> value) {
+    return value.isPresent() ? value.get() : null;
   }
 }

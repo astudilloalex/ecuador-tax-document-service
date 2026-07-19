@@ -2,7 +2,6 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 
 import java.util.Objects;
 import java.util.UUID;
-
 import org.jspecify.annotations.NullMarked;
 
 /** Immutable, opaque Company ownership identifier. */
@@ -19,6 +18,6 @@ public record CompanyId(UUID value) {
 
   @Override
   public String toString() {
-    return value.toString();
+    return Objects.requireNonNull(value.toString());
   }
 }

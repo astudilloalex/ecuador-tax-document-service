@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-
 import org.jspecify.annotations.NullMarked;
 
 /** Complete validated and calculated USD Invoice Draft business aggregate. */
@@ -41,10 +40,11 @@ public record InvoiceDraft(
     Objects.requireNonNull(subtotalBeforeTaxes, "subtotalBeforeTaxes");
     Objects.requireNonNull(totalDiscount, "totalDiscount");
     Objects.requireNonNull(grandTotal, "grandTotal");
-    lines = List.copyOf(lines);
-    taxTotals = List.copyOf(taxTotals);
-    payments = List.copyOf(payments);
-    additionalInformation = List.copyOf(additionalInformation);
+    lines = Objects.requireNonNull(List.copyOf(lines), "lines");
+    taxTotals = Objects.requireNonNull(List.copyOf(taxTotals), "taxTotals");
+    payments = Objects.requireNonNull(List.copyOf(payments), "payments");
+    additionalInformation =
+        Objects.requireNonNull(List.copyOf(additionalInformation), "additionalInformation");
     if (emissionPointId.equals(new UUID(0L, 0L))) {
       throw invalid("emissionPointId", "Emission point must not be nil");
     }

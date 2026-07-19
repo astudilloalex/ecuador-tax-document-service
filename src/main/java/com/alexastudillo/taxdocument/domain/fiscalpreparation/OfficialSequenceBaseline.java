@@ -4,8 +4,10 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Existing controlled mutable baseline state represented immutably at the domain boundary. */
+@NullMarked
 public record OfficialSequenceBaseline(
     UUID id,
     CompanyId companyId,

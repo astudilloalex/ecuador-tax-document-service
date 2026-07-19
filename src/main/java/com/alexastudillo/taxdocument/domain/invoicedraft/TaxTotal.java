@@ -2,7 +2,6 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 
 import java.math.BigDecimal;
 import java.util.Objects;
-
 import org.jspecify.annotations.NullMarked;
 
 /** Grouped IVA total whose key keeps zero treatments distinct. */

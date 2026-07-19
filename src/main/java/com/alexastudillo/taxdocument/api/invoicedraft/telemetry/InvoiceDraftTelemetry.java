@@ -2,6 +2,7 @@ package com.alexastudillo.taxdocument.api.invoicedraft.telemetry;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.InvoiceDraftRequestState;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
+import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.opentelemetry.api.trace.Span;
@@ -9,6 +10,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Objects;
 import org.jboss.logging.Logger;
+import org.jspecify.annotations.Nullable;
 
 /** Bounded low-cardinality metrics and safe operational evidence. */
 @ApplicationScoped
@@ -40,6 +42,7 @@ public final class InvoiceDraftTelemetry implements InvoiceDraftTelemetryPort {
   @Override
   public void lateOutcome(InvoiceDraftRequestState state, String outcome) {
     long elapsed = Math.max(0L, System.nanoTime() - state.startedNanos());
+    @Nullable CompanyId companyId = state.companyIdOrNull();
     LOG.warnv(
         "request_deadline_exceeded_after_response_commit correlationId={0} operation={1} "
             + "status={2} elapsedNanos={3} companyId={4}",
@@ -47,7 +50,7 @@ public final class InvoiceDraftTelemetry implements InvoiceDraftTelemetryPort {
         "create_invoice_draft",
         state.acceptedStatus(),
         elapsed,
-        state.companyId() == null ? null : state.companyId().value());
+        companyId == null ? null : companyId.value());
     meters
         .counter("invoice_draft_late_outcomes", "outcome", Objects.requireNonNull(outcome))
         .increment();

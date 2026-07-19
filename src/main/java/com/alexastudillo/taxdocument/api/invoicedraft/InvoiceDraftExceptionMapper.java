@@ -80,7 +80,8 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
           api.status(),
           api.code(),
           title(api.code()),
-          Objects.requireNonNull(Objects.requireNonNullElse(api.getMessage(), "The request failed")),
+          Objects.requireNonNull(
+              Objects.requireNonNullElse(api.getMessage(), "The request failed")),
           Objects.requireNonNull(api.violations()));
     }
     if (exception instanceof InvoiceDraftApplicationException application) {
@@ -89,9 +90,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
       String codeName = Objects.requireNonNull(failure.code().name());
       List<ProblemDetails.@NonNull Violation> violations =
           Objects.requireNonNull(
-              failure
-                  .violations()
-                  .stream()
+              failure.violations().stream()
                   .map(
                       value ->
                           new ProblemDetails.Violation(
@@ -101,12 +100,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
                               value.maximum(),
                               value.countingUnit()))
                   .toList());
-      return new Mapping(
-          status,
-          codeName,
-          title(codeName),
-          failure.detail(),
-          violations);
+      return new Mapping(status, codeName, title(codeName), failure.detail(), violations);
     }
     if (exception instanceof JsonProcessingException) {
       return new Mapping(
@@ -133,7 +127,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
   }
 
   private String safeCorrelation() {
-    String cid = state.correlationId();
+    @Nullable String cid = state.correlationIdOrNull();
     return cid == null ? Objects.requireNonNull(UUID.randomUUID().toString()) : cid;
   }
 

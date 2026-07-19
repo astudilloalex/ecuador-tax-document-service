@@ -3,8 +3,10 @@ package com.alexastudillo.taxdocument.application.requestcontext;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.LongSupplier;
+import org.jspecify.annotations.NullMarked;
 
 /** Transport-neutral monotonic request budget. */
+@NullMarked
 public final class RequestDeadline {
   private final long expiresAtNanos;
   private final LongSupplier ticker;
@@ -31,7 +33,8 @@ public final class RequestDeadline {
   }
 
   public Duration remaining() {
-    return Duration.ofNanos(Math.max(0L, expiresAtNanos - ticker.getAsLong()));
+    return Objects.requireNonNull(
+        Duration.ofNanos(Math.max(0L, expiresAtNanos - ticker.getAsLong())));
   }
 
   public boolean expired() {

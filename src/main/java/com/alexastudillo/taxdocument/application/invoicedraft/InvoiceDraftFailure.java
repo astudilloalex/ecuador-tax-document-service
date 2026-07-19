@@ -17,7 +17,10 @@ public record InvoiceDraftFailure(
   public InvoiceDraftFailure {
     Objects.requireNonNull(code, "code");
     Objects.requireNonNull(detail, "detail");
-    violations = violations == null ? Objects.requireNonNull(List.<@NonNull Violation>of()) : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
+    violations =
+        violations == null
+            ? Objects.requireNonNull(List.<@NonNull Violation>of())
+            : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
   }
 
   public enum Code {
@@ -43,6 +46,7 @@ public record InvoiceDraftFailure(
         Code.BUSINESS_VALIDATION_FAILED,
         "The Invoice Draft request violates an approved business rule",
         false,
-        List.<Violation>of(new Violation(code, field, stage, null, null)));
+        Objects.requireNonNull(
+            List.<@NonNull Violation>of(new Violation(code, field, stage, null, null))));
   }
 }

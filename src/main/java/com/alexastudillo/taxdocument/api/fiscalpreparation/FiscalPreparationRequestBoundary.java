@@ -42,7 +42,8 @@ public final class FiscalPreparationRequestBoundary {
     this.correlationHeader = Objects.requireNonNull(correlationHeader, "correlationHeader");
     this.requestDeadline =
         Objects.requireNonNull(
-            ConfigProvider.getConfig().getValue("fiscal-preparation.request-deadline", Duration.class));
+            ConfigProvider.getConfig()
+                .getValue("fiscal-preparation.request-deadline", Duration.class));
   }
 
   public PrepareInvoiceForFiscalIssuanceCommand accept(
@@ -54,12 +55,12 @@ public final class FiscalPreparationRequestBoundary {
     RequestContext context =
         new RequestContext(
             requestInstant,
-            Objects.requireNonNull(requestInstant.atZone(RequestContext.ECUADOR_TIME_ZONE).toLocalDate()),
+            Objects.requireNonNull(
+                requestInstant.atZone(RequestContext.ECUADOR_TIME_ZONE).toLocalDate()),
             RequestDeadline.start(requestDeadline));
     List<String> correlationHeaders =
         Objects.requireNonNull(routing.request().headers().getAll("X-Correlation-Id"));
-    CorrelationHeader.Classification correlation =
-        correlationHeader.classify(correlationHeaders);
+    CorrelationHeader.Classification correlation = correlationHeader.classify(correlationHeaders);
     FiscalPreparationCommitTracker commitTracker = new FiscalPreparationCommitTracker();
     state.initialize(context, Objects.requireNonNull(correlation.safeValue()), commitTracker);
     List<String> companyHeaders =
@@ -110,6 +111,7 @@ public final class FiscalPreparationRequestBoundary {
   }
 
   private static FiscalPreparationApplicationException failure(FiscalPreparationFailure.Code code) {
-    return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(Objects.requireNonNull(code)));
+    return new FiscalPreparationApplicationException(
+        FiscalPreparationFailure.of(Objects.requireNonNull(code)));
   }
 }

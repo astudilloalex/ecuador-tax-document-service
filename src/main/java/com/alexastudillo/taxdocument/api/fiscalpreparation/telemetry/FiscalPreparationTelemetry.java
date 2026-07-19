@@ -6,9 +6,11 @@ import io.opentelemetry.api.trace.Span;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.Objects;
 import org.jboss.logging.Logger;
+import org.jspecify.annotations.NullMarked;
 
 /** Metrics implementation restricted to stable bounded outcome and commit-knowledge labels. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationTelemetry implements FiscalPreparationTelemetryPort {
   private static final Logger LOG =
       Objects.requireNonNull(Logger.getLogger(FiscalPreparationTelemetry.class));

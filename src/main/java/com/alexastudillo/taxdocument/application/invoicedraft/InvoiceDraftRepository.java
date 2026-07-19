@@ -5,8 +5,10 @@ import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Company-scoped aggregate and idempotency persistence boundary. */
+@NullMarked
 public interface InvoiceDraftRepository {
   Uni<IdempotencyLookup> findByIdempotency(
       CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining);
@@ -26,11 +28,12 @@ public interface InvoiceDraftRepository {
       private final byte[] storedFingerprint;
 
       public Conflict(byte[] storedFingerprint) {
-        this.storedFingerprint = Arrays.copyOf(storedFingerprint, storedFingerprint.length);
+        this.storedFingerprint =
+            Objects.requireNonNull(Arrays.copyOf(storedFingerprint, storedFingerprint.length));
       }
 
       public byte[] storedFingerprint() {
-        return Arrays.copyOf(storedFingerprint, storedFingerprint.length);
+        return Objects.requireNonNull(Arrays.copyOf(storedFingerprint, storedFingerprint.length));
       }
     }
   }

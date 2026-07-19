@@ -10,11 +10,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Deterministic Stage 11A calculation followed by ordered Stage 11B validation. */
+@NullMarked
 public final class InvoiceDraftCalculator {
   public static final BigDecimal MAX_MONEY = new BigDecimal("999999999999999.99");
   private static final BigDecimal HUNDRED = new BigDecimal("100");
+  private static final BigDecimal ZERO = Objects.requireNonNull(BigDecimal.ZERO);
   private static final int MONEY_SCALE = 2;
 
   public Calculation calculate(Buyer buyer, List<InvoiceLine> inputs, List<Payment> payments) {
@@ -69,7 +73,7 @@ public final class InvoiceDraftCalculator {
         money(
             taxTotals.stream()
                 .map(total -> total.amount())
-                .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val)));
+                .reduce(ZERO, (acc, val) -> Objects.requireNonNull(acc.add(val))));
     requireMaximum(totalTax, Integer.MAX_VALUE, "taxTotals");
     BigDecimal grandTotal = money(subtotal.add(totalTax));
     requireMaximum(grandTotal.abs(), Integer.MAX_VALUE, "grandTotal");
@@ -85,7 +89,7 @@ public final class InvoiceDraftCalculator {
     buyer.validateCalculatedTotal(grandTotal);
     validatePayments(grandTotal, payments);
     return new Calculation(
-        List.copyOf(lines),
+        Objects.requireNonNull(List.copyOf(lines), "calculated lines"),
         taxTotals,
         money(subtotal),
         money(totalDiscount),
@@ -115,7 +119,7 @@ public final class InvoiceDraftCalculator {
         money(
             payments.stream()
                 .map(payment -> payment.amount())
-                .reduce(BigDecimal.ZERO, (acc, val) -> acc.add(val)));
+                .reduce(ZERO, (acc, val) -> Objects.requireNonNull(acc.add(val))));
     if (sum.compareTo(grandTotal) != 0) {
       throw violation("PAYMENT_TOTAL_MISMATCH", "payments", "Payments do not reconcile");
     }
@@ -133,19 +137,22 @@ public final class InvoiceDraftCalculator {
         + selection.catalogVersion();
   }
 
-  private static void requireMaximum(BigDecimal value, int line, String field) {
-    if (value.compareTo(MAX_MONEY) > 0) {
+  private static void requireMaximum(@Nullable BigDecimal value, int line, String field) {
+    BigDecimal requiredValue = Objects.requireNonNull(value, field);
+    if (requiredValue.compareTo(MAX_MONEY) > 0) {
       String path = line == Integer.MAX_VALUE ? field : "lines[" + (line - 1) + "]." + field;
       throw violation("MONETARY_RANGE_EXCEEDED", path, "Calculated monetary value overflowed");
     }
   }
 
-  private static BigDecimal money(BigDecimal value) {
-    return value.setScale(MONEY_SCALE, RoundingMode.HALF_UP);
+  private static BigDecimal money(@Nullable BigDecimal value) {
+    return Objects.requireNonNull(
+        Objects.requireNonNull(value, "monetary value")
+            .setScale(MONEY_SCALE, RoundingMode.HALF_UP));
   }
 
   private static BigDecimal zero() {
-    return BigDecimal.ZERO.setScale(MONEY_SCALE);
+    return Objects.requireNonNull(ZERO.setScale(MONEY_SCALE));
   }
 
   private static DraftValidationException violation(String code, String field, String message) {

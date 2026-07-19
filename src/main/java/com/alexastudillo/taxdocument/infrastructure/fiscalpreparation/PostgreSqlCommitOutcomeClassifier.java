@@ -2,10 +2,13 @@ package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
 
 import io.vertx.pgclient.PgException;
 import java.sql.SQLException;
+import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Conservative PostgreSQL commit-knowledge classifier; unknown is never reported as rollback. */
+@NullMarked
 public final class PostgreSqlCommitOutcomeClassifier {
   public Knowledge classify(Throwable failure, CommitPhase phase, boolean rollbackConfirmed) {
     if (rollbackConfirmed) {
@@ -35,10 +38,10 @@ public final class PostgreSqlCommitOutcomeClassifier {
   private static Optional<String> constraint(Throwable failure) {
     for (Throwable current = failure; current != null; current = current.getCause()) {
       if (current instanceof PgException postgres) {
-        return Optional.ofNullable(postgres.getConstraint());
+        return Objects.requireNonNull(Optional.ofNullable(postgres.getConstraint()));
       }
     }
-    return Optional.empty();
+    return Objects.requireNonNull(Optional.empty());
   }
 
   private static @Nullable String sqlState(Throwable failure) {

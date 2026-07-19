@@ -5,9 +5,11 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.NumericCode;
 import jakarta.annotation.PostConstruct;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.security.SecureRandom;
+import org.jspecify.annotations.NullMarked;
 
 /** Startup-warmed uniform eight-digit Numeric Code generator policy SECURE_RANDOM_8_V1. */
 @ApplicationScoped
+@NullMarked
 public final class SecureRandomNumericCodeGenerator implements NumericCodeGenerator {
   private final SecureRandom random = new SecureRandom();
 

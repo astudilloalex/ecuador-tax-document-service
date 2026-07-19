@@ -1,8 +1,11 @@
 package com.alexastudillo.taxdocument.application.fiscalpreparation;
 
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NullMarked;
 
 /** Request-local commit knowledge shared without coupling application or persistence to HTTP. */
+@NullMarked
 public final class FiscalPreparationCommitTracker {
   private final AtomicReference<Knowledge> knowledge = new AtomicReference<>(Knowledge.NOT_STARTED);
 
@@ -21,7 +24,7 @@ public final class FiscalPreparationCommitTracker {
   }
 
   public Knowledge knowledge() {
-    return knowledge.get();
+    return Objects.requireNonNull(knowledge.get(), "commit knowledge");
   }
 
   public enum Knowledge {

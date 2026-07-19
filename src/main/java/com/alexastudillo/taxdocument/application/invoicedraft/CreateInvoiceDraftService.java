@@ -20,9 +20,11 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Transport-neutral ordered Invoice Draft creation orchestration. */
+@NullMarked
 @ApplicationScoped
 public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCase {
   private static final ZoneId ECUADOR = Objects.requireNonNull(ZoneId.of("America/Guayaquil"));
@@ -66,14 +68,18 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
     return Objects.requireNonNull(
         repository
             .findByIdempotency(
-                normalized.companyId(), keyHash, requestFingerprint, normalized.deadline().remaining())
+                normalized.companyId(),
+                keyHash,
+                requestFingerprint,
+                normalized.deadline().remaining())
             .onItem()
             .transformToUni(
                 lookup -> {
                   if (lookup
                       instanceof InvoiceDraftRepository.IdempotencyLookup.Equivalent equivalent) {
                     return Objects.requireNonNull(
-                        Uni.createFrom().item(CreateInvoiceDraftResult.replay(equivalent.persisted())));
+                        Uni.createFrom()
+                            .item(CreateInvoiceDraftResult.replay(equivalent.persisted())));
                   }
                   if (lookup instanceof InvoiceDraftRepository.IdempotencyLookup.Conflict) {
                     return Objects.requireNonNull(
@@ -84,7 +90,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                                         InvoiceDraftFailure.Code.IDEMPOTENCY_CONFLICT,
                                         "The idempotency key is already bound to different content",
                                         false,
-                                        Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())))));
+                                        emptyViolations()))));
                   }
                   return prepareAndPersist(normalized, keyHash, requestFingerprint);
                 }));
@@ -110,9 +116,11 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                                         paymentMethods ->
                                             persistPrepared(
                                                 command,
-                                                buyerRule,
-                                                taxes,
-                                                paymentMethods,
+                                                Objects.requireNonNull(
+                                                    buyerRule, "buyer identification rule"),
+                                                Objects.requireNonNull(taxes, "resolved taxes"),
+                                                Objects.requireNonNull(
+                                                    paymentMethods, "resolved payment methods"),
                                                 keyHash,
                                                 requestFingerprint)))));
   }
@@ -149,7 +157,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                             input.quantity(),
                             input.unitPrice(),
                             input.discount(),
-                            taxes.get(index),
+                            Objects.requireNonNull(taxes.get(index), "resolved tax"),
                             null,
                             null,
                             null,
@@ -200,13 +208,15 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                   Map<UUID, UUID> lineTaxIdentifiers = new LinkedHashMap<>();
                   calculation
                       .lines()
-                      .forEach(line -> lineTaxIdentifiers.put(line.id(), identifiers.nextIdentifier()));
+                      .forEach(
+                          line -> lineTaxIdentifiers.put(line.id(), identifiers.nextIdentifier()));
                   Map<String, UUID> taxTotalIdentifiers = new LinkedHashMap<>();
                   calculation
                       .taxTotals()
                       .forEach(
                           total ->
-                              taxTotalIdentifiers.put(total.groupKey(), identifiers.nextIdentifier()));
+                              taxTotalIdentifiers.put(
+                                  total.groupKey(), identifiers.nextIdentifier()));
                   return new InvoiceDraftCandidate(
                       draft,
                       lineTaxIdentifiers,
@@ -271,7 +281,8 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
   private CreateInvoiceDraftCommand normalize(CreateInvoiceDraftCommand command) {
     requireBudget(command);
     String emissionPoint = normalizeEmissionPoint(command.emissionPointId());
-    LocalDate expectedDate = Objects.requireNonNull(command.requestCreationInstant().atZone(ECUADOR).toLocalDate());
+    LocalDate expectedDate =
+        Objects.requireNonNull(command.requestCreationInstant().atZone(ECUADOR).toLocalDate());
     if (!expectedDate.equals(command.emissionDate())) {
       throw new DraftValidationException(
           "BUSINESS_VALIDATION_FAILED",
@@ -305,7 +316,8 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
               line.discount(),
               line.taxRuleId()));
     }
-    List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additional = new ArrayList<>();
+    List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additional =
+        new ArrayList<>();
     for (int index = 0; index < command.additionalInformation().size(); index++) {
       CreateInvoiceDraftCommand.AdditionalInformationInput value =
           command.additionalInformation().get(index);
@@ -365,7 +377,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
               InvoiceDraftFailure.Code.REQUEST_TIMEOUT,
               "The request deadline expired",
               true,
-              Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())));
+              emptyViolations()));
     }
   }
 
@@ -380,5 +392,9 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
             Objects.requireNonNull(validation.code()),
             Objects.requireNonNull(validation.field()),
             stage));
+  }
+
+  private static List<InvoiceDraftFailure.@NonNull Violation> emptyViolations() {
+    return Objects.requireNonNull(List.of(), "empty violations");
   }
 }

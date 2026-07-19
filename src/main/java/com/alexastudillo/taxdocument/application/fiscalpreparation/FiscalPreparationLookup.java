@@ -2,8 +2,10 @@ package com.alexastudillo.taxdocument.application.fiscalpreparation;
 
 import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalPreparation;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Explicit preflight outcomes with no nullable or cross-Company distinction. */
+@NullMarked
 public sealed interface FiscalPreparationLookup {
   record Existing(FiscalPreparation preparation) implements FiscalPreparationLookup {
     public Existing {

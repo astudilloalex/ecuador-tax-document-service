@@ -15,10 +15,12 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Bodyless POST adapter for natural Company-plus-Invoice-Draft fiscal preparation. */
 @Path("/api/v1/invoice-drafts")
 @Produces(MediaType.APPLICATION_JSON)
+@NullMarked
 public final class FiscalPreparationResource {
   private final PrepareInvoiceForFiscalIssuanceUseCase useCase;
   private final FiscalPreparationRequestBoundary requestBoundary;
@@ -54,11 +56,14 @@ public final class FiscalPreparationResource {
         Objects.requireNonNull(
             useCase
                 .prepare(command)
-                .onFailure(error -> error != null && !(error instanceof FiscalPreparationApplicationException))
+                .onFailure(
+                    error ->
+                        error != null && !(error instanceof FiscalPreparationApplicationException))
                 .transform(
                     error ->
                         new FiscalPreparationApplicationException(
-                            FiscalPreparationFailure.of(FiscalPreparationFailure.Code.INTERNAL_ERROR),
+                            FiscalPreparationFailure.of(
+                                FiscalPreparationFailure.Code.INTERNAL_ERROR),
                             Objects.requireNonNull(error))));
     return Objects.requireNonNull(
         deadlineHandler

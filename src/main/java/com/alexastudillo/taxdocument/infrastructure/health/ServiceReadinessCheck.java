@@ -8,10 +8,12 @@ import java.time.Duration;
 import java.util.Objects;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
+import org.jspecify.annotations.NullMarked;
 
 /** Bounded read-only PostgreSQL/Flyway readiness with no provider or business-row probe. */
 @Readiness
 @ApplicationScoped
+@NullMarked
 public final class ServiceReadinessCheck implements AsyncHealthCheck {
   private static final String READINESS_SQL =
       "SELECT (SELECT count(*) = 5 FROM buyer_identification_type_catalog) "
@@ -27,18 +29,20 @@ public final class ServiceReadinessCheck implements AsyncHealthCheck {
 
   @Override
   public Uni<HealthCheckResponse> call() {
-    return pool.query(READINESS_SQL)
-        .execute()
-        .ifNoItem()
-        .after(Duration.ofSeconds(2))
-        .fail()
-        .onItem()
-        .transform(
-            rows ->
-                Objects.requireNonNull(rows.iterator().next().getBoolean("ready"), "ready")
-                    ? HealthCheckResponse.up("service-readiness")
-                    : HealthCheckResponse.down("service-readiness"))
-        .onFailure()
-        .recoverWithItem(() -> HealthCheckResponse.down("service-readiness"));
+    return Objects.requireNonNull(
+        pool.query(READINESS_SQL)
+            .execute()
+            .ifNoItem()
+            .after(Duration.ofSeconds(2))
+            .fail()
+            .onItem()
+            .transform(
+                rows ->
+                    Objects.requireNonNull(rows.iterator().next().getBoolean("ready"), "ready")
+                        ? HealthCheckResponse.up("service-readiness")
+                        : HealthCheckResponse.down("service-readiness"))
+            .onFailure()
+            .recoverWithItem(() -> HealthCheckResponse.down("service-readiness")),
+        "readiness result");
   }
 }

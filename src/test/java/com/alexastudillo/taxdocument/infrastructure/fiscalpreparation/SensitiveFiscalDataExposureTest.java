@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -20,20 +21,24 @@ import java.util.logging.Handler;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class SensitiveFiscalDataExposureTest {
   private static final Set<String> FORBIDDEN_PERSISTED_OR_SIGNAL_FIELDS =
-      Set.of(
-          "rawrequest",
-          "rawresponse",
-          "credential",
-          "password",
-          "authorization",
-          "internalerror",
-          "sql",
-          "endpoint",
-          "correlationid");
+      requireNonNull(
+          Set.of(
+              "rawrequest",
+              "rawresponse",
+              "credential",
+              "password",
+              "authorization",
+              "internalerror",
+              "sql",
+              "endpoint",
+              "correlationid"));
 
   @Test
   void persistenceModelsContainNoRawProviderCredentialInternalOrCorrelationMaterial() {
@@ -85,8 +90,10 @@ class SensitiveFiscalDataExposureTest {
     Handler handler =
         new Handler() {
           @Override
-          public void publish(LogRecord record) {
-            captured.append(record.getMessage()).append('\n');
+          public void publish(@Nullable LogRecord record) {
+            if (record != null) {
+              captured.append(record.getMessage()).append('\n');
+            }
           }
 
           @Override

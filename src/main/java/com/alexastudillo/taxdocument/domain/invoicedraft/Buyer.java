@@ -3,7 +3,6 @@ package com.alexastudillo.taxdocument.domain.invoicedraft;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.regex.Pattern;
-
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -17,20 +16,22 @@ public record Buyer(
     @Nullable String email,
     @Nullable String telephone,
     String catalogVersion) {
-  private static final Pattern NUMERIC_13 = Pattern.compile("^[0-9]{13}$");
-  private static final Pattern NUMERIC_10 = Pattern.compile("^[0-9]{10}$");
-  private static final Pattern ASCII_1_20 = Pattern.compile("^[A-Za-z0-9]{1,20}$");
+  private static final Pattern NUMERIC_13 = Objects.requireNonNull(Pattern.compile("^[0-9]{13}$"));
+  private static final Pattern NUMERIC_10 = Objects.requireNonNull(Pattern.compile("^[0-9]{10}$"));
+  private static final Pattern ASCII_1_20 =
+      Objects.requireNonNull(Pattern.compile("^[A-Za-z0-9]{1,20}$"));
   private static final String EMAIL_ATOM = "A-Za-z0-9!#$%&'*+/=?^_\\u0060{|}~-";
   private static final Pattern EMAIL =
-      Pattern.compile(
-          "^(?=.{1,254}$)(?=[^@]{1,64}@)["
-              + EMAIL_ATOM
-              + "]+(?:\\.["
-              + EMAIL_ATOM
-              + "]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
-              + "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$");
+      Objects.requireNonNull(
+          Pattern.compile(
+              "^(?=.{1,254}$)(?=[^@]{1,64}@)["
+                  + EMAIL_ATOM
+                  + "]+(?:\\.["
+                  + EMAIL_ATOM
+                  + "]+)*@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+                  + "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"));
   private static final Pattern TELEPHONE =
-      Pattern.compile("^(?=(?:\\D*\\d){7,15}\\D*$)[0-9+() -]{7,20}$");
+      Objects.requireNonNull(Pattern.compile("^(?=(?:\\D*\\d){7,15}\\D*$)[0-9+() -]{7,20}$"));
   private static final BigDecimal FINAL_CONSUMER_LIMIT = new BigDecimal("50.00");
 
   public Buyer {
@@ -67,7 +68,7 @@ public record Buyer(
     }
   }
 
-  public static boolean identificationIsValid(String type, String value) {
+  public static boolean identificationIsValid(@Nullable String type, @Nullable String value) {
     if (type == null || value == null) {
       return false;
     }
@@ -80,7 +81,7 @@ public record Buyer(
     };
   }
 
-  public static boolean emailIsValid(String value) {
+  public static boolean emailIsValid(@Nullable String value) {
     return value != null && EMAIL.matcher(value).matches();
   }
 

@@ -2,8 +2,10 @@ package com.alexastudillo.taxdocument.infrastructure.persistence;
 
 import java.time.Duration;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Exact remaining-request/configured-timeout minimum used by reactive database subscriptions. */
+@NullMarked
 public record ReactiveOperationBudget(Duration timeout, TimeoutOwner timeoutOwner) {
   public ReactiveOperationBudget {
     Objects.requireNonNull(timeout, "timeout");

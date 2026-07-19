@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,10 +36,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class FiscalPreparationRollbackTest {
   @Inject FiscalPreparationPostgreSqlSupport database;
   @Inject Pool pool;
@@ -59,7 +63,7 @@ class FiscalPreparationRollbackTest {
         FiscalPreparationTestFixtures.DRAFT,
         FiscalPreparationTestFixtures.EMISSION_POINT,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
     database.insertControlledBaseline(
         FiscalPreparationTestFixtures.BASELINE,
         FiscalPreparationTestFixtures.COMPANY_UUID,
@@ -69,7 +73,7 @@ class FiscalPreparationRollbackTest {
         "001",
         "001",
         0,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
   }
 
   @Test
@@ -93,17 +97,22 @@ class FiscalPreparationRollbackTest {
                         connection
                             .preparedQuery(INSERT_PREPARATION)
                             .execute(
-                                Tuple.from(
-                                    List.of(
-                                        UUID.fromString("55555555-5555-4555-8555-555555555555"),
-                                        FiscalPreparationTestFixtures.COMPANY_UUID,
-                                        FiscalPreparationTestFixtures.DRAFT,
-                                        FiscalPreparationTestFixtures.BASELINE,
-                                        FiscalPreparationTestFixtures.EMISSION_POINT,
-                                        accessKey,
-                                        OffsetDateTime.ofInstant(
-                                            FiscalPreparationTestFixtures.CREATED_AT,
-                                            ZoneOffset.UTC))))
+                                requireNonNull(
+                                    Tuple.from(
+                                        requireNonNull(
+                                            List.<@NonNull Object>of(
+                                                requireNonNull(
+                                                    UUID.fromString(
+                                                        "55555555-5555-4555-8555-555555555555")),
+                                                FiscalPreparationTestFixtures.COMPANY_UUID,
+                                                FiscalPreparationTestFixtures.DRAFT,
+                                                FiscalPreparationTestFixtures.BASELINE,
+                                                FiscalPreparationTestFixtures.EMISSION_POINT,
+                                                accessKey,
+                                                requireNonNull(
+                                                    OffsetDateTime.ofInstant(
+                                                        FiscalPreparationTestFixtures.CREATED_AT,
+                                                        ZoneOffset.UTC)))))))
                             .chain(
                                 () ->
                                     connection
@@ -150,7 +159,8 @@ class FiscalPreparationRollbackTest {
             .setPassword(
                 ConfigProvider.getConfig().getValue("quarkus.datasource.password", String.class));
     try (PostgreSqlCommitFaultProxy proxy =
-        PostgreSqlCommitFaultProxy.start(configured.getHost(), configured.getPort())) {
+        PostgreSqlCommitFaultProxy.start(
+            requireNonNull(configured.getHost()), configured.getPort())) {
       PgConnectOptions proxied =
           new PgConnectOptions(configured).setHost("127.0.0.1").setPort(proxy.port());
       Pool faultPool =
@@ -162,11 +172,16 @@ class FiscalPreparationRollbackTest {
       try {
         FiscalPreparationRepositoryAdapter faultStore =
             new FiscalPreparationRepositoryAdapter(
-                faultPool, clock, mapper, identifierGenerator, numericCodeGenerator, reconciler);
+                requireNonNull(faultPool),
+                clock,
+                mapper,
+                identifierGenerator,
+                numericCodeGenerator,
+                reconciler);
         proxy.interruptNextCommitAcknowledgement();
         try {
           faultStore
-              .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
+              .commit(FiscalPreparationTestFixtures.intent(), timeout())
               .await()
               .indefinitely();
         } catch (FiscalPreparationApplicationException failure) {
@@ -180,10 +195,7 @@ class FiscalPreparationRollbackTest {
     }
 
     FiscalPreparationCommitResult retry =
-        store
-            .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
-            .await()
-            .indefinitely();
+        store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
     assertTrue(
         retry instanceof FiscalPreparationCommitResult.Created
             || retry instanceof FiscalPreparationCommitResult.Replay);
@@ -192,6 +204,14 @@ class FiscalPreparationRollbackTest {
         1,
         database.lastAllocated(
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.BASELINE));
+  }
+
+  private static Duration timeout() {
+    return requireNonNull(Duration.ofSeconds(5));
+  }
+
+  private static java.time.Instant beforeCreatedAt() {
+    return requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
   }
 
   @Test

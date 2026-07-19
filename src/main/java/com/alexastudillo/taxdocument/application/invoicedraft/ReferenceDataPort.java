@@ -5,8 +5,10 @@ import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Transport-neutral access to immutable global SRI reference catalogs. */
+@NullMarked
 public interface ReferenceDataPort {
   Uni<BuyerIdentificationRule> buyerIdentificationRule(String officialCode, Duration remaining);
 

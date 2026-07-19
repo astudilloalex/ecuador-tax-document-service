@@ -7,8 +7,10 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Read-only authoritative fiscal-context boundary. */
+@NullMarked
 public interface FiscalContextPort {
   Uni<FiscalContextResolution> resolve(Request request);
 

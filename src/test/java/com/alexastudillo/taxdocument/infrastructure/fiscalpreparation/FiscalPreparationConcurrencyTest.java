@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.alexastudillo.taxdocument.application.fiscalpreparation.FiscalPreparationCommitIntent;
@@ -20,10 +21,12 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class FiscalPreparationConcurrencyTest {
   @Inject FiscalPreparationStore store;
   @Inject FiscalPreparationPostgreSqlSupport database;
@@ -42,7 +45,7 @@ class FiscalPreparationConcurrencyTest {
         "001",
         "001",
         0,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
   }
 
   @Test
@@ -96,16 +99,16 @@ class FiscalPreparationConcurrencyTest {
 
   @Test
   void distinctScopesAllocateTheirOwnFirstSequentialIndependently() {
-    UUID secondBaseline = UUID.fromString("66666666-6666-4666-8666-666666666666");
-    UUID secondEmissionPoint = UUID.fromString("77777777-7777-4777-8777-777777777777");
-    UUID secondDraft = UUID.fromString("88888888-8888-4888-8888-888888888888");
+    UUID secondBaseline = uuid("66666666-6666-4666-8666-666666666666");
+    UUID secondEmissionPoint = uuid("77777777-7777-4777-8777-777777777777");
+    UUID secondDraft = uuid("88888888-8888-4888-8888-888888888888");
     insertDraft(FiscalPreparationTestFixtures.DRAFT);
     database.insertControlledDraft(
         FiscalPreparationTestFixtures.COMPANY_UUID,
         secondDraft,
         secondEmissionPoint,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
     database.insertControlledBaseline(
         secondBaseline,
         FiscalPreparationTestFixtures.COMPANY_UUID,
@@ -115,7 +118,7 @@ class FiscalPreparationConcurrencyTest {
         "002",
         "002",
         0,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
     FiscalPreparationCommitIntent secondIntent =
         new FiscalPreparationCommitIntent(
             new InvoiceDraftPreparationView(
@@ -148,17 +151,22 @@ class FiscalPreparationConcurrencyTest {
       List<FiscalPreparationCommitIntent> intents, int repetitions) {
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       List<CompletableFuture<FiscalPreparation>> futures = new ArrayList<>();
-      for (FiscalPreparationCommitIntent intent : intents) {
+      for (FiscalPreparationCommitIntent candidateIntent : intents) {
+        FiscalPreparationCommitIntent intent = requireNonNull(candidateIntent);
         for (int repetition = 0; repetition < repetitions; repetition++) {
           futures.add(
               CompletableFuture.supplyAsync(
                   () ->
                       preparation(
-                          store.commit(intent, Duration.ofSeconds(10)).await().indefinitely()),
+                          requireNonNull(
+                              store
+                                  .commit(intent, requireNonNull(Duration.ofSeconds(10)))
+                                  .await()
+                                  .indefinitely())),
                   executor));
         }
       }
-      return futures.stream().map(CompletableFuture::join).toList();
+      return requireNonNull(futures.stream().map(CompletableFuture::join).toList());
     }
   }
 
@@ -168,7 +176,7 @@ class FiscalPreparationConcurrencyTest {
         draftId,
         FiscalPreparationTestFixtures.EMISSION_POINT,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
   }
 
   private static FiscalPreparation preparation(FiscalPreparationCommitResult result) {
@@ -176,5 +184,9 @@ class FiscalPreparationConcurrencyTest {
       case FiscalPreparationCommitResult.Created created -> created.preparation();
       case FiscalPreparationCommitResult.Replay replay -> replay.preparation();
     };
+  }
+
+  private static UUID uuid(String value) {
+    return requireNonNull(UUID.fromString(value));
   }
 }

@@ -5,8 +5,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Minimal immutable authoritative fiscal facts and source evidence for one preparation. */
+@NullMarked
 public record FiscalContextSnapshot(
     String issuerReference,
     String issuerRuc,
@@ -31,10 +34,11 @@ public record FiscalContextSnapshot(
     LocalDate sriTechnicalRuleDate,
     String numericCodePolicyVersion) {
   public static final String SRI_TECHNICAL_RULE_IDENTIFIER = "SRI-OFFLINE-2.33";
-  public static final LocalDate SRI_TECHNICAL_RULE_DATE = LocalDate.of(2026, 7, 13);
+  public static final LocalDate SRI_TECHNICAL_RULE_DATE =
+      Objects.requireNonNull(LocalDate.of(2026, 7, 13));
   public static final String NUMERIC_CODE_POLICY_VERSION = "SECURE_RANDOM_8_V1";
-  private static final Pattern RUC = Pattern.compile("^[0-9]{13}$");
-  private static final Pattern THREE_DIGITS = Pattern.compile("^[0-9]{3}$");
+  private static final Pattern RUC = Objects.requireNonNull(Pattern.compile("^[0-9]{13}$"));
+  private static final Pattern THREE_DIGITS = Objects.requireNonNull(Pattern.compile("^[0-9]{3}$"));
 
   public FiscalContextSnapshot {
     FiscalSourceEvidence.requireText(issuerReference, 128, "issuerReference");
@@ -44,7 +48,9 @@ public record FiscalContextSnapshot(
     FiscalSourceEvidence.requireText(legalName, 300, "legalName");
     Objects.requireNonNull(commercialName, "commercialName");
     commercialName.ifPresent(
-        value -> FiscalSourceEvidence.requireText(value, 300, "commercialName"));
+        value ->
+            FiscalSourceEvidence.requireText(
+                Objects.requireNonNull(value, "commercialName"), 300, "commercialName"));
     FiscalSourceEvidence.requireText(headOfficeAddress, 300, "headOfficeAddress");
     Objects.requireNonNull(specialTaxpayer, "specialTaxpayer");
     Objects.requireNonNull(withholdingAgent, "withholdingAgent");
@@ -74,7 +80,7 @@ public record FiscalContextSnapshot(
     }
   }
 
-  private static void requireThreeDigits(String value, String field) {
+  private static void requireThreeDigits(@Nullable String value, String field) {
     if (value == null || !THREE_DIGITS.matcher(value).matches()) {
       throw new IllegalArgumentException(field + " is invalid");
     }

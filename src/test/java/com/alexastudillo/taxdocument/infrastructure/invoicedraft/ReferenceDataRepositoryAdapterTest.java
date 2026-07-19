@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.alexastudillo.taxdocument.application.invoicedraft.ApplicationTestFixtures;
@@ -13,11 +14,13 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @RunOnVertxContext
+@NullMarked
 class ReferenceDataRepositoryAdapterTest {
   @Inject PostgreSqlTestResource database;
   @Inject ReferenceDataPort references;
@@ -30,11 +33,7 @@ class ReferenceDataRepositoryAdapterTest {
   @Test
   void paymentEffectivityUsesInclusiveEmissionDateAndNotCurrentDate(UniAsserter asserter) {
     asserter.assertThat(
-        () ->
-            references.paymentMethod(
-                ApplicationTestFixtures.PAYMENT_METHOD,
-                LocalDate.of(2026, 7, 12),
-                Duration.ofSeconds(2)),
+        () -> references.paymentMethod(ApplicationTestFixtures.PAYMENT_METHOD, date(12), timeout()),
         method -> assertEquals("01", method.officialCode()));
   }
 
@@ -43,7 +42,7 @@ class ReferenceDataRepositoryAdapterTest {
     asserter.assertFailedWith(
         () ->
             references.paymentMethod(
-                ApplicationTestFixtures.PAYMENT_METHOD, LocalDate.of(2026, 7, 17), Duration.ZERO),
+                ApplicationTestFixtures.PAYMENT_METHOD, date(17), requireNonNull(Duration.ZERO)),
         InvoiceDraftApplicationException.class);
   }
 
@@ -52,9 +51,17 @@ class ReferenceDataRepositoryAdapterTest {
     asserter.assertFailedWith(
         () ->
             references.paymentMethod(
-                UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"),
-                LocalDate.of(2026, 7, 17),
-                Duration.ofSeconds(2)),
+                requireNonNull(UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+                date(17),
+                timeout()),
         DraftValidationException.class);
+  }
+
+  private static LocalDate date(int day) {
+    return requireNonNull(LocalDate.of(2026, 7, day));
+  }
+
+  private static Duration timeout() {
+    return requireNonNull(Duration.ofSeconds(2));
   }
 }

@@ -8,9 +8,11 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.health.HealthCheckResponse;
 import org.eclipse.microprofile.health.Readiness;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class ServiceHealthTest {
   @Inject PostgreSqlTestResource database;
   @Inject @Readiness ServiceReadinessCheck readiness;

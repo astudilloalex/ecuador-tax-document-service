@@ -56,8 +56,16 @@ public class InvoiceDraftRequestState {
     return Objects.requireNonNull(correlationId, "correlationId");
   }
 
+  public @Nullable String correlationIdOrNull() {
+    return correlationId;
+  }
+
   public CompanyId companyId() {
     return Objects.requireNonNull(companyId, "companyId");
+  }
+
+  public @Nullable CompanyId companyIdOrNull() {
+    return companyId;
   }
 
   public void companyId(CompanyId value) {

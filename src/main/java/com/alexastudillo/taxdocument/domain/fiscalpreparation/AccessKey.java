@@ -1,10 +1,14 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
+import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
 
 /** Immutable complete 49-digit SRI v2.33 Access Key. */
+@NullMarked
 public record AccessKey(String value) {
-  private static final Pattern REPRESENTATION = Pattern.compile("^[0-9]{49}$");
+  private static final Pattern REPRESENTATION =
+      Objects.requireNonNull(Pattern.compile("^[0-9]{49}$"));
 
   public AccessKey {
     if (value == null || !REPRESENTATION.matcher(value).matches()) {

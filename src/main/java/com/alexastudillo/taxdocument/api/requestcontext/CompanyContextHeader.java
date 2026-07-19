@@ -7,10 +7,12 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Exactly-one authoritative X-Company-Id transport parser shared by Company-owned operations. */
 @ApplicationScoped
+@NullMarked
 public final class CompanyContextHeader {
   private static final Pattern UUID_TEXT =
       Objects.requireNonNull(
@@ -25,12 +27,13 @@ public final class CompanyContextHeader {
     if (values.size() != 1) {
       throw invalid();
     }
-    String normalized = trimAsciiSpaceAndTab(values.getFirst());
+    String normalized =
+        trimAsciiSpaceAndTab(Objects.requireNonNull(values.getFirst(), "company context value"));
     if (!UUID_TEXT.matcher(normalized).matches()) {
       throw invalid();
     }
     try {
-      return new CompanyId(UUID.fromString(normalized));
+      return new CompanyId(Objects.requireNonNull(UUID.fromString(normalized)));
     } catch (RuntimeException exception) {
       throw invalid();
     }
@@ -45,7 +48,7 @@ public final class CompanyContextHeader {
     while (end > start && isTransportWhitespace(value.charAt(end - 1))) {
       end--;
     }
-    return value.substring(start, end);
+    return Objects.requireNonNull(value.substring(start, end));
   }
 
   private static boolean isTransportWhitespace(char value) {

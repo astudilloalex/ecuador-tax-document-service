@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.api.fiscalpreparation;
 
 import static io.restassured.RestAssured.given;
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -13,14 +14,17 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import java.time.Instant;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class FiscalPreparationResourceTest {
-  private static AuthoritativeFiscalContextFixture fixture;
+  private static @Nullable AuthoritativeFiscalContextFixture fixture;
 
   @Inject FiscalPreparationPostgreSqlSupport database;
   @Inject FixedRequestClock clock;
@@ -32,20 +36,20 @@ class FiscalPreparationResourceTest {
 
   @AfterAll
   static void stopFixture() {
-    fixture.close();
+    contextFixture().close();
   }
 
   @BeforeEach
   void reset() {
-    fixture.reset();
+    contextFixture().reset();
     database.resetSchema();
-    clock.reset(Instant.parse("2026-07-18T12:00:00Z"), Instant.parse("2026-07-18T12:00:01Z"));
+    clock.reset(instant("2026-07-18T12:00:00Z"), instant("2026-07-18T12:00:01Z"));
     database.insertControlledDraft(
         FiscalPreparationTestFixtures.COMPANY_UUID,
         FiscalPreparationTestFixtures.DRAFT,
         FiscalPreparationTestFixtures.EMISSION_POINT,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
     database.insertControlledBaseline(
         FiscalPreparationTestFixtures.BASELINE,
         FiscalPreparationTestFixtures.COMPANY_UUID,
@@ -55,7 +59,7 @@ class FiscalPreparationResourceTest {
         "001",
         "001",
         122,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        beforeCreatedAt());
   }
 
   @Test
@@ -80,9 +84,9 @@ class FiscalPreparationResourceTest {
             .body("companyId", org.hamcrest.Matchers.nullValue())
             .extract()
             .asString();
-    assertEquals(1, fixture.callCount());
+    assertEquals(1, contextFixture().callCount());
 
-    fixture.providerStatus(503);
+    contextFixture().providerStatus(503);
     String replay =
         given()
             .header("X-Company-Id", FiscalPreparationTestFixtures.COMPANY_UUID)
@@ -99,7 +103,7 @@ class FiscalPreparationResourceTest {
     assertEquals(
         new com.fasterxml.jackson.databind.ObjectMapper().readTree(first),
         new com.fasterxml.jackson.databind.ObjectMapper().readTree(replay));
-    assertEquals(1, fixture.callCount());
+    assertEquals(1, contextFixture().callCount());
     assertEquals(
         123,
         database.lastAllocated(
@@ -139,7 +143,7 @@ class FiscalPreparationResourceTest {
         .then()
         .statusCode(400)
         .body("code", equalTo("INVALID_REQUEST"));
-    assertEquals(0, fixture.callCount());
+    assertEquals(0, contextFixture().callCount());
     assertEquals(0L, database.rowCount("fiscal_preparation"));
   }
 
@@ -157,10 +161,22 @@ class FiscalPreparationResourceTest {
         .body(
             "detail",
             org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("unsafe/value")));
-    assertEquals(0, fixture.callCount());
+    assertEquals(0, contextFixture().callCount());
   }
 
   private static String path(UUID draftId) {
     return "/api/v1/invoice-drafts/" + draftId + "/fiscal-preparation";
+  }
+
+  private static AuthoritativeFiscalContextFixture contextFixture() {
+    return requireNonNull(fixture, "authoritative fiscal context fixture");
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static Instant beforeCreatedAt() {
+    return requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
   }
 }

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 
 /** Exclusive API request-time, deadline-race, and terminal-outcome owner. */
@@ -85,6 +86,6 @@ public final class InvoiceDraftRequestDeadlineHandler {
             InvoiceDraftFailure.Code.REQUEST_TIMEOUT,
             "The Invoice Draft request exceeded its deadline",
             true,
-            Objects.requireNonNull(List.<InvoiceDraftFailure.Violation>of())));
+            Objects.requireNonNull(List.<InvoiceDraftFailure.@NonNull Violation>of())));
   }
 }

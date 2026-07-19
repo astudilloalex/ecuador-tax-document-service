@@ -13,12 +13,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** One-attempt, bounded and redacted authoritative fiscal-context adapter. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalContextHttpAdapter implements FiscalContextPort {
-  private static final Duration RESPONSE_CEILING = Duration.ofSeconds(2);
+  private static final Duration RESPONSE_CEILING =
+      Objects.requireNonNull(Duration.ofSeconds(2), "response ceiling");
   private final AuthoritativeFiscalContextClient client;
 
   public FiscalContextHttpAdapter(@RestClient AuthoritativeFiscalContextClient client) {
@@ -41,9 +44,9 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
         .after(timeout)
         .fail()
         .onItem()
-        .transform(FiscalContextHttpAdapter::map)
+        .transform(context -> map(Objects.requireNonNull(context, "authoritative fiscal context")))
         .onFailure()
-        .transform(FiscalContextHttpAdapter::classify);
+        .transform(failure -> classify(Objects.requireNonNull(failure, "provider failure")));
   }
 
   private static FiscalContextResolution map(AuthoritativeFiscalContextDto.Context context) {
@@ -54,7 +57,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
           Objects.requireNonNull(context.issuerReference(), "issuerReference"),
           Objects.requireNonNull(context.issuerRuc(), "issuerRuc"),
           Objects.requireNonNull(context.legalName(), "legalName"),
-          Optional.ofNullable(context.commercialName()),
+          optional(context.commercialName()),
           Objects.requireNonNull(context.headOfficeAddress(), "headOfficeAddress"),
           Objects.requireNonNull(context.accountingRequired(), "accountingRequired"),
           specialTaxpayer(context.specialTaxpayer()),
@@ -75,7 +78,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
               Objects.requireNonNull(source.authority(), "sourceAuthority"),
               Objects.requireNonNull(source.revision(), "sourceRevision"),
               Objects.requireNonNull(source.effectiveFrom(), "effectiveFrom"),
-              Optional.ofNullable(source.effectiveThrough()),
+              optional(source.effectiveThrough()),
               Objects.requireNonNull(source.observedAt(), "observedAt")));
     } catch (IllegalArgumentException | NullPointerException exception) {
       throw failure(FiscalPreparationFailure.Code.FISCAL_CONTEXT_INVALID);
@@ -84,30 +87,47 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
 
   private static Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer(
       AuthoritativeFiscalContextDto.@Nullable ResolutionDesignation designation) {
-    return Optional.ofNullable(designation)
-        .map(
-            value ->
-                new FiscalDesignation.SpecialTaxpayer(
-                    Objects.requireNonNull(value.resolutionIdentifier(), "resolutionIdentifier")));
+    if (designation == null) {
+      return Objects.requireNonNull(Optional.empty(), "empty special taxpayer");
+    }
+    return Objects.requireNonNull(
+        Optional.of(
+            new FiscalDesignation.SpecialTaxpayer(
+                Objects.requireNonNull(
+                    designation.resolutionIdentifier(), "resolutionIdentifier"))),
+        "special taxpayer");
   }
 
   private static Optional<FiscalDesignation.WithholdingAgent> withholdingAgent(
       AuthoritativeFiscalContextDto.@Nullable ResolutionDesignation designation) {
-    return Optional.ofNullable(designation)
-        .map(
-            value ->
-                new FiscalDesignation.WithholdingAgent(
-                    Objects.requireNonNull(value.resolutionIdentifier(), "resolutionIdentifier")));
+    if (designation == null) {
+      return Objects.requireNonNull(Optional.empty(), "empty withholding agent");
+    }
+    return Objects.requireNonNull(
+        Optional.of(
+            new FiscalDesignation.WithholdingAgent(
+                Objects.requireNonNull(
+                    designation.resolutionIdentifier(), "resolutionIdentifier"))),
+        "withholding agent");
   }
 
   private static Optional<FiscalDesignation.LargeContributor> largeContributor(
       AuthoritativeFiscalContextDto.@Nullable LargeContributorDesignation designation) {
-    return Optional.ofNullable(designation)
-        .map(
-            value ->
-                new FiscalDesignation.LargeContributor(
-                    Objects.requireNonNull(value.resolutionIdentifier(), "resolutionIdentifier"),
-                    Objects.requireNonNull(value.requiredLegend(), "requiredLegend")));
+    if (designation == null) {
+      return Objects.requireNonNull(Optional.empty(), "empty large contributor");
+    }
+    return Objects.requireNonNull(
+        Optional.of(
+            new FiscalDesignation.LargeContributor(
+                Objects.requireNonNull(designation.resolutionIdentifier(), "resolutionIdentifier"),
+                Objects.requireNonNull(designation.requiredLegend(), "requiredLegend"))),
+        "large contributor");
+  }
+
+  private static <T> Optional<T> optional(@Nullable T value) {
+    return value == null
+        ? Objects.requireNonNull(Optional.empty(), "empty optional")
+        : Objects.requireNonNull(Optional.of(value), "present optional");
   }
 
   private static Throwable classify(Throwable throwable) {

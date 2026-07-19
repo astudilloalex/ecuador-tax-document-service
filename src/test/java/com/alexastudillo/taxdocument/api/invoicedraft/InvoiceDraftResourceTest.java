@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
 import static io.restassured.RestAssured.given;
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -25,10 +26,14 @@ import jakarta.ws.rs.core.Response;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class InvoiceDraftResourceTest {
   @Inject PostgreSqlTestResource database;
   @Inject FixedRequestClock fixedClock;
@@ -36,7 +41,7 @@ class InvoiceDraftResourceTest {
   @BeforeEach
   void resetDatabase() {
     database.resetSchema();
-    fixedClock.reset(Instant.parse("2026-07-17T12:00:00Z"), Instant.parse("2026-07-17T12:00:01Z"));
+    fixedClock.reset(instant("2026-07-17T12:00:00Z"), instant("2026-07-17T12:00:01Z"));
   }
 
   @Test
@@ -151,7 +156,7 @@ class InvoiceDraftResourceTest {
       CreateInvoiceDraftService service, InMemoryRepository repository, String correlation)
       throws Exception {
     FixedRequestClock clock = new FixedRequestClock();
-    clock.reset(Instant.parse("2026-07-17T12:00:00Z"), Instant.parse("2026-07-17T12:00:01Z"));
+    clock.reset(instant("2026-07-17T12:00:00Z"), instant("2026-07-17T12:00:01Z"));
     InvoiceDraftTelemetry telemetry = new InvoiceDraftTelemetry(new SimpleMeterRegistry());
     InvoiceDraftRequestDeadlineHandler deadline =
         new InvoiceDraftRequestDeadlineHandler(clock, telemetry);
@@ -167,42 +172,57 @@ class InvoiceDraftResourceTest {
             state,
             new InvoiceDraftRequestPropertyClassifier(),
             new InvoiceDraftApiMapper(),
-            objectMapper,
+            requireNonNull(objectMapper),
             telemetry);
     String json =
         InvoiceDraftRequestValidationTest.validJson(
             "\t123E4567-E89B-12D3-A456-426614174000\t", " Cafe\u0301 Buyer ");
-    Response response = resource.create(objectMapper.readTree(json)).await().indefinitely();
+    Response response =
+        requireNonNull(
+            resource.create(requireNonNull(objectMapper.readTree(json))).await().indefinitely());
     assertFalse(state.deadline().expired());
-    repository.timestamp = Instant.parse("2026-07-17T12:00:01Z");
+    repository.timestamp = instant("2026-07-17T12:00:01Z");
     return response;
   }
 
   private static final class InMemoryRepository implements InvoiceDraftRepository {
-    private PersistedInvoiceDraft stored;
-    private byte[] fingerprint;
-    private Instant timestamp = Instant.parse("2026-07-17T12:00:01Z");
+    private @Nullable PersistedInvoiceDraft stored;
+    private byte @Nullable [] fingerprint;
+    private Instant timestamp = instant("2026-07-17T12:00:01Z");
     private int persistCalls;
 
     @Override
     public Uni<IdempotencyLookup> findByIdempotency(
         CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
       if (stored == null) {
-        return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
+        return uniItem(new IdempotencyLookup.Missing());
       }
       if (!Arrays.equals(fingerprint, requestFingerprint)) {
-        return Uni.createFrom()
-            .<IdempotencyLookup>item(new IdempotencyLookup.Conflict(fingerprint));
+        return uniItem(
+            new IdempotencyLookup.Conflict(
+                Objects.requireNonNull(fingerprint, "stored fingerprint")));
       }
-      return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Equivalent(stored));
+      return uniItem(
+          new IdempotencyLookup.Equivalent(Objects.requireNonNull(stored, "stored draft")));
     }
 
     @Override
     public Uni<PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining) {
       persistCalls++;
       fingerprint = candidate.requestFingerprint();
-      stored = new PersistedInvoiceDraft(candidate.draft(), timestamp, timestamp);
-      return Uni.createFrom().item(stored);
+      PersistedInvoiceDraft persisted =
+          new PersistedInvoiceDraft(
+              requireNonNull(candidate.draft(), "candidate draft"), timestamp, timestamp);
+      stored = persisted;
+      return uniItem(persisted);
     }
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static <T> Uni<T> uniItem(T value) {
+    return requireNonNull(Uni.createFrom().item(value));
   }
 }

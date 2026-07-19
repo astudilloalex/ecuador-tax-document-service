@@ -36,10 +36,12 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Company-scoped reactive store with fixed draft-first and exact-baseline-second locking. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationRepositoryAdapter implements FiscalPreparationStore {
   static final String SELECT_PREPARATION =
       "SELECT * FROM fiscal_preparation WHERE company_id = $1 AND invoice_draft_id = $2";
@@ -146,57 +148,77 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
     AtomicBoolean localChangesCompleted = new AtomicBoolean();
     Uni<FiscalPreparationCommitResult> operation =
         pool.withTransaction(
-            connection ->
-                configureTransaction(connection, budget.timeout())
-                    .chain(() -> commitLocked(connection, intent))
-                    .invoke(
-                        () -> {
-                          localChangesCompleted.set(true);
-                          commitTracker.possibleCommit();
-                        }));
-    return operation
-        .invoke(ignored -> commitTracker.committed())
-        .ifNoItem()
-        .after(budget.timeout())
-        .failWith(TimeoutException::new)
-        .onFailure()
-        .recoverWithUni(
-            failure ->
-                recoverFailure(
-                    failure,
-                    intent.draft().companyId(),
-                    intent.draft().invoiceDraftId(),
-                    remaining,
-                    budget.timeoutOwner(),
-                    localChangesCompleted.get(),
-                    commitTracker));
+            connection -> {
+              SqlConnection transactionConnection =
+                  requireHydrated(connection, "transaction connection");
+              return configureTransaction(
+                      requireHydrated(transactionConnection, "transaction connection"),
+                      budget.timeout())
+                  .chain(
+                      () ->
+                          commitLocked(
+                              requireHydrated(transactionConnection, "transaction connection"),
+                              intent))
+                  .invoke(
+                      () -> {
+                        localChangesCompleted.set(true);
+                        commitTracker.possibleCommit();
+                      });
+            });
+    return requireHydrated(
+        operation
+            .invoke(ignored -> commitTracker.committed())
+            .ifNoItem()
+            .after(budget.timeout())
+            .failWith(TimeoutException::new)
+            .onFailure()
+            .recoverWithUni(
+                failure ->
+                    recoverFailure(
+                        requireHydrated(failure, "transaction failure"),
+                        intent.draft().companyId(),
+                        intent.draft().invoiceDraftId(),
+                        remaining,
+                        budget.timeoutOwner(),
+                        localChangesCompleted.get(),
+                        commitTracker)),
+        "commit operation");
   }
 
   private Uni<FiscalPreparationCommitResult> commitLocked(
       SqlConnection connection, FiscalPreparationCommitIntent intent) {
     InvoiceDraftPreparationView expected = intent.draft();
-    return connection
-        .preparedQuery(LOCK_DRAFT)
-        .execute(Tuple.of(expected.companyId().value(), expected.invoiceDraftId()))
-        .onItem()
-        .transformToUni(rows -> afterDraftLock(connection, intent, rows));
+    return requireHydrated(
+        connection
+            .preparedQuery(LOCK_DRAFT)
+            .execute(Tuple.of(expected.companyId().value(), expected.invoiceDraftId()))
+            .onItem()
+            .transformToUni(
+                rows ->
+                    afterDraftLock(connection, intent, requireHydrated(rows, "locked draft rows"))),
+        "draft lock");
   }
 
   private Uni<FiscalPreparationCommitResult> afterDraftLock(
       SqlConnection connection, FiscalPreparationCommitIntent intent, RowSet<Row> rows) {
     Row row = first(rows);
     if (row == null) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_FOUND));
+      return requireHydrated(
+          Uni.createFrom().failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_FOUND)),
+          "draft not found failure");
     }
     if (!"DRAFT".equals(row.getString("status"))) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE)),
+          "draft not preparable failure");
     }
     if (!intent.draft().emissionPointId().equals(row.getUUID("emission_point_id"))
         || !intent.draft().emissionDate().equals(row.getLocalDate("emission_date"))) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE)),
+          "draft not preparable failure");
     }
     return findPreparation(connection, intent.draft().companyId(), intent.draft().invoiceDraftId())
         .onItem()
@@ -211,39 +233,49 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
   private Uni<FiscalPreparationCommitResult> lockBaseline(
       SqlConnection connection, FiscalPreparationCommitIntent intent) {
     FiscalContextSnapshot snapshot = intent.snapshot();
-    return connection
-        .preparedQuery(LOCK_BASELINE)
-        .execute(
-            Tuple.of(
-                    intent.draft().companyId().value(),
-                    snapshot.issuerReference(),
-                    snapshot.establishmentReference(),
-                    snapshot.emissionPointId(),
-                    snapshot.establishmentCode(),
-                    snapshot.emissionPointCode())
-                .addString(snapshot.documentTypeCode()))
-        .onItem()
-        .transformToUni(rows -> allocate(connection, intent, rows));
+    return requireHydrated(
+        connection
+            .preparedQuery(LOCK_BASELINE)
+            .execute(
+                Tuple.of(
+                        intent.draft().companyId().value(),
+                        snapshot.issuerReference(),
+                        snapshot.establishmentReference(),
+                        snapshot.emissionPointId(),
+                        snapshot.establishmentCode(),
+                        snapshot.emissionPointCode())
+                    .addString(snapshot.documentTypeCode()))
+            .onItem()
+            .transformToUni(
+                rows ->
+                    allocate(connection, intent, requireHydrated(rows, "locked baseline rows"))),
+        "baseline lock");
   }
 
   private Uni<FiscalPreparationCommitResult> allocate(
       SqlConnection connection, FiscalPreparationCommitIntent intent, RowSet<Row> rows) {
     Row row = first(rows);
     if (row == null) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_BASELINE_MISSING));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_BASELINE_MISSING)),
+          "missing baseline failure");
     }
     OfficialSequenceBaseline baseline;
     try {
       baseline = baseline(row);
     } catch (IllegalArgumentException | NullPointerException exception) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_BASELINE_INVALID));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_BASELINE_INVALID)),
+          "invalid baseline failure");
     }
     OfficialSequenceBaseline.AllocationDecision decision = baseline.allocationDecision();
     if (decision instanceof OfficialSequenceBaseline.AllocationDecision.Exhausted) {
-      return Uni.createFrom()
-          .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_EXHAUSTED));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.OFFICIAL_SEQUENCE_EXHAUSTED)),
+          "exhausted sequence failure");
     }
     OfficialSequentialNumber sequential =
         ((OfficialSequenceBaseline.AllocationDecision.Next) decision).sequentialNumber();
@@ -269,7 +301,9 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
               sequential,
               numericCode);
     } catch (IllegalArgumentException exception) {
-      return Uni.createFrom().failure(failure(FiscalPreparationFailure.Code.ACCESS_KEY_INVALID));
+      return requireHydrated(
+          Uni.createFrom().failure(failure(FiscalPreparationFailure.Code.ACCESS_KEY_INVALID)),
+          "invalid access-key failure");
     }
     FiscalPreparation preparation =
         new FiscalPreparation(
@@ -283,14 +317,24 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
             numericCode,
             accessKey,
             clock.persistenceTime());
-    OffsetDateTime updatedAt = OffsetDateTime.ofInstant(preparation.createdAt(), ZoneOffset.UTC);
-    return connection
-        .preparedQuery(INSERT_PREPARATION)
-        .execute(mapper.toInsertParameters(preparation))
-        .onItem()
-        .transformToUni(
-            inserted ->
-                afterPreparationInsert(connection, baseline, sequential, updatedAt, inserted));
+    OffsetDateTime updatedAt =
+        requireHydrated(
+            OffsetDateTime.ofInstant(preparation.createdAt(), ZoneOffset.UTC),
+            "preparation updatedAt");
+    return requireHydrated(
+        connection
+            .preparedQuery(INSERT_PREPARATION)
+            .execute(mapper.toInsertParameters(preparation))
+            .onItem()
+            .transformToUni(
+                inserted ->
+                    afterPreparationInsert(
+                        connection,
+                        baseline,
+                        sequential,
+                        requireHydrated(updatedAt, "preparation updatedAt"),
+                        requireHydrated(inserted, "inserted preparation rows"))),
+        "preparation insert");
   }
 
   private Uni<FiscalPreparationCommitResult> afterPreparationInsert(
@@ -301,7 +345,9 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
       RowSet<Row> inserted) {
     Row insertedRow = first(inserted);
     if (inserted.rowCount() != 1 || insertedRow == null) {
-      return Uni.createFrom().failure(new IllegalStateException("insert did not win"));
+      return requireHydrated(
+          Uni.createFrom().failure(new IllegalStateException("insert did not win")),
+          "lost preparation insert");
     }
     FiscalPreparation persisted = mapper.fromRow(insertedRow);
     return connection
@@ -320,12 +366,14 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
   private Uni<Void> configureTransaction(SqlConnection connection, Duration statementTimeout) {
     long statementMillis = Math.max(1L, statementTimeout.toMillis());
     long lockMillis = Math.max(1L, Math.min(lockTimeout.toMillis(), statementMillis));
-    return connection
-        .preparedQuery(
-            "SELECT set_config('statement_timeout', $1, true), "
-                + "set_config('lock_timeout', $2, true)")
-        .execute(Tuple.of(statementMillis + "ms", lockMillis + "ms"))
-        .replaceWithVoid();
+    return requireHydrated(
+        connection
+            .preparedQuery(
+                "SELECT set_config('statement_timeout', $1, true), "
+                    + "set_config('lock_timeout', $2, true)")
+            .execute(Tuple.of(statementMillis + "ms", lockMillis + "ms"))
+            .replaceWithVoid(),
+        "transaction configuration");
   }
 
   private Uni<FiscalPreparationCommitResult> recoverFailure(
@@ -338,13 +386,15 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
       FiscalPreparationCommitTracker commitTracker) {
     if (failure instanceof FiscalPreparationApplicationException applicationFailure) {
       commitTracker.confirmedRollback();
-      return Uni.createFrom()
-          .failure(
-              new FiscalPreparationApplicationException(
-                  applicationFailure
-                      .failure()
-                      .withCommitKnowledge(
-                          FiscalPreparationFailure.CommitKnowledge.CONFIRMED_ROLLBACK)));
+      return requireHydrated(
+          Uni.createFrom()
+              .failure(
+                  new FiscalPreparationApplicationException(
+                      applicationFailure
+                          .failure()
+                          .withCommitKnowledge(
+                              FiscalPreparationFailure.CommitKnowledge.CONFIRMED_ROLLBACK))),
+          "confirmed rollback failure");
     }
     PostgreSqlCommitOutcomeClassifier.Knowledge knowledge =
         outcomeClassifier.classify(
@@ -355,10 +405,15 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
             !localChangesCompleted);
     if (knowledge == PostgreSqlCommitOutcomeClassifier.Knowledge.UNKNOWN) {
       commitTracker.possibleCommit();
-      return reconciler
-          .reconcile(companyId, invoiceDraftId, remaining)
-          .onItem()
-          .transformToUni(result -> reconciledResult(result, commitTracker));
+      return requireHydrated(
+          reconciler
+              .reconcile(companyId, invoiceDraftId, remaining)
+              .onItem()
+              .transformToUni(
+                  result ->
+                      reconciledResult(
+                          requireHydrated(result, "reconciliation result"), commitTracker)),
+          "reconciled commit result");
     }
     commitTracker.confirmedRollback();
     FiscalPreparationFailure.Code code;
@@ -375,13 +430,15 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
             case PERSISTENCE_FAILURE -> FiscalPreparationFailure.Code.PERSISTENCE_FAILURE;
           };
     }
-    return Uni.createFrom()
-        .failure(
-            new FiscalPreparationApplicationException(
-                FiscalPreparationFailure.of(code)
-                    .withCommitKnowledge(
-                        FiscalPreparationFailure.CommitKnowledge.CONFIRMED_ROLLBACK),
-                failure));
+    return requireHydrated(
+        Uni.createFrom()
+            .failure(
+                new FiscalPreparationApplicationException(
+                    FiscalPreparationFailure.of(code)
+                        .withCommitKnowledge(
+                            FiscalPreparationFailure.CommitKnowledge.CONFIRMED_ROLLBACK),
+                    failure)),
+        "classified commit failure");
   }
 
   private static Uni<FiscalPreparationCommitResult> reconciledResult(
@@ -392,15 +449,17 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
       return Uni.createFrom().item(new FiscalPreparationCommitResult.Replay(winner.preparation()));
     }
     commitTracker.possibleCommit();
-    return Uni.createFrom()
-        .failure(failure(FiscalPreparationFailure.Code.PREPARATION_OUTCOME_UNKNOWN));
+    return requireHydrated(
+        Uni.createFrom()
+            .failure(failure(FiscalPreparationFailure.Code.PREPARATION_OUTCOME_UNKNOWN)),
+        "unknown preparation outcome");
   }
 
   private Uni<PreparationRead> findPreparation(CompanyId companyId, UUID invoiceDraftId) {
     return pool.preparedQuery(SELECT_PREPARATION)
         .execute(Tuple.of(companyId.value(), invoiceDraftId))
         .onItem()
-        .transform(this::preparationRead);
+        .transform(rows -> preparationRead(requireHydrated(rows, "preparation query rows")));
   }
 
   private Uni<PreparationRead> findPreparation(
@@ -409,7 +468,7 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
         .preparedQuery(SELECT_PREPARATION)
         .execute(Tuple.of(companyId.value(), invoiceDraftId))
         .onItem()
-        .transform(this::preparationRead);
+        .transform(rows -> preparationRead(requireHydrated(rows, "preparation query rows")));
   }
 
   private PreparationRead preparationRead(RowSet<Row> rows) {
@@ -423,7 +482,7 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
         .onItem()
         .transform(
             rows -> {
-              Row row = first(rows);
+              Row row = first(requireHydrated(rows, "invoice draft query rows"));
               if (row == null) {
                 return new FiscalPreparationLookup.NotFound();
               }
@@ -444,17 +503,20 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
   private Uni<FiscalPreparationLookup> boundedLookup(
       Uni<FiscalPreparationLookup> operation, Duration remaining) {
     ReactiveOperationBudget budget = requireBudget(remaining, operationTimeout);
-    return operation
-        .ifNoItem()
-        .after(budget.timeout())
-        .failWith(
-            () ->
-                failure(
-                    budget.timeoutOwner() == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
-                        ? FiscalPreparationFailure.Code.REQUEST_TIMEOUT
-                        : FiscalPreparationFailure.Code.PERSISTENCE_FAILURE))
-        .onFailure(error -> !(error instanceof FiscalPreparationApplicationException))
-        .transform(error -> failure(FiscalPreparationFailure.Code.PERSISTENCE_FAILURE));
+    return requireHydrated(
+        operation
+            .ifNoItem()
+            .after(budget.timeout())
+            .failWith(
+                () ->
+                    failure(
+                        budget.timeoutOwner()
+                                == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
+                            ? FiscalPreparationFailure.Code.REQUEST_TIMEOUT
+                            : FiscalPreparationFailure.Code.PERSISTENCE_FAILURE))
+            .onFailure(error -> !(error instanceof FiscalPreparationApplicationException))
+            .transform(error -> failure(FiscalPreparationFailure.Code.PERSISTENCE_FAILURE)),
+        "bounded lookup");
   }
 
   private static ReactiveOperationBudget requireBudget(
@@ -479,8 +541,12 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
             Objects.requireNonNull(row.getString("emission_point_code"), "emissionPointCode"),
             Objects.requireNonNull(row.getString("document_type_code"), "documentTypeCode")),
         Objects.requireNonNull(row.getInteger("last_allocated"), "lastAllocated"),
-        Objects.requireNonNull(row.getOffsetDateTime("created_at"), "createdAt").toInstant(),
-        Objects.requireNonNull(row.getOffsetDateTime("updated_at"), "updatedAt").toInstant());
+        requireHydrated(
+            Objects.requireNonNull(row.getOffsetDateTime("created_at"), "createdAt").toInstant(),
+            "createdAt instant"),
+        requireHydrated(
+            Objects.requireNonNull(row.getOffsetDateTime("updated_at"), "updatedAt").toInstant(),
+            "updatedAt instant"));
   }
 
   private static @Nullable Row first(RowSet<Row> rows) {
@@ -489,6 +555,10 @@ public final class FiscalPreparationRepositoryAdapter implements FiscalPreparati
 
   private static FiscalPreparationApplicationException failure(FiscalPreparationFailure.Code code) {
     return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(code));
+  }
+
+  private static <T> T requireHydrated(@Nullable T value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 
   private sealed interface PreparationRead permits PreparationFound, PreparationAbsent {}

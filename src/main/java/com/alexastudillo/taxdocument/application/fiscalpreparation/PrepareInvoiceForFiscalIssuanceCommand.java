@@ -5,8 +5,10 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalContextSnaps
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Bodyless natural-identity preparation command. */
+@NullMarked
 public record PrepareInvoiceForFiscalIssuanceCommand(
     CompanyId companyId,
     UUID invoiceDraftId,

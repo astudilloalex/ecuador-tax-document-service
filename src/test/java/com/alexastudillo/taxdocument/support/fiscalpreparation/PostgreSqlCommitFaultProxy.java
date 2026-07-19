@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.support.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
+
 import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetServer;
@@ -11,10 +13,12 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.jspecify.annotations.NullMarked;
 
 /** Test-only PostgreSQL TCP proxy that can drop the first COMMIT acknowledgement. */
+@NullMarked
 public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
-  private static final Duration WAIT = Duration.ofSeconds(5);
+  private static final Duration WAIT = requireNonNull(Duration.ofSeconds(5));
 
   private final Vertx vertx;
   private final NetServer server;
@@ -33,7 +37,7 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
     Objects.requireNonNull(upstreamHost, "upstreamHost");
     Vertx vertx = Vertx.vertx();
     CommitFaultState state = new CommitFaultState();
-    Set<NetSocket> connections = ConcurrentHashMap.newKeySet();
+    Set<NetSocket> connections = requireNonNull(ConcurrentHashMap.newKeySet());
     NetServer server =
         vertx
             .createNetServer()
@@ -60,7 +64,8 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
             .toCompletableFuture()
             .orTimeout(WAIT.toMillis(), TimeUnit.MILLISECONDS)
             .join();
-    return new PostgreSqlCommitFaultProxy(vertx, server, state, connections);
+    return new PostgreSqlCommitFaultProxy(
+        vertx, requireNonNull(server, "fault proxy server"), state, connections);
   }
 
   public int port() {
@@ -90,7 +95,7 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
   private static void bridgeClient(CommitFaultState state, NetSocket client, NetSocket upstream) {
     client.handler(
         data -> {
-          if (containsCommit(data)) {
+          if (containsCommit(requireNonNull(data))) {
             state.commitObserved.set(true);
           }
           upstream.write(data);

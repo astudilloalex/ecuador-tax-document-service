@@ -21,9 +21,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import org.flywaydb.core.api.MigrationInfo;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class FiscalPreparationMigrationTest {
   @Inject PostgreSqlTestResource database;
   @Inject FiscalPreparationPostgreSqlSupport fiscalDatabase;
@@ -119,7 +121,7 @@ class FiscalPreparationMigrationTest {
         FiscalPreparationTestFixtures.DRAFT,
         FiscalPreparationTestFixtures.EMISSION_POINT,
         FiscalPreparationTestFixtures.DATE,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        Objects.requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
     fiscalDatabase.insertControlledBaseline(
         FiscalPreparationTestFixtures.BASELINE,
         FiscalPreparationTestFixtures.COMPANY_UUID,
@@ -129,9 +131,10 @@ class FiscalPreparationMigrationTest {
         "001",
         "001",
         0,
-        FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60));
+        Objects.requireNonNull(FiscalPreparationTestFixtures.CREATED_AT.minusSeconds(60)));
     store
-        .commit(FiscalPreparationTestFixtures.intent(), Duration.ofSeconds(5))
+        .commit(
+            FiscalPreparationTestFixtures.intent(), Objects.requireNonNull(Duration.ofSeconds(5)))
         .await()
         .indefinitely();
 
@@ -167,11 +170,13 @@ class FiscalPreparationMigrationTest {
   }
 
   private static Map<String, Integer> checksums(List<MigrationInfo> migrations) {
-    return migrations.stream()
-        .filter(info -> Integer.parseInt(info.getVersion().getVersion()) <= 5)
-        .collect(
-            Collectors.toUnmodifiableMap(
-                info -> info.getVersion().getVersion(),
-                info -> Objects.requireNonNull(info.getChecksum(), "checksum")));
+    var values =
+        migrations.stream()
+            .filter(info -> Integer.parseInt(info.getVersion().getVersion()) <= 5)
+            .collect(
+                Collectors.toUnmodifiableMap(
+                    info -> info.getVersion().getVersion(),
+                    info -> Objects.requireNonNull(info.getChecksum(), "checksum")));
+    return Objects.requireNonNull(values);
   }
 }

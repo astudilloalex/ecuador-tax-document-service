@@ -1,8 +1,10 @@
 package com.alexastudillo.taxdocument.application.fiscalpreparation;
 
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Failure carrier that exposes only the stable transport-neutral fiscal failure. */
+@NullMarked
 public final class FiscalPreparationApplicationException extends RuntimeException {
   private static final long serialVersionUID = 1L;
   private final FiscalPreparationFailure failure;

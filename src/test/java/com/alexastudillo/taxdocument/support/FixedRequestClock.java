@@ -5,6 +5,7 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Singleton;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.jspecify.annotations.NullMarked;
 
@@ -16,8 +17,10 @@ import org.jspecify.annotations.NullMarked;
 public final class FixedRequestClock implements RequestClock {
   private final AtomicInteger requestCalls = new AtomicInteger();
   private final AtomicInteger persistenceCalls = new AtomicInteger();
-  private volatile Instant requestInstant = Instant.parse("2026-07-17T12:00:00Z");
-  private volatile Instant persistenceInstant = Instant.parse("2026-07-17T12:00:01Z");
+  private volatile Instant requestInstant =
+      Objects.requireNonNull(Instant.parse("2026-07-17T12:00:00Z"));
+  private volatile Instant persistenceInstant =
+      Objects.requireNonNull(Instant.parse("2026-07-17T12:00:01Z"));
 
   @Override
   public Instant requestTime() {

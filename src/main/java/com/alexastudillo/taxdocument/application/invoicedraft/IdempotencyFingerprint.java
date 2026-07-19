@@ -8,22 +8,24 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Versioned, domain-separated privacy-minimal SHA-256 hashing. */
+@NullMarked
 public final class IdempotencyFingerprint {
   public static final short NORMALIZATION_VERSION = 1;
   private static final byte[] KEY_DOMAIN =
-      "invoice-draft:key:v1\0".getBytes(StandardCharsets.UTF_8);
+      Objects.requireNonNull("invoice-draft:key:v1\0".getBytes(StandardCharsets.UTF_8));
   private static final byte[] REQUEST_DOMAIN =
-      "invoice-draft:request:v1\0".getBytes(StandardCharsets.UTF_8);
+      Objects.requireNonNull("invoice-draft:request:v1\0".getBytes(StandardCharsets.UTF_8));
 
   public byte[] keyHash(String normalizedKey) {
     Objects.requireNonNull(normalizedKey, "normalizedKey");
     MessageDigest digest = sha256();
     digest.update(KEY_DOMAIN);
     put(digest, normalizedKey);
-    return digest.digest();
+    return Objects.requireNonNull(digest.digest());
   }
 
   public byte[] requestFingerprint(CreateInvoiceDraftCommand command) {
@@ -31,7 +33,7 @@ public final class IdempotencyFingerprint {
     MessageDigest digest = sha256();
     digest.update(REQUEST_DOMAIN);
     put(digest, command.emissionPointId());
-    put(digest, command.emissionDate().toString());
+    put(digest, Objects.requireNonNull(command.emissionDate().toString()));
     put(digest, command.buyer().identificationType());
     put(digest, command.buyer().identification());
     put(digest, command.buyer().legalName());
@@ -45,11 +47,11 @@ public final class IdempotencyFingerprint {
         digest,
         command.additionalInformation().stream().map(value -> value.toString()).toList(),
         true);
-    return digest.digest();
+    return Objects.requireNonNull(digest.digest());
   }
 
   public String hex(byte[] hash) {
-    return HexFormat.of().formatHex(hash);
+    return Objects.requireNonNull(HexFormat.of().formatHex(hash));
   }
 
   private static void putCollection(
@@ -57,7 +59,7 @@ public final class IdempotencyFingerprint {
     Collection<String> source =
         sorted ? values.stream().sorted(Comparator.naturalOrder()).toList() : values;
     digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(source.size()).array());
-    source.forEach(value -> put(digest, value));
+    source.forEach(value -> put(digest, Objects.requireNonNull(value)));
   }
 
   private static void putNullable(MessageDigest digest, @Nullable String value) {

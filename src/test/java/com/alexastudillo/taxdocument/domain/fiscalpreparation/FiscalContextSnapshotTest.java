@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,12 +9,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class FiscalContextSnapshotTest {
   @Test
   void minimalSnapshotRetainsOnlyAuthoritativeIssuanceFactsAndVersionEvidence() {
-    FiscalContextSnapshot snapshot = snapshot(Optional.empty(), Optional.empty(), Optional.empty());
+    FiscalContextSnapshot snapshot = snapshot(emptyOptional(), emptyOptional(), emptyOptional());
 
     assertEquals("SRI-OFFLINE-2.33", snapshot.sriTechnicalRuleIdentifier());
     assertEquals(LocalDate.of(2026, 7, 13), snapshot.sriTechnicalRuleDate());
@@ -51,9 +54,9 @@ class FiscalContextSnapshotTest {
             new FiscalSourceEvidence(
                 "SRI",
                 "revision-1",
-                LocalDate.of(2026, 7, 19),
-                Optional.of(LocalDate.of(2026, 7, 18)),
-                Instant.parse("2026-07-18T12:00:00Z")));
+                date(2026, 7, 19),
+                requireNonNull(Optional.of(date(2026, 7, 18))),
+                instant("2026-07-18T12:00:00Z")));
   }
 
   static FiscalContextSnapshot snapshot(
@@ -64,7 +67,7 @@ class FiscalContextSnapshotTest {
         "issuer-1",
         "1792146739001",
         "Issuer S.A.",
-        Optional.empty(),
+        emptyOptional(),
         "Head Office",
         true,
         specialTaxpayer,
@@ -74,7 +77,7 @@ class FiscalContextSnapshotTest {
         "establishment-1",
         "001",
         "Establishment Address",
-        UUID.fromString("123e4567-e89b-12d3-a456-426614174000"),
+        requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000")),
         "002",
         "1",
         "01",
@@ -82,11 +85,23 @@ class FiscalContextSnapshotTest {
         new FiscalSourceEvidence(
             "SRI",
             "revision-1",
-            LocalDate.of(2026, 7, 1),
-            Optional.empty(),
-            Instant.parse("2026-07-18T12:00:00Z")),
+            date(2026, 7, 1),
+            emptyOptional(),
+            instant("2026-07-18T12:00:00Z")),
         "SRI-OFFLINE-2.33",
-        LocalDate.of(2026, 7, 13),
+        date(2026, 7, 13),
         "SECURE_RANDOM_8_V1");
+  }
+
+  private static LocalDate date(int year, int month, int day) {
+    return requireNonNull(LocalDate.of(year, month, day));
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static <T> Optional<T> emptyOptional() {
+    return requireNonNull(Optional.empty());
   }
 }

@@ -38,7 +38,8 @@ public final class InvoiceDraftPayloadSizeFailureHandler {
         .route(HttpMethod.POST, PATH)
         .order(RouteConstants.ROUTE_ORDER_UPLOAD_LIMIT - 1)
         .handler(context -> rejectKnownOversizeBody(Objects.requireNonNull(context, "context")))
-        .failureHandler(context -> mapStreamingBodyFailure(Objects.requireNonNull(context, "context")));
+        .failureHandler(
+            context -> mapStreamingBodyFailure(Objects.requireNonNull(context, "context")));
   }
 
   public ProblemDetails.ApiException payloadTooLarge() {

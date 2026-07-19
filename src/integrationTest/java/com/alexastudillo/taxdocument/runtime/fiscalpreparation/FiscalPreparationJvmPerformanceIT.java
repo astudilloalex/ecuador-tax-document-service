@@ -27,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestReporter;
 
 @QuarkusIntegrationTest
+@NullMarked
 class FiscalPreparationJvmPerformanceIT {
   private static final String COMPANY = "c1111111-1111-4111-8111-111111111111";
   private static final UUID EMISSION_POINT =
@@ -64,7 +66,8 @@ class FiscalPreparationJvmPerformanceIT {
 
     String oneDraft = createDraft(today, "same-draft-" + suffix, "Same Draft Buyer");
     long sameStarted = System.nanoTime();
-    List<Response> equivalent = concurrentPosts(Objects.requireNonNull(java.util.Collections.nCopies(100, oneDraft)));
+    List<Response> equivalent =
+        concurrentPosts(Objects.requireNonNull(java.util.Collections.nCopies(100, oneDraft)));
     Duration sameDuration = elapsed(sameStarted);
     assertTrue(sameDuration.compareTo(Duration.ofSeconds(10)) < 0);
     assertEquals(1L, equivalent.stream().filter(response -> response.statusCode() == 201).count());
@@ -108,8 +111,10 @@ class FiscalPreparationJvmPerformanceIT {
     String runtimeLog = Files.readString(Path.of("build/quarkus.log"));
     assertFalse(runtimeLog.contains("blocked thread"));
     assertFalse(runtimeLog.contains("Thread blocked"));
-    reporter.publishEntry("sameDraftMillis", Objects.requireNonNull(Long.toString(sameDuration.toMillis())));
-    reporter.publishEntry("oneScopeMillis", Objects.requireNonNull(Long.toString(scopeDuration.toMillis())));
+    reporter.publishEntry(
+        "sameDraftMillis", Objects.requireNonNull(Long.toString(sameDuration.toMillis())));
+    reporter.publishEntry(
+        "oneScopeMillis", Objects.requireNonNull(Long.toString(scopeDuration.toMillis())));
     reporter.publishEntry("poolRecovery", "PASS");
   }
 

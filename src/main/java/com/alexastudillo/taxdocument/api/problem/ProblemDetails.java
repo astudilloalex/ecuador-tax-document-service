@@ -28,7 +28,10 @@ public record ProblemDetails(
     Objects.requireNonNull(detail, "detail");
     Objects.requireNonNull(instance, "instance");
     Objects.requireNonNull(correlationId, "correlationId");
-    violations = violations == null ? null : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
+    violations =
+        violations == null
+            ? null
+            : Objects.requireNonNull(List.<@NonNull Violation>copyOf(violations));
   }
 
   public record Violation(
@@ -52,11 +55,14 @@ public record ProblemDetails(
       this(status, code, message, Objects.requireNonNull(List.<@NonNull Violation>of()));
     }
 
-    public ApiException(int status, String code, String message, List<@NonNull Violation> violations) {
+    public ApiException(
+        int status, String code, String message, List<@NonNull Violation> violations) {
       super(message);
       this.status = status;
       this.code = Objects.requireNonNull(code, "code");
-      this.violations = Objects.requireNonNull(List.<@NonNull Violation>copyOf(Objects.requireNonNull(violations, "violations")));
+      this.violations =
+          Objects.requireNonNull(
+              List.<@NonNull Violation>copyOf(Objects.requireNonNull(violations, "violations")));
     }
 
     public int status() {

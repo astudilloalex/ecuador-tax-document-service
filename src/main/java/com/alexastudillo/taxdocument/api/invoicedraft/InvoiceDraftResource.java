@@ -87,7 +87,8 @@ public final class InvoiceDraftResource {
     }
     validateRepresentation(request);
     try {
-      return Objects.requireNonNull(objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class));
+      return Objects.requireNonNull(
+          objectMapper.treeToValue(request, CreateInvoiceDraftRequest.class));
     } catch (JsonProcessingException exception) {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");

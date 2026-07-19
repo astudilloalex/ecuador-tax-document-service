@@ -5,8 +5,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Indivisible immutable fiscal identity assigned to exactly one Company-owned Invoice Draft. */
+@NullMarked
 public record FiscalPreparation(
     UUID id,
     CompanyId companyId,

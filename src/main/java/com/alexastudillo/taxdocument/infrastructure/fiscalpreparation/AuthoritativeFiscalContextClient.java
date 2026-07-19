@@ -9,8 +9,10 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import java.util.Objects;
 import java.util.Set;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** MicroProfile consumer of authoritative-fiscal-context contract 1.0.0. */
@@ -18,18 +20,20 @@ import org.jspecify.annotations.Nullable;
 @Path("/fiscal-context-resolutions/invoice-issuance")
 @Consumes(MediaType.APPLICATION_JSON)
 @Produces(MediaType.APPLICATION_JSON)
+@NullMarked
 public interface AuthoritativeFiscalContextClient {
   Set<String> SAFE_PROVIDER_CODES =
-      Set.of(
-          "FISCAL_CONTEXT_NOT_FOUND",
-          "FISCAL_CONTEXT_INEFFECTIVE",
-          "FISCAL_CONTEXT_INELIGIBLE",
-          "FISCAL_CONTEXT_AMBIGUOUS",
-          "FISCAL_CONTEXT_INVALID",
-          "FISCAL_CONTEXT_UNSUPPORTED",
-          "FISCAL_CONTEXT_INCONSISTENT",
-          "PROVIDER_UNAVAILABLE",
-          "PROVIDER_TIMEOUT");
+      Objects.requireNonNull(
+          Set.of(
+              "FISCAL_CONTEXT_NOT_FOUND",
+              "FISCAL_CONTEXT_INEFFECTIVE",
+              "FISCAL_CONTEXT_INELIGIBLE",
+              "FISCAL_CONTEXT_AMBIGUOUS",
+              "FISCAL_CONTEXT_INVALID",
+              "FISCAL_CONTEXT_UNSUPPORTED",
+              "FISCAL_CONTEXT_INCONSISTENT",
+              "PROVIDER_UNAVAILABLE",
+              "PROVIDER_TIMEOUT"));
 
   @POST
   Uni<AuthoritativeFiscalContextDto.Context> resolve(
@@ -44,7 +48,7 @@ public interface AuthoritativeFiscalContextClient {
     try {
       AuthoritativeFiscalContextDto.ProviderProblem problem =
           response.readEntity(AuthoritativeFiscalContextDto.ProviderProblem.class);
-      if (problem != null && SAFE_PROVIDER_CODES.contains(problem.code())) {
+      if (SAFE_PROVIDER_CODES.contains(problem.code())) {
         code = problem.code();
       }
     } catch (RuntimeException ignored) {

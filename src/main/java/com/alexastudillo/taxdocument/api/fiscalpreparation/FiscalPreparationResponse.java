@@ -4,9 +4,11 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Exact sensitive success representation; Company context is intentionally absent. */
+@NullMarked
 public record FiscalPreparationResponse(
     UUID fiscalPreparationId,
     UUID invoiceDraftId,

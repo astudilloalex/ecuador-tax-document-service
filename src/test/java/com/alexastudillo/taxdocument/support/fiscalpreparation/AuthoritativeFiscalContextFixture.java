@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.support.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
+
 import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpConnection;
 import io.vertx.core.http.HttpMethod;
@@ -13,13 +15,15 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
 /** Bounded local implementation of authoritative-fiscal-context consumer contract 1.0.0. */
+@NullMarked
 public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   public static final int PORT = 18082;
   public static final String PATH = "/fiscal-context-resolutions/invoice-issuance";
-  private static final Duration WAIT = Duration.ofSeconds(5);
+  private static final Duration WAIT = requireNonNull(Duration.ofSeconds(5));
   private static final String VALID_CONTEXT =
       """
       {
@@ -53,7 +57,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   private final Set<HttpConnection> connections;
   private final AtomicInteger calls = new AtomicInteger();
   private final AtomicReference<ResponsePlan> response =
-      new AtomicReference<>(new ResponsePlan(200, VALID_CONTEXT, Duration.ZERO));
+      new AtomicReference<>(new ResponsePlan(200, VALID_CONTEXT, zeroDuration()));
   private final AtomicReference<Optional<CapturedRequest>> lastRequest =
       new AtomicReference<>(Optional.empty());
 
@@ -67,7 +71,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   public static AuthoritativeFiscalContextFixture start() {
     Vertx vertx = Vertx.vertx();
     Router router = Router.router(vertx);
-    Set<HttpConnection> connections = ConcurrentHashMap.newKeySet();
+    Set<HttpConnection> connections = requireNonNull(ConcurrentHashMap.newKeySet());
     AtomicReference<AuthoritativeFiscalContextFixture> fixture = new AtomicReference<>();
     router
         .route(HttpMethod.POST, PATH)
@@ -85,7 +89,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
                                   new CapturedRequest(
                                       context.request().getHeader("X-Company-Id"),
                                       context.request().getHeader("X-Correlation-Id"),
-                                      body.toString())));
+                                      requireNonNull(body.toString()))));
                           ResponsePlan plan = active.response.get();
                           Runnable send =
                               () ->
@@ -118,24 +122,25 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
             .orTimeout(WAIT.toMillis(), TimeUnit.MILLISECONDS)
             .join();
     AuthoritativeFiscalContextFixture result =
-        new AuthoritativeFiscalContextFixture(vertx, server, connections);
+        new AuthoritativeFiscalContextFixture(
+            vertx, requireNonNull(server, "HTTP server"), connections);
     fixture.set(result);
     return result;
   }
 
   public void valid() {
-    plan(200, VALID_CONTEXT, Duration.ZERO);
+    plan(200, VALID_CONTEXT, zeroDuration());
   }
 
   public void providerStatus(int status) {
-    plan(status, "{\"code\":\"FIXTURE_PROVIDER_FAILURE\"}", Duration.ZERO);
+    plan(status, "{\"code\":\"FIXTURE_PROVIDER_FAILURE\"}", zeroDuration());
   }
 
   public void providerProblem(int status, String safeCode) {
     if (!safeCode.matches("^[A-Z][A-Z0-9_]{0,63}$")) {
       throw new IllegalArgumentException("safeCode must be a bounded machine code");
     }
-    plan(status, "{\"code\":\"" + safeCode + "\"}", Duration.ZERO);
+    plan(status, "{\"code\":\"" + safeCode + "\"}", zeroDuration());
   }
 
   public void delayed(Duration delay) {
@@ -143,18 +148,18 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   }
 
   public void malformed() {
-    plan(200, "{not-json", Duration.ZERO);
+    plan(200, "{not-json", zeroDuration());
   }
 
   public void partial() {
-    plan(200, "{\"issuerReference\":\"partial\"}", Duration.ZERO);
+    plan(200, "{\"issuerReference\":\"partial\"}", zeroDuration());
   }
 
   public void oversized(int bytes) {
     if (bytes < 1) {
       throw new IllegalArgumentException("bytes must be positive");
     }
-    plan(200, "x".repeat(bytes), Duration.ZERO);
+    plan(200, requireNonNull("x".repeat(bytes)), zeroDuration());
   }
 
   public void plan(int status, String body, Duration delay) {
@@ -172,7 +177,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   }
 
   public Optional<CapturedRequest> lastRequest() {
-    return lastRequest.get();
+    return requireNonNull(lastRequest.get());
   }
 
   public void reset() {
@@ -195,6 +200,10 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
 
   private static String contentType(int status) {
     return status == 200 ? "application/json" : "application/problem+json";
+  }
+
+  private static Duration zeroDuration() {
+    return requireNonNull(Duration.ZERO);
   }
 
   private record ResponsePlan(int status, String body, Duration delay) {}

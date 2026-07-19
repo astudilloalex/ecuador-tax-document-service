@@ -11,9 +11,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 
 /** Read-only Company-plus-draft reconciliation after an uncertain commit acknowledgement. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationCommitReconciler {
   private final Pool pool;
   private final FiscalPreparationPersistenceMapper mapper;
@@ -36,7 +38,7 @@ public final class FiscalPreparationCommitReconciler {
         .after(remaining)
         .fail()
         .onItem()
-        .transform(this::result)
+        .transform(rows -> result(Objects.requireNonNull(rows, "reconciliation rows")))
         .onFailure()
         .recoverWithItem(new Result.Unknown());
   }

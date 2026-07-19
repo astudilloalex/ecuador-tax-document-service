@@ -6,11 +6,13 @@ import jakarta.enterprise.inject.Alternative;
 import jakarta.inject.Singleton;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NullMarked;
 
 /** Resettable test-only deterministic local identifier sequence. */
 @Alternative
 @Priority(1)
 @Singleton
+@NullMarked
 public final class DeterministicDraftIdentifierGenerator implements DraftIdentifierGenerator {
   private final AtomicLong sequence = new AtomicLong(1L);
 

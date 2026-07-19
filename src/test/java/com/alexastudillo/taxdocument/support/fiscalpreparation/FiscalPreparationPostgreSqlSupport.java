@@ -1,5 +1,7 @@
 package com.alexastudillo.taxdocument.support.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
+
 import com.alexastudillo.taxdocument.infrastructure.invoicedraft.PostgreSqlTestResource;
 import io.vertx.mutiny.sqlclient.Pool;
 import io.vertx.mutiny.sqlclient.Row;
@@ -15,11 +17,14 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.NullMarked;
 
 /** Controlled Feature 002 rows on the existing Quarkus PostgreSQL 18.4 test lifecycle. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationPostgreSqlSupport {
-  private static final Duration WAIT = Duration.ofSeconds(10);
+  private static final Duration WAIT = requireNonNull(Duration.ofSeconds(10));
   private static final String REFERENCE_VERSION = "SRI-OFFLINE-2.32-TARGET-1";
 
   private final PostgreSqlTestResource database;
@@ -50,13 +55,14 @@ public final class FiscalPreparationPostgreSqlSupport {
         ) VALUES ($1, $2, $3, $4, '06', $5, 'FIXTURE001', 'Fixture Buyer', 'DRAFT', 'USD',
                   10.00, 0.00, 11.50, $6, $6)
         """,
-        Tuple.of(
-            invoiceDraftId,
-            companyId,
-            emissionPointId,
-            emissionDate,
-            REFERENCE_VERSION,
-            OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC)));
+        requireNonNull(
+            Tuple.of(
+                invoiceDraftId,
+                companyId,
+                emissionPointId,
+                emissionDate,
+                REFERENCE_VERSION,
+                OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC))));
   }
 
   public void insertControlledBaseline(
@@ -77,24 +83,26 @@ public final class FiscalPreparationPostgreSqlSupport {
           last_allocated, created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, '01', $8, $9, $9)
         """,
-        Tuple.from(
-            List.of(
-                baselineId,
-                companyId,
-                issuerReference,
-                establishmentReference,
-                emissionPointId,
-                establishmentCode,
-                emissionPointCode,
-                lastAllocated,
-                OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC))));
+        requireNonNull(
+            Tuple.from(
+                requireNonNull(
+                    List.<@NonNull Object>of(
+                        baselineId,
+                        companyId,
+                        issuerReference,
+                        establishmentReference,
+                        emissionPointId,
+                        establishmentCode,
+                        emissionPointCode,
+                        lastAllocated,
+                        requireNonNull(OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC)))))));
   }
 
   public long fiscalPreparationCount(UUID companyId, UUID invoiceDraftId) {
     return requireRow(
             "SELECT count(*) AS value FROM fiscal_preparation "
                 + "WHERE company_id = $1 AND invoice_draft_id = $2",
-            Tuple.of(companyId, invoiceDraftId))
+            requireNonNull(Tuple.of(companyId, invoiceDraftId)))
         .getLong("value");
   }
 
@@ -102,7 +110,7 @@ public final class FiscalPreparationPostgreSqlSupport {
     return requireRow(
             "SELECT last_allocated FROM official_sequence_baseline "
                 + "WHERE company_id = $1 AND id = $2",
-            Tuple.of(companyId, baselineId))
+            requireNonNull(Tuple.of(companyId, baselineId)))
         .getInteger("last_allocated");
   }
 
@@ -115,17 +123,19 @@ public final class FiscalPreparationPostgreSqlSupport {
               FROM invoice_draft
              WHERE company_id = $1 AND id = $2
             """,
-            Tuple.of(companyId, invoiceDraftId));
+            requireNonNull(Tuple.of(companyId, invoiceDraftId)));
     return new DraftSnapshot(
-        row.getUUID("emission_point_id"),
-        row.getLocalDate("emission_date"),
-        row.getString("status"),
-        row.getString("currency"),
-        row.getBigDecimal("subtotal_before_taxes"),
-        row.getBigDecimal("total_discount"),
-        row.getBigDecimal("grand_total"),
-        row.getOffsetDateTime("created_at").toInstant(),
-        row.getOffsetDateTime("updated_at").toInstant());
+        requireNonNull(row.getUUID("emission_point_id"), "emission_point_id"),
+        requireNonNull(row.getLocalDate("emission_date"), "emission_date"),
+        requireNonNull(row.getString("status"), "status"),
+        requireNonNull(row.getString("currency"), "currency"),
+        requireNonNull(row.getBigDecimal("subtotal_before_taxes"), "subtotal_before_taxes"),
+        requireNonNull(row.getBigDecimal("total_discount"), "total_discount"),
+        requireNonNull(row.getBigDecimal("grand_total"), "grand_total"),
+        requireNonNull(
+            requireNonNull(row.getOffsetDateTime("created_at"), "created_at").toInstant()),
+        requireNonNull(
+            requireNonNull(row.getOffsetDateTime("updated_at"), "updated_at").toInstant()));
   }
 
   public long rowCount(String tableName) {

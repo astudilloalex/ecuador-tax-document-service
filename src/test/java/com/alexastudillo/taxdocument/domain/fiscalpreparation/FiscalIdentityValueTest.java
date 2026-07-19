@@ -1,12 +1,15 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class FiscalIdentityValueTest {
   @Test
   void officialSequentialNumberEnforcesTheExactNineDigitOfficialRange() {
@@ -31,7 +34,7 @@ class FiscalIdentityValueTest {
 
   @Test
   void exactScopeUsesIssuerEstablishmentEmissionPointAndInvoiceTypeOnly() {
-    UUID emissionPoint = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+    UUID emissionPoint = requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"));
     OfficialSequenceScope first =
         new OfficialSequenceScope("issuer-1", "establishment-1", emissionPoint, "001", "002", "01");
     assertEquals(

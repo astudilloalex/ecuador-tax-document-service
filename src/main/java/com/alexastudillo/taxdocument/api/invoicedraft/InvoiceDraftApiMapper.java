@@ -25,10 +25,14 @@ public final class InvoiceDraftApiMapper {
     try {
       List<CreateInvoiceDraftCommand.@NonNull LineInput> lines =
           Objects.requireNonNull(
-              request.lines().stream().map(line -> lineInput(Objects.requireNonNull(line))).toList());
+              request.lines().stream()
+                  .map(line -> lineInput(Objects.requireNonNull(line)))
+                  .toList());
       List<CreateInvoiceDraftCommand.@NonNull PaymentInput> payments =
           Objects.requireNonNull(
-              request.payments().stream().map(payment -> paymentInput(Objects.requireNonNull(payment))).toList());
+              request.payments().stream()
+                  .map(payment -> paymentInput(Objects.requireNonNull(payment)))
+                  .toList());
       List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additionalInformation =
           additionalInformationInputs(request);
 
@@ -63,18 +67,22 @@ public final class InvoiceDraftApiMapper {
     }
     List<InvoiceDraftResponse.@NonNull LineResponse> lines =
         Objects.requireNonNull(
-            draft.lines().stream().map(line -> lineResponse(Objects.requireNonNull(line))).toList());
+            draft.lines().stream()
+                .map(line -> lineResponse(Objects.requireNonNull(line)))
+                .toList());
     List<InvoiceDraftResponse.@NonNull TaxResponse> taxTotals =
         Objects.requireNonNull(
-            draft.taxTotals().stream().map(tax -> taxResponse(Objects.requireNonNull(tax))).toList());
+            draft.taxTotals().stream()
+                .map(tax -> taxResponse(Objects.requireNonNull(tax)))
+                .toList());
     List<InvoiceDraftResponse.@NonNull PaymentResponse> payments =
         Objects.requireNonNull(
-            draft.payments().stream().map(payment -> paymentResponse(Objects.requireNonNull(payment))).toList());
+            draft.payments().stream()
+                .map(payment -> paymentResponse(Objects.requireNonNull(payment)))
+                .toList());
     List<InvoiceDraftResponse.@NonNull AdditionalInformationResponse> additionalInformation =
         Objects.requireNonNull(
-            draft
-                .additionalInformation()
-                .stream()
+            draft.additionalInformation().stream()
                 .map(info -> additionalInformationResponse(Objects.requireNonNull(info)))
                 .toList());
 
@@ -121,15 +129,16 @@ public final class InvoiceDraftApiMapper {
         new BigDecimal(payment.amount()));
   }
 
-  private List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additionalInformationInputs(
-      CreateInvoiceDraftRequest request) {
-    List<CreateInvoiceDraftRequest.AdditionalInformationRequest> infoList = request.additionalInformation();
+  private List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>
+      additionalInformationInputs(CreateInvoiceDraftRequest request) {
+    List<CreateInvoiceDraftRequest.AdditionalInformationRequest> infoList =
+        request.additionalInformation();
     if (infoList == null) {
-      return Objects.requireNonNull(List.<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>of());
+      return Objects.requireNonNull(
+          List.<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>of());
     }
     return Objects.requireNonNull(
-        infoList
-            .stream()
+        infoList.stream()
             .map(info -> additionalInformationInput(Objects.requireNonNull(info)))
             .toList());
   }

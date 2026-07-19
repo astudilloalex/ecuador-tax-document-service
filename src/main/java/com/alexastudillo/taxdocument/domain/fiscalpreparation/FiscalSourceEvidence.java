@@ -4,8 +4,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Immutable authority, revision, effective interval, and observation evidence. */
+@NullMarked
 public record FiscalSourceEvidence(
     String authority,
     String revision,
@@ -29,7 +32,7 @@ public record FiscalSourceEvidence(
         && effectiveThrough.map(end -> !date.isAfter(end)).orElse(true);
   }
 
-  static void requireText(String value, int maximum, String field) {
+  static void requireText(@Nullable String value, int maximum, String field) {
     if (value == null
         || value.isBlank()
         || value.length() > maximum

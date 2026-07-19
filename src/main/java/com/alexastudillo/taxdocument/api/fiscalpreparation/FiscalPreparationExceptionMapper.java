@@ -11,7 +11,6 @@ import jakarta.ws.rs.ext.Provider;
 import java.net.URI;
 import java.util.Locale;
 import java.util.Objects;
-
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 

@@ -1,11 +1,15 @@
 package com.alexastudillo.taxdocument.domain.fiscalpreparation;
 
 import java.util.Locale;
+import java.util.Objects;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NullMarked;
 
 /** Immutable system-generated eight-digit SRI Access Key component. */
+@NullMarked
 public record NumericCode(String value) {
-  private static final Pattern REPRESENTATION = Pattern.compile("^[0-9]{8}$");
+  private static final Pattern REPRESENTATION =
+      Objects.requireNonNull(Pattern.compile("^[0-9]{8}$"));
 
   public NumericCode {
     if (value == null || !REPRESENTATION.matcher(value).matches()) {
@@ -17,7 +21,7 @@ public record NumericCode(String value) {
     if (number < 0 || number > 99_999_999) {
       throw new IllegalArgumentException("Numeric Code is outside its valid range");
     }
-    return new NumericCode(String.format(Locale.ROOT, "%08d", number));
+    return new NumericCode(Objects.requireNonNull(String.format(Locale.ROOT, "%08d", number)));
   }
 
   public static NumericCode parse(String value) {

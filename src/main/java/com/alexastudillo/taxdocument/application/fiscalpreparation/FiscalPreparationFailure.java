@@ -4,7 +4,6 @@ import java.io.Serializable;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
-
 import org.jspecify.annotations.NullMarked;
 
 /** Stable transport-neutral safe failure with explicit retry and commit knowledge. */
@@ -89,6 +88,6 @@ public record FiscalPreparationFailure(
         Code.PREPARATION_OUTCOME_UNKNOWN,
         "Fiscal Preparation outcome is unknown; retry the same Company and Invoice Draft");
     values.put(Code.INTERNAL_ERROR, "Fiscal Preparation failed");
-    return Map.copyOf(values);
+    return Objects.requireNonNull(Map.copyOf(values), "failure details");
   }
 }

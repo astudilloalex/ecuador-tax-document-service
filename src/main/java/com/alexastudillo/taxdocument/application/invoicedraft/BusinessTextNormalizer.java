@@ -13,7 +13,10 @@ public final class BusinessTextNormalizer {
   public NormalizedText normalizeDisplay(String field, String raw, int maximumCodePoints) {
     Objects.requireNonNull(field, "field");
     Objects.requireNonNull(raw, "raw");
-    String value = trimAsciiSpace(Normalizer.normalize(raw, Normalizer.Form.NFC));
+    String value =
+        trimAsciiSpace(
+            Objects.requireNonNull(
+                Normalizer.normalize(raw, Normalizer.Form.NFC), "normalized text"));
     validateCodePoints(field, value);
     int length = value.codePointCount(0, value.length());
     if (length < 1 || length > maximumCodePoints) {
@@ -44,7 +47,7 @@ public final class BusinessTextNormalizer {
     while (end > start && (value.charAt(end - 1) == ' ' || value.charAt(end - 1) == '\t')) {
       end--;
     }
-    return value.substring(start, end);
+    return Objects.requireNonNull(value.substring(start, end));
   }
 
   private static String trimAsciiSpace(String value) {
@@ -56,7 +59,7 @@ public final class BusinessTextNormalizer {
     while (end > start && value.charAt(end - 1) == ' ') {
       end--;
     }
-    return value.substring(start, end);
+    return Objects.requireNonNull(value.substring(start, end));
   }
 
   private static void validateCodePoints(String field, String value) {
@@ -93,7 +96,7 @@ public final class BusinessTextNormalizer {
       previousSpace = codePoint == 0x20;
       offset += Character.charCount(codePoint);
     }
-    return result.toString();
+    return Objects.requireNonNull(result.toString());
   }
 
   public record NormalizedText(String displayValue, @Nullable String canonicalValue) {}

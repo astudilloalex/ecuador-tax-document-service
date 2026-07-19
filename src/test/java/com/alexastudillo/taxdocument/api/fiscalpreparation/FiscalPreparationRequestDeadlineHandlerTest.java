@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -14,8 +15,10 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class FiscalPreparationRequestDeadlineHandlerTest {
   @Test
   void conclusiveResultBeforeExpiryWinsExactlyOnceAndLateDeadlineCannotReplaceIt() {
@@ -23,8 +26,7 @@ class FiscalPreparationRequestDeadlineHandlerTest {
     FiscalPreparationRequestState state = state(ticker, 10L);
     FiscalPreparationRequestDeadlineHandler handler = new FiscalPreparationRequestDeadlineHandler();
 
-    assertEquals(
-        "winner", handler.race(Uni.createFrom().item("winner"), state).await().indefinitely());
+    assertEquals("winner", handler.race(item("winner"), state).await().indefinitely());
     ticker.set(10L);
     assertFalse(state.acceptTerminal());
   }
@@ -39,7 +41,7 @@ class FiscalPreparationRequestDeadlineHandlerTest {
             FiscalPreparationApplicationException.class,
             () ->
                 new FiscalPreparationRequestDeadlineHandler()
-                    .race(Uni.createFrom().nothing(), state)
+                    .race(nothing(), state)
                     .await()
                     .indefinitely());
     assertEquals(FiscalPreparationFailure.Code.REQUEST_TIMEOUT, failure.failure().code());
@@ -59,7 +61,7 @@ class FiscalPreparationRequestDeadlineHandlerTest {
             FiscalPreparationApplicationException.class,
             () ->
                 new FiscalPreparationRequestDeadlineHandler()
-                    .race(Uni.createFrom().nothing(), state)
+                    .race(nothing(), state)
                     .await()
                     .indefinitely());
 
@@ -83,7 +85,7 @@ class FiscalPreparationRequestDeadlineHandlerTest {
             FiscalPreparationApplicationException.class,
             () ->
                 new FiscalPreparationRequestDeadlineHandler()
-                    .race(Uni.createFrom().nothing(), state)
+                    .race(nothing(), state)
                     .await()
                     .indefinitely());
     assertEquals(
@@ -96,9 +98,9 @@ class FiscalPreparationRequestDeadlineHandlerTest {
     AtomicLong ticker = new AtomicLong(100L);
     RequestContext context =
         new RequestContext(
-            Instant.parse("2026-07-19T04:59:59.999Z"),
-            LocalDate.of(2026, 7, 18),
-            RequestDeadline.start(Duration.ofNanos(20), ticker::get));
+            instant("2026-07-19T04:59:59.999Z"),
+            date(),
+            RequestDeadline.start(requireNonNull(Duration.ofNanos(20)), ticker::get));
     ticker.set(119L);
     assertEquals(LocalDate.of(2026, 7, 18), context.ecuadorDate());
     assertEquals(Duration.ofNanos(1), context.deadline().remaining());
@@ -108,11 +110,27 @@ class FiscalPreparationRequestDeadlineHandlerTest {
     FiscalPreparationRequestState state = new FiscalPreparationRequestState();
     state.initialize(
         new RequestContext(
-            Instant.parse("2026-07-18T12:00:00Z"),
-            LocalDate.of(2026, 7, 18),
-            RequestDeadline.start(Duration.ofNanos(budgetNanos), ticker::get)),
+            instant("2026-07-18T12:00:00Z"),
+            date(),
+            RequestDeadline.start(requireNonNull(Duration.ofNanos(budgetNanos)), ticker::get)),
         "corr-1",
         new FiscalPreparationCommitTracker());
     return state;
+  }
+
+  private static <T> Uni<T> item(T value) {
+    return requireNonNull(Uni.createFrom().item(value));
+  }
+
+  private static Uni<Object> nothing() {
+    return requireNonNull(Uni.createFrom().nothing());
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static LocalDate date() {
+    return requireNonNull(LocalDate.of(2026, 7, 18));
   }
 }

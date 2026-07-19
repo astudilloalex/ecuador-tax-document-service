@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.application.fiscalpreparation;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -22,15 +23,16 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class PrepareInvoiceForFiscalIssuanceUseCaseTest {
   private static final CompanyId COMPANY =
-      new CompanyId(UUID.fromString("11111111-1111-4111-8111-111111111111"));
-  private static final UUID DRAFT = UUID.fromString("22222222-2222-4222-8222-222222222222");
-  private static final UUID EMISSION_POINT =
-      UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-  private static final LocalDate TODAY = LocalDate.of(2026, 7, 18);
+      new CompanyId(uuid("11111111-1111-4111-8111-111111111111"));
+  private static final UUID DRAFT = uuid("22222222-2222-4222-8222-222222222222");
+  private static final UUID EMISSION_POINT = uuid("123e4567-e89b-12d3-a456-426614174000");
+  private static final LocalDate TODAY = date(2026, 7, 18);
 
   @Test
   void replayReturnsTheCommittedWinnerBeforeDateProviderStoreCommitOrIdentityWork() {
@@ -40,7 +42,7 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     PrepareInvoiceForFiscalIssuanceService service = service(store, provider);
 
     PrepareInvoiceForFiscalIssuanceResult result =
-        service.prepare(command(LocalDate.of(2030, 1, 1))).await().indefinitely();
+        service.prepare(command(date(2030, 1, 1))).await().indefinitely();
 
     assertSame(winner, result.preparation());
     assertEquals(true, result.replayed());
@@ -68,12 +70,13 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
 
   @Test
   void nonPreparableAndStaleDraftsFailBeforeProviderAndCommitWithStableCodes() {
-    for (FiscalPreparationLookup lookup :
+    for (FiscalPreparationLookup candidateLookup :
         new FiscalPreparationLookup[] {
           new FiscalPreparationLookup.NotFound(),
           new FiscalPreparationLookup.NotPreparable(
               FiscalPreparationLookup.NotPreparableReason.NON_DRAFT)
         }) {
+      FiscalPreparationLookup lookup = requireNonNull(candidateLookup);
       FakeStore store = new FakeStore(lookup);
       FakeFiscalContextPort provider = new FakeFiscalContextPort(validResolution());
       FiscalPreparationApplicationException failure =
@@ -91,7 +94,7 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
 
     InvoiceDraftPreparationView stale =
         new InvoiceDraftPreparationView(
-            DRAFT, COMPANY, EMISSION_POINT, TODAY.minusDays(1), "DRAFT");
+            DRAFT, COMPANY, EMISSION_POINT, requireNonNull(TODAY.minusDays(1)), "DRAFT");
     FakeStore store = new FakeStore(new FiscalPreparationLookup.EligibleDraft(stale));
     FakeFiscalContextPort provider = new FakeFiscalContextPort(validResolution());
     FiscalPreparationApplicationException failure =
@@ -139,12 +142,14 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
   }
 
   private static PrepareInvoiceForFiscalIssuanceCommand command(LocalDate requestDate) {
-    Instant entry = requestDate.atStartOfDay(RequestContext.ECUADOR_TIME_ZONE).toInstant();
+    Instant entry =
+        requireNonNull(requestDate.atStartOfDay(RequestContext.ECUADOR_TIME_ZONE).toInstant());
     return new PrepareInvoiceForFiscalIssuanceCommand(
         COMPANY,
         DRAFT,
         "corr-1",
-        new RequestContext(entry, requestDate, RequestDeadline.start(Duration.ofSeconds(10))),
+        new RequestContext(
+            entry, requestDate, RequestDeadline.start(requireNonNull(Duration.ofSeconds(10)))),
         new FiscalPreparationCommitTracker());
   }
 
@@ -153,13 +158,13 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
         "issuer-1",
         "1792146739001",
         "Issuer S.A.",
-        Optional.of("Issuer"),
+        optional("Issuer"),
         "Head Office",
         true,
-        Optional.empty(),
-        Optional.empty(),
+        emptyOptional(),
+        emptyOptional(),
         FiscalDesignation.RimpeClassification.NONE,
-        Optional.empty(),
+        emptyOptional(),
         "establishment-1",
         "001",
         "Establishment Address",
@@ -172,19 +177,19 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
         new FiscalSourceEvidence(
             "SRI",
             "revision-1",
-            LocalDate.of(2026, 7, 1),
-            Optional.empty(),
-            Instant.parse("2026-07-18T11:59:00Z")));
+            date(2026, 7, 1),
+            emptyOptional(),
+            instant("2026-07-18T11:59:00Z")));
   }
 
   private static FiscalPreparation preparation() {
     FiscalContextSnapshot snapshot =
         new FiscalContextValidator().validate(validResolution(), EMISSION_POINT, TODAY);
     return new FiscalPreparation(
-        UUID.fromString("33333333-3333-4333-8333-333333333333"),
+        uuid("33333333-3333-4333-8333-333333333333"),
         COMPANY,
         DRAFT,
-        UUID.fromString("44444444-4444-4444-8444-444444444444"),
+        uuid("44444444-4444-4444-8444-444444444444"),
         TODAY,
         snapshot,
         OfficialSequentialNumber.of(1),
@@ -198,7 +203,7 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
                 snapshot.emissionPointCode(),
                 OfficialSequentialNumber.of(1),
                 NumericCode.of(1)),
-        Instant.parse("2026-07-18T12:00:00Z"));
+        instant("2026-07-18T12:00:00Z"));
   }
 
   private static final class FakeStore implements FiscalPreparationStore {
@@ -217,7 +222,7 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     public Uni<FiscalPreparationLookup> lookup(
         CompanyId companyId, UUID invoiceDraftId, Duration remaining) {
       lookupCalls.incrementAndGet();
-      return Uni.createFrom().item(lookup);
+      return uniItem(lookup);
     }
 
     @Override
@@ -225,7 +230,7 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
         FiscalPreparationCommitIntent value, Duration remaining) {
       commitCalls.incrementAndGet();
       intent.set(value);
-      return Uni.createFrom().item(commitResult.get());
+      return uniItem(requireNonNull(commitResult.get(), "commit result"));
     }
   }
 
@@ -236,20 +241,45 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
 
     private FakeFiscalContextPort(FiscalContextResolution resolution) {
       this.resolution = Optional.of(resolution);
-      this.failure = Optional.empty();
+      this.failure = emptyOptional();
     }
 
     private FakeFiscalContextPort(RuntimeException failure) {
-      this.resolution = Optional.empty();
+      this.resolution = emptyOptional();
       this.failure = Optional.of(failure);
     }
 
     @Override
     public Uni<FiscalContextResolution> resolve(Request request) {
       calls.incrementAndGet();
-      return failure
-          .<Uni<FiscalContextResolution>>map(Uni.createFrom()::failure)
-          .orElseGet(() -> Uni.createFrom().item(resolution.orElseThrow()));
+      if (failure.isPresent()) {
+        return requireNonNull(Uni.createFrom().failure(failure.orElseThrow()));
+      }
+      return uniItem(resolution.orElseThrow());
     }
+  }
+
+  private static UUID uuid(String value) {
+    return requireNonNull(UUID.fromString(value));
+  }
+
+  private static LocalDate date(int year, int month, int day) {
+    return requireNonNull(LocalDate.of(year, month, day));
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static <T> Optional<T> optional(T value) {
+    return requireNonNull(Optional.of(value));
+  }
+
+  private static <T> Optional<T> emptyOptional() {
+    return requireNonNull(Optional.empty());
+  }
+
+  private static <T> Uni<T> uniItem(T value) {
+    return requireNonNull(Uni.createFrom().item(value));
   }
 }

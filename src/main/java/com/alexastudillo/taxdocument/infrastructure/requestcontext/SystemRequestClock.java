@@ -6,14 +6,16 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Default UTC system-clock adapter with distinct request and persistence operations. */
 @ApplicationScoped
+@NullMarked
 public final class SystemRequestClock implements RequestClock {
   private final Clock clock;
 
   public SystemRequestClock() {
-    this(Clock.systemUTC());
+    this(Objects.requireNonNull(Clock.systemUTC()));
   }
 
   public SystemRequestClock(Clock clock) {
@@ -22,11 +24,11 @@ public final class SystemRequestClock implements RequestClock {
 
   @Override
   public Instant requestTime() {
-    return clock.instant();
+    return Objects.requireNonNull(clock.instant());
   }
 
   @Override
   public Instant persistenceTime() {
-    return clock.instant().truncatedTo(ChronoUnit.MICROS);
+    return Objects.requireNonNull(clock.instant().truncatedTo(ChronoUnit.MICROS));
   }
 }

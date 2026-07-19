@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.application.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -11,13 +12,15 @@ import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
+@NullMarked
 class CreateInvoiceDraftUseCaseTest {
   @Test
   void applicationNormalizesBuildsTimestampFreeCandidateAndMapsPersistedResult() {
     AtomicReference<InvoiceDraftCandidate> captured = new AtomicReference<>();
-    Instant timestamp = Instant.parse("2026-07-17T12:00:01Z");
+    Instant timestamp = requireNonNull(Instant.parse("2026-07-17T12:00:01Z"));
     InvoiceDraftRepository repository =
         new InvoiceDraftRepository() {
           @Override
@@ -26,16 +29,15 @@ class CreateInvoiceDraftUseCaseTest {
               byte[] keyHash,
               byte[] requestFingerprint,
               Duration remaining) {
-            return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
+            return uniItem(new IdempotencyLookup.Missing());
           }
 
           @Override
           public Uni<PersistedInvoiceDraft> persist(
               InvoiceDraftCandidate candidate, Duration remaining) {
             captured.set(candidate);
-            return Uni.createFrom()
-                .<PersistedInvoiceDraft>item(
-                    new PersistedInvoiceDraft(candidate.draft(), timestamp, timestamp));
+            return uniItem(
+                new PersistedInvoiceDraft(requireNonNull(candidate.draft()), timestamp, timestamp));
           }
         };
     CreateInvoiceDraftResult result =
@@ -76,14 +78,14 @@ class CreateInvoiceDraftUseCaseTest {
               byte[] requestFingerprint,
               Duration remaining) {
             calls.incrementAndGet();
-            return Uni.createFrom().<IdempotencyLookup>item(new IdempotencyLookup.Missing());
+            return uniItem(new IdempotencyLookup.Missing());
           }
 
           @Override
           public Uni<PersistedInvoiceDraft> persist(
               InvoiceDraftCandidate candidate, Duration remaining) {
             calls.incrementAndGet();
-            return Uni.createFrom().failure(new AssertionError("must not persist"));
+            return requireNonNull(Uni.createFrom().failure(new AssertionError("must not persist")));
           }
         };
     CreateInvoiceDraftCommand valid = ApplicationTestFixtures.command();
@@ -113,5 +115,9 @@ class CreateInvoiceDraftUseCaseTest {
                     .indefinitely());
     assertTrue(failure instanceof InvoiceDraftApplicationException);
     assertEquals(0, calls.get());
+  }
+
+  private static <T> Uni<T> uniItem(T value) {
+    return requireNonNull(Uni.createFrom().item(value));
   }
 }

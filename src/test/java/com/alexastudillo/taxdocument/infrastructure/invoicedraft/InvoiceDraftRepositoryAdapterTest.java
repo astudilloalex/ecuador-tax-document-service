@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
 
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -15,10 +16,12 @@ import io.quarkus.test.vertx.UniAsserter;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
+@NullMarked
 class InvoiceDraftRepositoryAdapterTest {
   @Inject PostgreSqlTestResource database;
   @Inject InvoiceDraftRepository repository;
@@ -27,7 +30,7 @@ class InvoiceDraftRepositoryAdapterTest {
   @BeforeEach
   void migrate() {
     database.resetSchema();
-    clock.reset(Instant.parse("2026-07-17T12:00:00Z"), Instant.parse("2026-07-17T12:00:01Z"));
+    clock.reset(instant("2026-07-17T12:00:00Z"), instant("2026-07-17T12:00:01Z"));
   }
 
   @Test
@@ -36,7 +39,7 @@ class InvoiceDraftRepositoryAdapterTest {
     InvoiceDraftCandidate candidate = InfrastructureTestFixtures.candidate();
     asserter
         .assertThat(
-            () -> repository.persist(candidate, Duration.ofSeconds(5)),
+            () -> repository.persist(candidate, timeout()),
             persisted -> {
               assertEquals(candidate.draft().id(), persisted.draft().id());
               assertEquals(persisted.createdAt(), persisted.updatedAt());
@@ -48,9 +51,9 @@ class InvoiceDraftRepositoryAdapterTest {
             () ->
                 repository.findByIdempotency(
                     candidate.draft().companyId(),
-                    candidate.idempotencyKeyHash(),
-                    candidate.requestFingerprint(),
-                    Duration.ofSeconds(5)),
+                    requireNonNull(candidate.idempotencyKeyHash()),
+                    requireNonNull(candidate.requestFingerprint()),
+                    timeout()),
             replay -> {
               assertTrue(replay instanceof InvoiceDraftRepository.IdempotencyLookup.Equivalent);
               assertEquals(1, clock.persistenceCalls());
@@ -70,5 +73,13 @@ class InvoiceDraftRepositoryAdapterTest {
                 + "'payment_method_catalog') AND column_name='company_id'"));
     InvoiceDraftCandidate candidate = InfrastructureTestFixtures.candidate();
     assertArrayEquals(candidate.requestFingerprint(), candidate.requestFingerprint());
+  }
+
+  private static Instant instant(String value) {
+    return requireNonNull(Instant.parse(value));
+  }
+
+  private static Duration timeout() {
+    return requireNonNull(Duration.ofSeconds(5));
   }
 }

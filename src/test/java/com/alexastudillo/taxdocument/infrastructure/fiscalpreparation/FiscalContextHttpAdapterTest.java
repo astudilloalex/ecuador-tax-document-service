@@ -16,13 +16,15 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.jspecify.annotations.Nullable;
 
 @QuarkusTest
+@NullMarked
 class FiscalContextHttpAdapterTest {
   private static @Nullable AuthoritativeFiscalContextFixture fixture;
 
@@ -50,7 +52,10 @@ class FiscalContextHttpAdapterTest {
   @Test
   void sendsExactCompanyAndSelectionOnceAndMapsCompleteAuthoritativeEvidence() {
     FiscalContextResolution resolution =
-        adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely();
+        adapter
+            .resolve(request(Objects.requireNonNull(Duration.ofSeconds(5))))
+            .await()
+            .indefinitely();
 
     assertEquals("1790012345001", resolution.issuerRuc());
     assertEquals("001", resolution.establishmentCode());
@@ -73,7 +78,11 @@ class FiscalContextHttpAdapterTest {
       FiscalPreparationApplicationException failure =
           assertThrows(
               FiscalPreparationApplicationException.class,
-              () -> adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely());
+              () ->
+                  adapter
+                      .resolve(request(Objects.requireNonNull(Duration.ofSeconds(5))))
+                      .await()
+                      .indefinitely());
       assertEquals(
           switch (status) {
             case 409 -> FiscalPreparationFailure.Code.FISCAL_CONTEXT_INCONSISTENT;
@@ -113,13 +122,18 @@ class FiscalContextHttpAdapterTest {
     FiscalPreparationApplicationException failure =
         assertThrows(
             FiscalPreparationApplicationException.class,
-            () -> adapter.resolve(request(Objects.requireNonNull(Duration.ofSeconds(5)))).await().indefinitely());
+            () ->
+                adapter
+                    .resolve(request(Objects.requireNonNull(Duration.ofSeconds(5))))
+                    .await()
+                    .indefinitely());
     assertEquals(expected, failure.failure().code());
   }
 
   private static FiscalContextPort.Request request(Duration remaining) {
     return new FiscalContextPort.Request(
-        new CompanyId(Objects.requireNonNull(UUID.fromString("11111111-1111-4111-8111-111111111111"))),
+        new CompanyId(
+            Objects.requireNonNull(UUID.fromString("11111111-1111-4111-8111-111111111111"))),
         Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000")),
         Objects.requireNonNull(LocalDate.of(2026, 7, 18)),
         "01",

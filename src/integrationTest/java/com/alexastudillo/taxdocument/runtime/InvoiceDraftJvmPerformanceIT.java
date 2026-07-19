@@ -1,6 +1,7 @@
 package com.alexastudillo.taxdocument.runtime;
 
 import static io.restassured.RestAssured.given;
+import static java.util.Objects.requireNonNull;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -16,9 +17,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
 @QuarkusIntegrationTest
+@NullMarked
 class InvoiceDraftJvmPerformanceIT {
   private static final String COMPANY = "a1111111-1111-4111-8111-111111111111";
   private static final String PATH = "/api/v1/invoice-drafts";
@@ -30,7 +33,7 @@ class InvoiceDraftJvmPerformanceIT {
 
   @Test
   void packagedJvmMeetsLatencyConcurrencyAndPoolRecoveryBudgets() throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
+    LocalDate today = requireNonNull(LocalDate.now(requireNonNull(ZoneId.of("America/Guayaquil"))));
     awaitResourceObservationWindow();
     String typical = typicalBody(today, "Performance Buyer");
     long warmUpStarted = System.nanoTime();
@@ -188,7 +191,8 @@ class InvoiceDraftJvmPerformanceIT {
   }
 
   private static String typicalBody(LocalDate date, String buyerName) {
-    return """
+    return requireNonNull(
+        """
         {
           "emissionPointId": "123e4567-e89b-12d3-a456-426614174000",
           "emissionDate": "%s",
@@ -212,7 +216,7 @@ class InvoiceDraftJvmPerformanceIT {
           "additionalInformation": []
         }
         """
-        .formatted(date, buyerName);
+            .formatted(date, buyerName));
   }
 
   private static String maximumBody(LocalDate date) {
@@ -263,7 +267,8 @@ class InvoiceDraftJvmPerformanceIT {
           "{\"name\":\"Reference %d\",\"value\":\"Maximum value %d\"}"
               .formatted(position, position));
     }
-    return """
+    return requireNonNull(
+        """
         {
           "emissionPointId":"123e4567-e89b-12d3-a456-426614174000",
           "emissionDate":"%s",
@@ -277,7 +282,7 @@ class InvoiceDraftJvmPerformanceIT {
           "additionalInformation":[%s]
         }
         """
-        .formatted(date, lines, payments, additional);
+            .formatted(date, lines, payments, additional));
   }
 
   @FunctionalInterface
@@ -294,15 +299,16 @@ class InvoiceDraftJvmPerformanceIT {
       double maximumMillis) {
     @Override
     public String toString() {
-      return String.format(
-          Locale.ROOT,
-          "{name:%s,samples:%d,p50Ms:%.3f,p95Ms:%.3f,p99Ms:%.3f,maxMs:%.3f}",
-          name,
-          samples,
-          p50Millis,
-          p95Millis,
-          p99Millis,
-          maximumMillis);
+      return requireNonNull(
+          String.format(
+              Locale.ROOT,
+              "{name:%s,samples:%d,p50Ms:%.3f,p95Ms:%.3f,p99Ms:%.3f,maxMs:%.3f}",
+              name,
+              samples,
+              p50Millis,
+              p95Millis,
+              p99Millis,
+              maximumMillis));
     }
   }
 

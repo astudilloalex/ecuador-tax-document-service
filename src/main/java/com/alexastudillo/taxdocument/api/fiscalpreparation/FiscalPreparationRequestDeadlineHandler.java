@@ -7,9 +7,11 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Objects;
+import org.jspecify.annotations.NullMarked;
 
 /** Races one application outcome against the already-fixed request deadline. */
 @ApplicationScoped
+@NullMarked
 public final class FiscalPreparationRequestDeadlineHandler {
   public <T> Uni<T> race(Uni<T> application, FiscalPreparationRequestState state) {
     Objects.requireNonNull(application, "application");
@@ -17,7 +19,8 @@ public final class FiscalPreparationRequestDeadlineHandler {
     Duration remaining = state.requestContext().deadline().remaining();
     if (remaining.isZero() || remaining.isNegative()) {
       state.acceptTerminal();
-      return Objects.requireNonNull(Uni.createFrom().failure(timeoutFailure(state.commitTracker())));
+      return Objects.requireNonNull(
+          Uni.createFrom().failure(timeoutFailure(state.commitTracker())));
     }
     Uni<T> timeout =
         Objects.requireNonNull(
