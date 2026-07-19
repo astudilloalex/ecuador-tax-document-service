@@ -33,15 +33,29 @@ public final class InvoiceDraftRequestDeadlineHandler {
         requestInstant, RequestDeadline.start(requestDeadline), safeCorrelationId, started);
   }
 
+  public void initialize(
+      InvoiceDraftRequestState state, InvoiceDraftRequestBoundary.BoundaryState boundary) {
+    state.initialize(
+        boundary.requestInstant(),
+        boundary.deadline(),
+        boundary.correlation().safeValue(),
+        boundary.startedNanos(),
+        boundary.terminalAccepted());
+    boundary.requestState(state);
+  }
+
   public <T> Uni<T> race(Uni<T> application, InvoiceDraftRequestState state) {
+    Duration remaining = state.deadline().remaining();
     Uni<T> timeout =
-        Uni.createFrom()
-            .voidItem()
-            .onItem()
-            .delayIt()
-            .by(state.deadline().remaining())
-            .onItem()
-            .transformToUni(ignored -> Uni.createFrom().failure(timeoutFailure()));
+        remaining.isZero()
+            ? Uni.createFrom().failure(timeoutFailure())
+            : Uni.createFrom()
+                .voidItem()
+                .onItem()
+                .delayIt()
+                .by(remaining)
+                .onItem()
+                .transformToUni(ignored -> Uni.createFrom().failure(timeoutFailure()));
     return Uni.join()
         .first(application, timeout)
         .toTerminate()

@@ -9,16 +9,24 @@ import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceDraftCalculator;
 import com.alexastudillo.taxdocument.domain.invoicedraft.InvoiceLine;
 import com.alexastudillo.taxdocument.domain.invoicedraft.Payment;
 import com.alexastudillo.taxdocument.domain.invoicedraft.TaxSelection;
+import io.quarkus.test.junit.QuarkusTest;
+import io.vertx.mutiny.sqlclient.Pool;
+import jakarta.inject.Inject;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+@QuarkusTest
 class InvoiceDraftPerformanceTest {
+  @Inject Pool pool;
+
   @Test
   void maximumLineCalculationIsDeterministicAndCompletesWithinRequestBudget() {
     TaxSelection tax =
@@ -73,5 +81,42 @@ class InvoiceDraftPerformanceTest {
     ticker.set(10L);
     assertTrue(deadline.expired());
     assertEquals(Duration.ZERO, deadline.remaining());
+  }
+
+  @Test
+  void recordsTheLocalPostgreSqlRoundTripBaseline() {
+    for (int sample = 0; sample < 20; sample++) {
+      selectOne();
+    }
+    long[] samples = new long[100];
+    for (int sample = 0; sample < samples.length; sample++) {
+      long started = System.nanoTime();
+      selectOne();
+      samples[sample] = System.nanoTime() - started;
+    }
+    Arrays.sort(samples);
+    System.out.printf(
+        Locale.ROOT,
+        "POSTGRESQL_BASELINE_EVIDENCE samples=100 p50Ms=%.3f p95Ms=%.3f p99Ms=%.3f "
+            + "maxMs=%.3f%n",
+        percentileMillis(samples, 0.50),
+        percentileMillis(samples, 0.95),
+        percentileMillis(samples, 0.99),
+        samples[samples.length - 1] / 1_000_000.0);
+  }
+
+  private void selectOne() {
+    long value =
+        pool.query("SELECT 1")
+            .execute()
+            .map(rows -> rows.iterator().next().getLong(0))
+            .await()
+            .atMost(Duration.ofSeconds(5));
+    assertEquals(1L, value);
+  }
+
+  private static double percentileMillis(long[] sortedNanos, double percentile) {
+    int index = Math.max(0, (int) Math.ceil(percentile * sortedNanos.length) - 1);
+    return sortedNanos[index] / 1_000_000.0;
   }
 }

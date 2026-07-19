@@ -2,7 +2,7 @@
 
 **Feature**: `001-create-invoice-draft`
 
-**Purpose**: Phase 1 validation guide; it does not create implementation tasks
+**Purpose**: Validation guide and final execution record; it does not create implementation tasks
 
 ## Approved Reference Inputs
 
@@ -21,8 +21,8 @@ published contract MUST agree byte-for-byte with the complete approved baseline.
 
 ## Prerequisites
 
-- `GATE-GOV-001` is released by `astudilloalex`; the mandatory current `$speckit-analyze` gate
-  remains before T017, while T017/T018 remain pending and T019 remains blocked until both pass;
+- `GATE-GOV-001` is released by `astudilloalex`; the approved T017 red-evidence/T018 V5
+  corrective sequence and the subsequent implementation tasks are complete;
 - Java 25;
 - repository Gradle wrapper;
 - PostgreSQL 18.4-compatible database or approved PostgreSQL test container;
@@ -44,8 +44,9 @@ database:
 Expected evidence:
 
 - Flyway creates the complete schema and every approved local reference row from empty state;
-- immutable V3 is followed by pending T017 V5 and T018 proves the exact final ASCII constraints,
-  five-migration history, and successful Flyway validation;
+- immutable V3 is followed by V5; T017 owns the authoritative staged ASCII fixture/red evidence
+  and T018 proves the exact final ASCII constraints, five-migration history, V3-to-V5 upgrade, and
+  successful Flyway validation;
 - each seeded tax-rule and payment-method UUID matches the published baseline;
 - production schema auto-generation is disabled;
 - no Company/Issuer/establishment/emission-point master table exists;
@@ -443,3 +444,44 @@ Authorization, `401`, and `403` content.
 Native support is optional. If claimed, record both build and runtime evidence for the same critical
 paths using the approved seeds. Otherwise document native as deferred or unsupported with evidence
 while retaining the JVM deployment baseline.
+
+## 14. Executed Validation Record — 2026-07-18
+
+The final validation used Java 25, the repository Gradle wrapper, a local PostgreSQL 18.4 Dev
+Service through Podman, dynamic `America/Guayaquil` dates, and the exact approved catalog UUIDs.
+The executed commands were:
+
+```bash
+DOCKER_HOST=unix:///run/user/1000/podman/podman.sock \
+  TESTCONTAINERS_RYUK_DISABLED=true QUARKUS_HTTP_TEST_PORT=0 \
+  ./gradlew spotlessCheck test
+
+DOCKER_HOST=unix:///run/user/1000/podman/podman.sock \
+  TESTCONTAINERS_RYUK_DISABLED=true QUARKUS_HTTP_TEST_PORT=0 \
+  ./gradlew quarkusIntTest \
+  --tests com.alexastudillo.taxdocument.runtime.InvoiceDraftJvmSmokeIT
+
+DOCKER_HOST=unix:///run/user/1000/podman/podman.sock \
+  TESTCONTAINERS_RYUK_DISABLED=true QUARKUS_HTTP_TEST_PORT=0 \
+  ./gradlew quarkusIntTest \
+  --tests com.alexastudillo.taxdocument.runtime.InvoiceDraftJvmPerformanceIT
+```
+
+All three commands completed successfully. The packaged tests booted the production artifact with
+the `prod` profile, applied and validated all five migrations from an empty database, and served
+the endpoint over an ephemeral HTTP port.
+
+| Required evidence group | Executed evidence | Result |
+|-------------------------|-------------------|--------|
+| Empty database, authoritative T017 ASCII vectors, immutable V3, V3→V5, final constraints, exact catalogs and Company/global scope | `InvoiceDraftMigrationTest`, `ReferenceDataBaselineTest`, and `ascii-validation-vectors.json` | PASS |
+| Header cardinality/codes, Company-only header input, safe correlation, strict entity classification and oversized precedence | `CompanyContextHeaderTest`, `CorrelationHeaderTest`, `InvoiceDraftRequestValidationTest`, `InvoiceDraftOpenApiContractTest`, and packaged smoke | PASS |
+| Application-only Stage-6 emission-point/general-text normalization, Unicode/canonicalName/`U+0130`, email, and unchanged API handoff | `CreateInvoiceDraftUseCaseTest`, `DraftTextRulesTest`, `BuyerTest`, `InvoiceDraftRequestValidationTest`, and shared Unicode fixture consumers | PASS |
+| Stage 10, 11A and ordered 11B, approved tax/payment effectivity on `emissionDate`, monetary rounding/range and payment reconciliation | Domain calculator/tax/payment suites, `ReferenceDataRepositoryAdapterTest`, and packaged monetary/failure smoke | PASS |
+| Timestamp-free candidate → committed result, T076-only persistence clock, equal microsecond-representable timestamps, replay preservation/no clock, rollback and recovery | `InvoiceDraftRepositoryAdapterTest`, `InvoiceDraftIdempotencyConcurrencyTest`, `InvoiceDraftRollbackTest`, `SystemRequestClockTest`, and packaged create/replay smoke | PASS |
+| Earliest pre-body request time/deadline, first-conclusive arbitration, timeout minimum clamping, response-end timer cancellation and safe late telemetry | `InvoiceDraftRequestBoundary`, `InvoiceDraftRequestDeadlineHandlerTest`, `ReactiveOperationBudgetTest`, `SensitiveDataExposureTest`, oversized packaged smoke, and performance profile | PASS |
+| Company-owned aggregate/binding scope, unscoped global catalogs, no identity/Company client/cache/fiscal side effect, and clean dependency direction | `CleanArchitectureTest`, `InvoiceDraftBoundaryTest`, migration inspection, OpenAPI security-absence checks, and packaged health/OpenAPI smoke | PASS |
+| Dynamic Ecuadorian date and full external response contract | Both packaged suites derive the request date with `LocalDate.now(ZoneId.of("America/Guayaquil"))`; smoke verifies canonical Company/emission-point IDs, DRAFT/USD, totals and original timestamps | PASS |
+| Maximum profile, 50-way equivalence and pool recovery | `InvoiceDraftJvmPerformanceIT`; exact environment, samples and percentiles are recorded in `operational-requirements.md` | PASS |
+
+This record validates the implemented boundaries; it makes no authentication, Company-master,
+fiscal-issuance, external SRI, or native-runtime claim.

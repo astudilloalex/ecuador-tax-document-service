@@ -207,9 +207,15 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                   IdempotencyFingerprint.NORMALIZATION_VERSION);
             })
         .onItem()
-        .transformToUni(candidate -> repository.persist(candidate, command.deadline().remaining()))
-        .onItem()
-        .transform(CreateInvoiceDraftResult::newResult);
+        .transformToUni(
+            candidate ->
+                repository
+                    .persist(candidate, command.deadline().remaining())
+                    .map(
+                        persisted ->
+                            candidate.draft().id().equals(persisted.draft().id())
+                                ? CreateInvoiceDraftResult.newResult(persisted)
+                                : CreateInvoiceDraftResult.replay(persisted)));
   }
 
   private Uni<List<TaxSelection>> resolveTaxes(

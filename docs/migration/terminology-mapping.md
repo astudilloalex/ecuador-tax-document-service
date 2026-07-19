@@ -4,6 +4,8 @@
 
 **Created**: 2026-07-12
 
+**Last verified**: 2026-07-18
+
 **Authority**: `.specify/memory/constitution.md` v2.0.1
 
 This file is the canonical mapping from historical or official source terminology to target
@@ -40,3 +42,16 @@ otherwise.
 ## Feature References
 
 - `specs/001-create-invoice-draft/spec.md`
+
+## Final Classification Verification — 2026-07-18
+
+The completed Create Invoice Draft implementation, OpenAPI contract, migrations, source packages,
+tests, and final Spec Kit artifacts were checked against this table. All target names remain in
+English or are approved exact official terms such as RUC and SRI identifiers. Company Identifier,
+Emission Point, Invoice Draft, Tax Rule, Payment Method, Idempotency Key, and Fiscal Context
+Snapshot retain the scopes recorded above.
+
+No implemented term changed ownership or crossed an approved classification boundary, so no table
+row required reclassification. In particular, Company remains an opaque externally owned context,
+global SRI catalogs remain unscoped by Company, and Fiscal Context Snapshot, Access Key, and
+Official Sequential Number remain excluded from draft creation.

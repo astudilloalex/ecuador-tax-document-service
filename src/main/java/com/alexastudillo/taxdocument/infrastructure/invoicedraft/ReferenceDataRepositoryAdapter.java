@@ -116,11 +116,20 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
     if (remaining.isZero() || remaining.isNegative()) {
       return Uni.createFrom().failure(deadlineExhausted());
     }
-    Duration timeout = remaining.compareTo(operationTimeout) < 0 ? remaining : operationTimeout;
+    ReactiveOperationBudget budget = ReactiveOperationBudget.clamp(remaining, operationTimeout);
     return operation
         .ifNoItem()
-        .after(timeout)
-        .failWith(this::deadlineExhausted)
+        .after(budget.timeout())
+        .failWith(
+            budget.timeoutOwner() == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
+                ? this::deadlineExhausted
+                : () ->
+                    new InvoiceDraftApplicationException(
+                        new InvoiceDraftFailure(
+                            InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE,
+                            "The reference-data operation timed out",
+                            true,
+                            List.of())))
         .onFailure(
             throwable ->
                 !(throwable instanceof InvoiceDraftApplicationException)

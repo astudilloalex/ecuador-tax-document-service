@@ -52,6 +52,7 @@ public final class InvoiceDraftTelemetry implements InvoiceDraftTelemetryPort {
     meters
         .counter("invoice_draft_late_outcomes", "outcome", Objects.requireNonNull(outcome))
         .increment();
+    meters.counter("request_deadline_exceeded_after_response_commit").increment();
   }
 
   @Override

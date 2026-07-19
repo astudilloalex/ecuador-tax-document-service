@@ -15,9 +15,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
 
@@ -83,16 +83,15 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
               InvoiceDraftPersistenceMapper.MappedAggregate aggregate =
                   mapper.toEntities(candidate, timestamp);
               InvoiceDraftIdempotencyEntity binding = binding(candidate, timestamp);
-              return aggregate
-                  .root()
-                  .persist()
-                  .replaceWithVoid()
-                  .chain(() -> persistAll(aggregate.lines(), 0))
-                  .chain(() -> persistAll(aggregate.lineTaxes(), 0))
-                  .chain(() -> persistAll(aggregate.taxTotals(), 0))
-                  .chain(() -> persistAll(aggregate.payments(), 0))
-                  .chain(() -> persistAll(aggregate.additionalInformation(), 0))
-                  .chain(() -> binding.persist().replaceWithVoid())
+              List<PanacheEntityBase> entities = new ArrayList<>();
+              entities.add(aggregate.root());
+              entities.addAll(aggregate.lines());
+              entities.addAll(aggregate.lineTaxes());
+              entities.addAll(aggregate.taxTotals());
+              entities.addAll(aggregate.payments());
+              entities.addAll(aggregate.additionalInformation());
+              entities.add(binding);
+              return PanacheEntityBase.persist(entities)
                   .replaceWith(
                       mapper.toPersisted(
                           aggregate.root(),
@@ -178,14 +177,6 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
     return InvoiceLineTaxEntity.list("invoiceLineId in ?1", lineIds);
   }
 
-  private static Uni<Void> persistAll(List<? extends PanacheEntityBase> entities, int index) {
-    if (index == entities.size()) {
-      return Uni.createFrom().voidItem();
-    }
-    PanacheEntityBase entity = Objects.requireNonNull(entities.get(index));
-    return entity.persist().replaceWithVoid().chain(() -> persistAll(entities, index + 1));
-  }
-
   private static InvoiceDraftIdempotencyEntity binding(
       InvoiceDraftCandidate candidate, Instant timestamp) {
     InvoiceDraftIdempotencyEntity entity = new InvoiceDraftIdempotencyEntity();
@@ -202,11 +193,14 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
     if (remaining.isZero() || remaining.isNegative()) {
       return Uni.createFrom().failure(deadlineExhausted());
     }
-    Duration timeout = remaining.compareTo(configuredTimeout) < 0 ? remaining : configuredTimeout;
+    ReactiveOperationBudget budget = ReactiveOperationBudget.clamp(remaining, configuredTimeout);
     return operation
         .ifNoItem()
-        .after(timeout)
-        .failWith(this::deadlineExhausted)
+        .after(budget.timeout())
+        .failWith(
+            budget.timeoutOwner() == ReactiveOperationBudget.TimeoutOwner.REQUEST_DEADLINE
+                ? this::deadlineExhausted
+                : () -> persistenceUnavailable("The persistence operation timed out"))
         .onFailure(throwable -> !(throwable instanceof InvoiceDraftApplicationException))
         .transform(
             throwable ->

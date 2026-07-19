@@ -27,10 +27,10 @@ violated for T001–T016. The completed evidence-based review is recorded in
 `governance-retrospective-review.md`; `astudilloalex` approved its mandatory corrective disposition
 in both required capacities in `governance-owner-approval.md`. `GATE-GOV-001` is released. A later
 analysis identified non-governance request-time and request-contract inconsistencies. Their
-documentary remediation is complete, but implementation permission remains
-`PENDING_SUCCESSFUL_ANALYSIS` until a new analysis confirms that no CRITICAL finding remains. T017
-remains pending and blocked by that condition, T018 depends on successful T017, and T019 remains
-blocked until both complete successfully.
+documentary remediation was cleared by the required successful follow-up analysis before the
+corrective sequence continued. T017–T101 are complete, and the 2026-07-18 final current-state
+`$speckit-analyze` independently confirmed that no unresolved CRITICAL issue remains. Neither
+analysis makes the historical T001–T016 sequence retroactively compliant.
 
 **Tests**: Every applicable constitutional test category is included before the production work it
 covers. SRI SOAP, XML, access-key, signature, certificate, PDF, notification, and other external
@@ -47,7 +47,7 @@ controls precede its evidence-first implementation; Definition of Done validatio
 - Every path is repository-relative and uses the approved English terminology.
 - T001–T016 were completed before the mandatory analysis gate and were subsequently reviewed
   through the approved retrospective governance process. D1 remains a historical process
-  non-conformity. D2 and D3 are addressed through mandatory corrective tasks T017 and T018.
+  non-conformity. D2 and D3 were addressed through mandatory corrective tasks T017 and T018.
 
 **Task-ID renumbering record**: T001–T016 are unchanged. New corrective tasks occupy T017 and T018.
 Every formerly pending identifier T017–T099 maps bijectively to T019–T101 by adding two; no former
@@ -79,7 +79,7 @@ identity, Company, cache, broker, or fiscal-issuance capabilities.
 
 - [X] T008 Create reusable Quarkus Database Dev Services context, schema-reset, and row-count support for PostgreSQL migration, transaction, timeout, and concurrency evidence without declaring or starting a second Testcontainers lifecycle in `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/PostgreSqlTestResource.java`
 - [X] T009 [P] Add Clean Architecture and prohibited-dependency assertions for Constitution IV, VII, XV, and XVI in `src/test/java/com/alexastudillo/taxdocument/architecture/CleanArchitectureTest.java`
-- [X] T010 [P] Add empty-database Flyway, exact locale-independent ASCII product/buyer constraints, aggregate/binding Company enforcement, global reference-catalog no-Company-column checks, prohibited-structure, and repeatability tests for FR-007/FR-010/FR-020–FR-024/FR-030/FR-036–FR-039/DR-014/SC-002/SC-017/SC-022–SC-024 in `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/InvoiceDraftMigrationTest.java`; retrospective review found that the historical test omits executable product/buyer ASCII vectors, so pending T017 records the failing pre-V5 evidence and pending T018 supplies the corrective V5 implementation
+- [X] T010 [P] Add empty-database Flyway, exact locale-independent ASCII product/buyer constraints, aggregate/binding Company enforcement, global reference-catalog no-Company-column checks, prohibited-structure, and repeatability tests for FR-007/FR-010/FR-020–FR-024/FR-030/FR-036–FR-039/DR-014/SC-002/SC-017/SC-022–SC-024 in `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/InvoiceDraftMigrationTest.java`; retrospective review found that the historical test omits executable product/buyer ASCII vectors, so subsequent T017 records the failing pre-V5 evidence and T018 supplies the corrective V5 implementation
 - [X] T011 [P] Add exact 5-buyer/6-IVA/8-payment row-count, evidence metadata, UUIDv5 recalculation, validity-overlap, and no-runtime-generation tests for FR-045–FR-047/DR-001/SC-031–SC-032 in `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/ReferenceDataBaselineTest.java`
 - [X] T012 Configure Flyway-only schema evolution, non-mutating Hibernate validation, reactive and migration datasources, bounded pool/query timeouts, the five-second write-transaction ceiling, the exact `invoice-draft.request-deadline=PT10S` duration consumed by the API deadline owner, exact bare-byte `quarkus.http.limits.max-body-size=2097152`, `quarkus.jackson.fail-on-unknown-properties=true`, `quarkus.rest.exception-mapping.disable-mapper-for=io.quarkus.resteasy.reactive.jackson.runtime.mappers.BuiltinMismatchedInputExceptionMapper`, `mp.openapi.scan.disable=true`, and PostgreSQL-only readiness in `src/main/resources/application.properties`; do not treat a Quarkus connection or idle timeout as the end-to-end request deadline
 - [X] T013 Create the exact globally governed, non-Company-owned versioned buyer-identification, IVA-rule, and payment-method catalog structures—with no Company column—plus evidence metadata, validity boundaries, and stable-identifier columns from the approved model for FR-045/FR-046/FR-047/SC-031/SC-032 in `src/main/resources/db/migration/V1__create_invoice_draft_reference_catalogs.sql`
@@ -87,9 +87,10 @@ identity, Company, cache, broker, or fiscal-issuance capabilities.
 - [X] T015 Create the Invoice Draft root, line, line-tax, grouped-tax, payment, and additional-information structures and constraints, including locale-independent ASCII `product_code` and type-conditional buyer-identification barriers matching `^[A-Za-z0-9]{1,25}$` and `^[A-Za-z0-9]{1,20}$` where applicable, for FR-007/FR-010/FR-020–FR-024/FR-037–FR-038/DR-014/DR-020–DR-023 in `src/main/resources/db/migration/V3__create_invoice_draft_aggregate.sql`; retrospective review found the affected constraints non-conforming, V3 remains immutable, T017 records the mismatch, and T018 replaces only those barriers through a new V5 migration
 - [X] T016 Create the local Company-scoped binding with `UNIQUE (company_id, idempotency_key_hash)`, 32-byte hashes, normalization version, unique draft, and composite Company/draft foreign key for FR-027–FR-034 in `src/main/resources/db/migration/V4__create_invoice_draft_idempotency.sql`
 
-**Checkpoint**: Historical V1–V4 create the local schema and approved reference baseline with no
-Company master data, identity state, fiscal snapshot, or cross-service relation. Exact approved
-ASCII integrity remains pending in T017–T018 and is not represented as complete.
+**Historical checkpoint before corrective work**: V1–V4 created the local schema and approved
+reference baseline with no Company master data, identity state, fiscal snapshot, or cross-service
+relation. Exact approved ASCII integrity was intentionally still pending at that point and was
+subsequently completed by T017–T018 without rewriting V3.
 
 ---
 
@@ -110,8 +111,8 @@ fiscal side effect occurs.
 
 ### GATE-GOV-001 — Retrospective Analyze-Gate Remediation
 
-**Status**: **RELEASED — APPROVED WITH MANDATORY CORRECTIVE ACTIONS; CURRENT IMPLEMENTATION
-PERMISSION PENDING SUCCESSFUL ANALYSIS.**
+**Status**: **RELEASED — APPROVED MANDATORY CORRECTIVE ACTIONS COMPLETE; IMPLEMENTATION AND FINAL
+VALIDATION COMPLETE.**
 
 **Approver**: `astudilloalex`
 
@@ -120,12 +121,12 @@ PERMISSION PENDING SUCCESSFUL ANALYSIS.**
 The governance release accepts D1 as historical and D2/D3 only with T017/T018 correction. The
 approved `governance-corrective-assignment-addendum.md` prospectively assigns red evidence to T017
 and V5/green persistence evidence to T018 without changing D1–D3 or the retrospective review/hash.
-The corrective-assignment analysis condition was satisfied, but a later analysis found separate
-request-time and request-contract inconsistencies. Their documentary remediation does not itself
-authorize implementation: T017 remains blocked until a new analysis contains no CRITICAL finding.
-The release does not authorize skipping T017/T018, starting T019, marking corrective work complete,
-or executing later business implementation prematurely. T018 depends on successful T017, and
-failure of T017 or T018 blocks all later work.
+The corrective-assignment analysis condition was satisfied, and a later analysis found separate
+request-time and request-contract inconsistencies. Those findings were remediated, and the
+required successful follow-up analysis cleared implementation before the corrective sequence
+continued. T017, T018, and T019–T101 are complete, and the 2026-07-18 final current-state analysis
+confirmed that no unresolved CRITICAL issue remains. This completion record does not erase the
+original prohibition against skipping T017/T018 or beginning later business work prematurely.
 
 ### Mandatory Corrective Database Evidence
 
@@ -236,15 +237,15 @@ criteria, and every applicable constitutional evidence category on the mandatory
 
 **Purpose**: Validate the completed bounded feature without hiding unfinished story work here.
 
-- [ ] T093 Re-run empty-database Flyway, V3-to-T018-V5 upgrade, Flyway validation, exact seed, prohibited-structure, authoritative T017 ASCII vectors, final constraint definitions without POSIX/locale/Unicode shorthand, global-catalog no-Company-column checks, aggregate/binding Company-scope constraints, initial equal timestamp persistence, and repeatability evidence against PostgreSQL 18.4 using `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/InvoiceDraftMigrationTest.java`
-- [ ] T094 Run formatting, static analysis, architecture, domain, application, API, PostgreSQL, concurrency, rollback, sensitive-data, health, observability, and performance suites configured in `build.gradle.kts`
-- [ ] T095 Run packaged JVM boot, served `/q/openapi` equality/security absence, and all critical create/replay/conflict/failure/date/correlation/monetary smoke paths from `src/test/java/com/alexastudillo/taxdocument/runtime/InvoiceDraftJvmSmokeTest.java`
-- [ ] T096 Validate and record all approved end-to-end, recovery, exact header-cardinality/error, T017-vector/V3→V5 ASCII, Application-only Stage-6 Unicode/`canonicalName`/`U+0130` behavior, candidate/result handoff, Stage 10/11A/11B, payment-emissionDate, API-only deadline, T076-only single-clock equal `createdAt`/`updatedAt`, replay preservation/no clock, Company request/response, repository/global-catalog, negative-architecture, and dynamic America/Guayaquil date scenarios in `specs/001-create-invoice-draft/quickstart.md`
-- [ ] T097 Record the exact JVM/PostgreSQL measurement environment, warm-up, samples, percentiles, resource use, blocked-thread result, earliest-boundary deadline start, aggregate/reference remaining-budget and configured-timeout minimum clamping, first-conclusive deadline arbitration, post-response-commit telemetry-only behavior, response-end timer cancellation, and pool recovery evidence in `specs/001-create-invoice-draft/operational-requirements.md`
-- [ ] T098 Record mandatory JVM evidence and either native build-plus-runtime evidence or an evidence-based native deferral without weakening JVM support in `specs/001-create-invoice-draft/plan.md`
-- [ ] T099 Record the final Constitution v2.0.1 and Definition of Done review, including `GOV-001` and the approved corrective-assignment addendum disposition, Company request/input exclusion and contract-required response, Company-owned aggregate/binding scope with unscoped global catalogs, no identity/Company dependency/snapshot/fiscal side effect, T017 red vectors/evidence, T018 V5/green persistence evidence, T030/T045/T050 distributed equivalence, Application-only normalization, candidate/persisted-result boundary, payment effectivity, API-only deadline arbitration, single T076 clock with equal timestamps/replay preservation, sensitive-data, and runtime evidence in `specs/001-create-invoice-draft/plan.md`
-- [ ] T100 Reconcile final FR-001–FR-047, DR-001–DR-024, SC-001–SC-033, AS-001–AS-071, stable-error, governance gate/addendum, shared ASCII-fixture consumers, candidate/result, normalization/timestamp ownership, and prohibited-boundary evidence in `specs/001-create-invoice-draft/traceability.md`
-- [ ] T101 Verify approved English terminology remains complete and update only affected classifications in `docs/migration/terminology-mapping.md`
+- [X] T093 Re-run empty-database Flyway, V3-to-T018-V5 upgrade, Flyway validation, exact seed, prohibited-structure, authoritative T017 ASCII vectors, final constraint definitions without POSIX/locale/Unicode shorthand, global-catalog no-Company-column checks, aggregate/binding Company-scope constraints, initial equal timestamp persistence, and repeatability evidence against PostgreSQL 18.4 using `src/test/java/com/alexastudillo/taxdocument/infrastructure/invoicedraft/InvoiceDraftMigrationTest.java`
+- [X] T094 Run formatting, static analysis, architecture, domain, application, API, PostgreSQL, concurrency, rollback, sensitive-data, health, observability, and performance suites configured in `build.gradle.kts`
+- [X] T095 Run packaged JVM boot, served `/q/openapi` equality/security absence, and all critical create/replay/conflict/failure/date/correlation/monetary smoke paths from `src/test/java/com/alexastudillo/taxdocument/runtime/InvoiceDraftJvmSmokeTest.java`
+- [X] T096 Validate and record all approved end-to-end, recovery, exact header-cardinality/error, T017-vector/V3→V5 ASCII, Application-only Stage-6 Unicode/`canonicalName`/`U+0130` behavior, candidate/result handoff, Stage 10/11A/11B, payment-emissionDate, API-only deadline, T076-only single-clock equal `createdAt`/`updatedAt`, replay preservation/no clock, Company request/response, repository/global-catalog, negative-architecture, and dynamic America/Guayaquil date scenarios in `specs/001-create-invoice-draft/quickstart.md`
+- [X] T097 Record the exact JVM/PostgreSQL measurement environment, warm-up, samples, percentiles, resource use, blocked-thread result, earliest-boundary deadline start, aggregate/reference remaining-budget and configured-timeout minimum clamping, first-conclusive deadline arbitration, post-response-commit telemetry-only behavior, response-end timer cancellation, and pool recovery evidence in `specs/001-create-invoice-draft/operational-requirements.md`
+- [X] T098 Record mandatory JVM evidence and either native build-plus-runtime evidence or an evidence-based native deferral without weakening JVM support in `specs/001-create-invoice-draft/plan.md`
+- [X] T099 Record the final Constitution v2.0.1 and Definition of Done review, including `GOV-001` and the approved corrective-assignment addendum disposition, Company request/input exclusion and contract-required response, Company-owned aggregate/binding scope with unscoped global catalogs, no identity/Company dependency/snapshot/fiscal side effect, T017 red vectors/evidence, T018 V5/green persistence evidence, T030/T045/T050 distributed equivalence, Application-only normalization, candidate/persisted-result boundary, payment effectivity, API-only deadline arbitration, single T076 clock with equal timestamps/replay preservation, sensitive-data, and runtime evidence in `specs/001-create-invoice-draft/plan.md`
+- [X] T100 Reconcile final FR-001–FR-047, DR-001–DR-024, SC-001–SC-033, AS-001–AS-071, stable-error, governance gate/addendum, shared ASCII-fixture consumers, candidate/result, normalization/timestamp ownership, and prohibited-boundary evidence in `specs/001-create-invoice-draft/traceability.md`
+- [X] T101 Verify approved English terminology remains complete and update only affected classifications in `docs/migration/terminology-mapping.md`
 
 ---
 
@@ -266,11 +267,12 @@ Constitution v2.0.1 amendment APPROVED
   → subsequent $speckit-analyze found no related CRITICAL corrective-assignment issue
   → later $speckit-analyze found separate request-time/request-contract CRITICAL issues
   → documentary remediation + 36/36 specification-boundary checklist evaluation
-  → REQUIRED new $speckit-analyze with no CRITICAL finding
-  → T017 authoritative ASCII vectors + failing pre-V5 PostgreSQL/Flyway evidence
-  → T018 immutable V5 corrective migration + passing upgrade/Flyway evidence
-  → T019 through Phase 3 US1 Create and Review an Invoice Draft
-  → Final Definition of Done Validation
+  → successful required follow-up $speckit-analyze with no CRITICAL finding
+  → T017 authoritative ASCII vectors + failing pre-V5 PostgreSQL/Flyway evidence COMPLETE
+  → T018 immutable V5 corrective migration + passing upgrade/Flyway evidence COMPLETE
+  → T019 through Phase 3 US1 Create and Review an Invoice Draft COMPLETE
+  → Final Definition of Done Validation COMPLETE
+  → 2026-07-18 final current-state $speckit-analyze: no unresolved CRITICAL finding
 ```
 
 ### Phase Dependencies
@@ -316,10 +318,11 @@ Constitution v2.0.1 amendment APPROVED
 - `$speckit-analyze` was required after task generation and before T001, but that sequence was not
   followed and cannot be repaired retroactively. The retrospective review and deviation
   dispositions are approved and `GATE-GOV-001` is released. The corrective-assignment addendum is
-  also approved. A later analysis identified separate documentary inconsistencies that are now
-  remediated, but T017 remains blocked until a new analysis confirms no CRITICAL finding. T018 still
-  requires successful T017, T019 still requires both, and the Final Phase depends on T017–T092 and
-  the released gate.
+  also approved. A later analysis identified separate documentary inconsistencies; they were
+  remediated and cleared by the required successful follow-up analysis. T017, T018, T019–T092, and
+  the Final Phase are complete. The 2026-07-18 final current-state analysis independently confirmed
+  that no unresolved CRITICAL issue remains. This record does not alter the historical pre-T001
+  violation.
 
 ### Parallel Execution Example for User Story 1
 
@@ -355,18 +358,17 @@ boundary, then T085, then T087, before T088; T084, T085, and T087 are intentiona
 1. Preserve T001–T016 as historical work and use the completed retrospective/deviation record.
 2. Preserve the completed `astudilloalex` approval, released `GATE-GOV-001`, and approved revised
    assignment in `governance-corrective-assignment-addendum.md`.
-3. Preserve the approved corrective-assignment result, but keep T017 pending and blocked until a
-   new analysis validates the latest request-time, request-contract, and checklist remediation.
-4. Do not skip T017 or T018 and do not start T019 before both corrective tasks succeed.
-5. Complete T017's shared vectors/failing pre-V5 evidence, then T018's V5/passing
-   PostgreSQL-Flyway evidence, before T019 or any other business task; failure in either blocks all
-   later work.
-6. Write all remaining US1 evidence tasks before their production tasks.
-7. Complete the US1 domain, application, infrastructure, API, and operational work in dependency
+3. Complete the required successful follow-up analysis over the request-time, request-contract,
+   and checklist remediation before the corrective sequence continues; the 2026-07-18 final
+   current-state re-analysis independently confirms that no unresolved CRITICAL issue remains.
+4. Complete T017's shared vectors/failing pre-V5 evidence, then T018's V5/passing
+   PostgreSQL-Flyway evidence before T019; both completed in that order.
+5. Write the remaining US1 evidence tasks before their production tasks.
+6. Complete the US1 domain, application, infrastructure, API, and operational work in dependency
    order.
-8. Validate US1 independently; it is the complete MVP and the only story in this bounded feature.
-9. Complete Definition of Done evidence without representing the retrospective gate as an original
-   pre-T001 analysis.
+7. Validate US1 independently as the complete MVP and only story in this bounded feature.
+8. Complete Definition of Done evidence without representing the retrospective gate as an original
+   pre-T001 analysis; this final validation completed on 2026-07-18.
 
 ### Incremental Delivery
 

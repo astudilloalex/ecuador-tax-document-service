@@ -270,3 +270,58 @@ Native execution is optional. If claimed, both build and runtime smoke must cove
 resource-sensitive DTO serialization, validation, Panache mapping, Flyway resources, OpenAPI,
 health, and the critical create/replay/conflict paths. A build alone is insufficient. JVM remains
 acceptable when native evidence fails or complexity is unjustified.
+
+## Executed JVM Performance and Deadline Evidence — 2026-07-18
+
+### Environment and method
+
+The final profile ran the packaged production artifact and PostgreSQL on the same local host. This
+is a reproducible development/reference result, not a capacity claim for a production topology.
+
+| Item | Recorded value |
+|------|----------------|
+| Host | Debian Linux `6.12.95+deb13-amd64`, x86_64, Intel Core i7-8750H, 6 cores/12 threads, 15 GiB RAM; no explicit cgroup CPU or memory limit observed |
+| Runtime | OpenJDK `25.0.3+9` with no explicit `-Xms`, `-Xmx`, or GC override; Quarkus `3.33.2.1`; production profile |
+| Build/container | Gradle `9.5.1`; Podman `5.4.2`; Testcontainers `2.0.4` through Quarkus Dev Services |
+| Database | PostgreSQL `18.4` in the local container runtime; five Flyway migrations applied and validated from empty |
+| Reactive limits | Pool maximum 20; statement and configured operation timeout 5 s; write ceiling 5 s; request deadline 10 s |
+| Reference dataset | Exact approved 5 buyer-identification, 6 IVA-rule, and 8 payment-method rows |
+| Database baseline | 20 warm-ups plus 100 reactive `SELECT 1` samples: p50 0.270 ms, p95 0.735 ms, p99 1.739 ms, maximum 3.510 ms |
+| Resource observation | One host `ps` sample while the packaged process was active: RSS 354000 KiB, VSZ 9209316 KiB, CPU 119%, memory 2.1%; observational only, not a configured limit |
+
+`InvoiceDraftJvmPerformanceIT` used loopback HTTP through REST Assured and `System.nanoTime()`. The
+reported latency therefore conservatively includes local client/transport overhead in addition to
+the required service boundary. Percentiles use the nearest-rank method over independently timed
+requests. A 10-second client-only resource-observation window occurred before warm-up and is
+excluded. Warm-up was 20 typical creations in 2702.101 ms; the measured profiles, concurrency
+probe, and recovery request took 19814.803 ms.
+
+### Results
+
+| Profile | Samples | p50 | p95 | p99 | Maximum | Budget result |
+|---------|---------|-----|-----|-----|---------|---------------|
+| Typical new draft | 100 | 27.367 ms | 41.808 ms | 57.160 ms | 57.787 ms | PASS — p95 ≤ 750 ms; p99 ≤ 1.5 s |
+| Maximum valid draft: 500 lines, 8 payments, 15 additional entries | 20 | 622.854 ms | 1105.946 ms | 1477.757 ms | 1477.757 ms | PASS — p95 ≤ 3 s; p99 ≤ 5 s |
+| Equivalent replay | 100 | 13.563 ms | 17.243 ms | 21.261 ms | 42.946 ms | PASS — p95 ≤ 250 ms; p99 ≤ 500 ms |
+| Idempotency conflict | 100 | 7.831 ms | 10.296 ms | 13.927 ms | 18.973 ms | PASS — p95 ≤ 250 ms; p99 ≤ 500 ms |
+
+Fifty concurrent equivalent requests completed in 274.465 ms with exactly one `201` creation and
+49 `200` replays. A new creation immediately afterward completed in 16.023 ms, demonstrating pool
+recovery. Inspection of the packaged run found no Vert.x blocked-thread warning, Mutiny dropped
+exception, pool-starvation failure, or OTLP-export connection warning.
+
+### Deadline and reactive-budget evidence
+
+| Required behavior | Executed evidence | Result |
+|-------------------|-------------------|--------|
+| One earliest pre-body wall-clock capture, monotonic deadline, safe correlation, and shared atomic terminal | `InvoiceDraftRequestBoundary`, `RequestDatePolicyTest`, `InvoiceDraftResourceTest`, and packaged smoke | PASS |
+| Stage-first and deadline-first races accept exactly one terminal outcome | `InvoiceDraftRequestDeadlineHandlerTest` controls both signal orders without sleeping | PASS |
+| Effective database timeout is exactly `min(remaining, configured)` and retains the timeout owner | `ReactiveOperationBudgetTest` covers both sides and zero/negative rejection; aggregate/reference adapter tests cover neutral `REQUEST_TIMEOUT` versus `PERSISTENCE_UNAVAILABLE` mapping | PASS |
+| No database subscription begins after budget exhaustion; write timeout is also capped at 5 s | `ReactiveOperationBudget`, repository guards, `InvoiceDraftPerformanceTest`, and adapter tests | PASS |
+| Over-limit-first payload uses correlated `413`; an already expired deadline uses correlated `504` | Packaged JVM smoke exercises oversized payloads with absent, valid, and unsafe correlation; boundary and deadline unit tests cover the exclusive terminal | PASS |
+| Expiry after response commitment is telemetry-only, and the one timer is cancelled when the response ends | `InvoiceDraftRequestBoundary` response-head/end-handler paths, shared terminal state, `InvoiceDraftTelemetry`, and `SensitiveDataExposureTest` verify no second response/compensation path and one bounded `request_deadline_exceeded_after_response_commit` counter | PASS |
+
+The server-side functional timer remains the single `RequestDeadline` started by the pre-body
+route. It is independent from the loopback benchmark timer, `requestCreationInstant`, and the
+transactional persistence clock. No Company Service, cache, broker, blocking event-loop wait, or
+new distributed component was introduced to meet these budgets.

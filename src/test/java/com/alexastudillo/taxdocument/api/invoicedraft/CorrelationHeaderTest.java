@@ -21,10 +21,19 @@ class CorrelationHeaderTest {
   @Test
   void absentGeneratesSafeUuidAndInvalidNeverEchoesInput() {
     assertTrue(header.classify(null).validInput());
-    CorrelationHeader.Classification invalid = header.classify(List.of("unsafe value"));
-    assertFalse(invalid.validInput());
-    UUID.fromString(invalid.safeValue());
-    assertFalse(invalid.safeValue().contains("unsafe"));
+    for (List<String> values :
+        List.of(
+            List.of("   "),
+            List.of("unsafe value"),
+            List.of("unsafe/value"),
+            List.of("ñ"),
+            List.of("x".repeat(65)),
+            List.of("first", "second"))) {
+      CorrelationHeader.Classification invalid = header.classify(values);
+      assertFalse(invalid.validInput());
+      UUID.fromString(invalid.safeValue());
+      assertFalse(invalid.safeValue().contains("unsafe"));
+    }
   }
 
   @Test
@@ -33,6 +42,9 @@ class CorrelationHeaderTest {
     assertEquals("Key Case", keys.parse(List.of("\tKey Case ")));
     assertEquals("IDEMPOTENCY_KEY_REQUIRED", keyFailure(keys, null).code());
     assertEquals("IDEMPOTENCY_KEY_INVALID", keyFailure(keys, List.of("   ")).code());
+    assertEquals("IDEMPOTENCY_KEY_INVALID", keyFailure(keys, List.of("x".repeat(129))).code());
+    assertEquals("IDEMPOTENCY_KEY_INVALID", keyFailure(keys, List.of("key\u0001value")).code());
+    assertEquals("IDEMPOTENCY_KEY_INVALID", keyFailure(keys, List.of("clé")).code());
     assertEquals("IDEMPOTENCY_KEY_MULTIPLE", keyFailure(keys, List.of("a,b")).code());
     assertEquals("IDEMPOTENCY_KEY_MULTIPLE", keyFailure(keys, List.of("a", "b")).code());
   }

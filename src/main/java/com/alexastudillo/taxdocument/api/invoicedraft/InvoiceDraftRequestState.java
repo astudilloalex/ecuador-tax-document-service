@@ -4,12 +4,13 @@ import com.alexastudillo.taxdocument.application.invoicedraft.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import jakarta.enterprise.context.RequestScoped;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Request-local API state populated before entity consumption. */
 @RequestScoped
 public class InvoiceDraftRequestState {
-  private final AtomicBoolean terminalAccepted = new AtomicBoolean();
+  private AtomicBoolean terminalAccepted = new AtomicBoolean();
   private Instant requestCreationInstant;
   private RequestDeadline deadline;
   private String correlationId;
@@ -20,10 +21,20 @@ public class InvoiceDraftRequestState {
 
   public void initialize(
       Instant instant, RequestDeadline requestDeadline, String safeCorrelationId, long startNanos) {
+    initialize(instant, requestDeadline, safeCorrelationId, startNanos, new AtomicBoolean());
+  }
+
+  void initialize(
+      Instant instant,
+      RequestDeadline requestDeadline,
+      String safeCorrelationId,
+      long startNanos,
+      AtomicBoolean sharedTerminal) {
     requestCreationInstant = instant;
     deadline = requestDeadline;
     correlationId = safeCorrelationId;
     startedNanos = startNanos;
+    terminalAccepted = Objects.requireNonNull(sharedTerminal, "sharedTerminal");
   }
 
   public boolean acceptTerminal() {

@@ -6,13 +6,12 @@
 sessions through 2026-07-17, including normalization, persistence-boundary, timestamp,
 canonical-name, emission-point, calculated-property, and buyer-email decisions
 
-**Implementation progression**: `GATE-GOV-001` retains its **RELEASED** governance status. The
-approved `governance-corrective-assignment-addendum.md` assigns red evidence to T017 and V5/green
-persistence evidence to T018. A later analysis identified non-governance documentary
-inconsistencies in request-time and request-contract semantics. Those inconsistencies are remediated
-in the current artifacts, but implementation permission remains `PENDING_SUCCESSFUL_ANALYSIS` until
-a new analysis confirms that no CRITICAL finding remains. T017 and T018 remain pending, T018
-depends on successful T017, and T019 remains blocked until both complete successfully.
+**Implementation progression**: **COMPLETE**. `GATE-GOV-001` remains **RELEASED**, the historical
+T001–T016 workflow non-conformity remains recorded, and the approved
+`governance-corrective-assignment-addendum.md` has been fulfilled: T017 supplied the authoritative
+red ASCII-vector evidence and T018 supplied V5 plus green PostgreSQL/Flyway evidence. The later
+request-time and request-contract findings were remediated before implementation continued. T019
+through T101 and the final JVM validation are complete.
 
 ## Summary
 
@@ -186,19 +185,16 @@ against approved Constitution v2.0.1, the current feature specification, and rep
 | Operations | PASS — health/correlation required | PASS — PostgreSQL-only readiness, metrics/log/trace/performance budgets defined |
 | Simplicity | PASS — no speculative platform/component | PASS — only local ports, datastore, and two justified persisted capabilities |
 | Runtime evidence | PASS — JVM mandatory/native optional | PASS — packaged JVM and conditional native evidence paths defined |
-| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY WITH MANDATORY CORRECTION** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; the approved corrective-assignment addendum assigns T017 red evidence and T018 V5/green persistence evidence; `GATE-GOV-001` retains its released status; current documentary remediation awaits a successful new analysis before T017 may begin |
+| Mandatory Spec Kit workflow | PASS for the pre-task planning evidence available at that point | **APPROVED HISTORICAL NON-CONFORMITY; CORRECTION COMPLETE** — T001–T016 preceded a verifiable post-task `$speckit-analyze`; D1–D3 remain approved without erasing the violation; T017 delivered the assigned red evidence, T018 delivered V5/green persistence evidence, and `GATE-GOV-001` remains released |
 
 No constitutional complexity exception is requested. A workflow non-conformity exists because
 T001–T016 were implemented before the mandatory analysis gate; it is recorded without
 retroactive correction in `governance-nonconformity.md`.
 
-**Current implementation gate**: governance approval and the corrective-assignment addendum are
-complete, and `GATE-GOV-001` retains its released status. The request-time and request-contract
-findings from the latest analysis are remediated documentarily, and all requirements-quality
-checklists are evaluated with evidence. Implementation permission remains
-`PENDING_SUCCESSFUL_ANALYSIS` until a new analysis confirms that no CRITICAL finding remains. T017
-is pending and blocked by that condition; T018 depends on successful T017, and T019 remains blocked
-until T017 and T018 both complete successfully.
+**Current implementation gate**: **RELEASED AND SATISFIED**. Governance approval, the
+corrective-assignment addendum, T017 red evidence, T018 V5/green evidence, the follow-up analysis,
+and all requirements-quality checklists completed successfully. The historical sequencing finding
+remains visible in `governance-nonconformity.md`; it is not rewritten as retrospective compliance.
 
 ## Clean Architecture Mapping
 
@@ -763,9 +759,9 @@ Key invariants:
   before constructing the candidate; persistence copies but never generates or replaces them;
 - quantity/unit price columns use `numeric(12,6)`; monetary columns use `numeric(17,2)`; tax-rate
   columns use `numeric(5,2)` with range checks mirrored by pre-persistence validation;
-- final schema after immutable V3 then pending V5 uses the exact locale-independent ASCII
-  product/buyer expressions above; T017 creates no migration and first supplies the authoritative
-  fixture/red evidence; T018 alone creates V5, replaces only the affected constraints, and makes
+- final schema after immutable V3 then applied V5 uses the exact locale-independent ASCII
+  product/buyer expressions above; T017 created no migration and supplied the authoritative
+  fixture/red evidence; T018 alone created V5, replaced only the affected constraints, and made
   the PostgreSQL/Flyway evidence green;
 - local children reference only the draft/line;
 - every aggregate/binding query or mutation uses authoritative CompanyId; global reference-catalog
@@ -855,8 +851,8 @@ T017, T018, T030, T045, and T050 with the stage-specific fields and responsibili
 The authoritative Unicode fixture is
 `src/test/resources/invoicedraft/unicode-text-validation-vectors.json`, owned by T020 and consumed
 directly by T026, T029, T030, T033, T036, and T045—including its exact buyer-email vectors—with
-T028 consuming it indirectly through T020's idempotency vectors. Both fixtures are planned here and are not created by this documentary
-reconciliation.
+T028 consuming it indirectly through T020's idempotency vectors. Both fixtures were created by
+their assigned implementation tasks and are consumed by the distributed suites listed above.
 
 Composition remains outside the domain. No `company`, `security`, Company-client, or cache package
 is planned.
@@ -940,8 +936,34 @@ custom authentication framework.
 The requirements-quality content checks are reconciled to approved Constitution v2.0.1. The
 recorded pre-analysis sequence remains an approved historical non-conformity and cannot be
 corrected retroactively. `astudilloalex` approved D1–D3 with mandatory T017/T018 correction and
-released `GATE-GOV-001`. The later approved addendum assigns T017 red evidence and T018 V5/green
-persistence evidence without changing the retrospective findings or hash. The latest documentary
-findings are remediated, but T017 remains pending and blocked until a new analysis confirms no
-CRITICAL finding. T018 remains dependent on successful T017, and T019 remains ineligible until both
-corrective tasks complete successfully.
+released `GATE-GOV-001`. T017 and T018 fulfilled the later approved addendum without changing the
+retrospective findings or hash; the follow-up analysis cleared implementation, and the complete
+T019–T101 sequence has now passed its final JVM validation.
+
+## Recorded JVM/Native Decision — 2026-07-18
+
+The mandatory JVM target is accepted. OpenJDK 25.0.3 booted the packaged Quarkus 3.33.2.1
+production artifact, applied and validated all five migrations against PostgreSQL 18.4, served the
+canonical OpenAPI document and health endpoints, and passed the create/replay/conflict, validation,
+date, correlation, oversized-payload, concurrency, and performance paths. `spotlessCheck test`
+also passed 70 tests with no failure, error, or skip.
+
+Native execution is **deferred and not claimed**. The validation host provides an OpenJDK JVM, not
+a GraalVM/Mandrel native toolchain, and no native executable was built or run. Native is optional
+under this plan, so this evidence-based deferral changes no JVM requirement, deployment baseline,
+contract, or acceptance result. A later native claim must still supply both a successful native
+build and runtime smoke over the reflection/resource-sensitive paths in the table above.
+
+## Final Constitution v2.0.1 and Definition of Done Review — 2026-07-18
+
+| Review area | Final disposition and evidence |
+|-------------|--------------------------------|
+| Governance | PASS — `GOV-001`/`GATE-GOV-001` remains released; the historical T001–T016 sequence remains disclosed; T017's authoritative red vectors and T018's V5/green PostgreSQL evidence satisfy the approved corrective-assignment addendum. |
+| Company contract and ownership | PASS — Company is required only through `X-Company-Id`, excluded from request input, explicitly required in the response, immutable on the aggregate/binding scope, and absent from global catalog columns and filters. |
+| External and fiscal boundary | PASS — dependency, configuration, schema, health, OpenAPI, and architecture evidence shows no identity/security behavior, Company client/lookup/cache, Company snapshot, SRI call, issuance identifier, XML/signature, notification, or other fiscal side effect. |
+| Distributed validation equivalence | PASS — T017/T018 PostgreSQL/Flyway, T030 OpenAPI, and T045/T050 production Java consume the authoritative staged ASCII fixture; each layer uses only its assigned raw, normalized, application, stored, or probe value. |
+| Normalization and handoff | PASS — API forwards decoded business values, Application alone owns emission-point validation and the one Unicode normalization/canonical-name pass, Domain/Infrastructure do not normalize, and the timestamp-free `InvoiceDraftCandidate`/committed `PersistedInvoiceDraft` boundary is enforced. |
+| Fiscal calculation and payment | PASS — Stage 10, 11A, and ordered 11B evidence covers supported IVA treatments, numeric envelopes, calculated-field rejection, reconciliation, and payment-method activity/effectivity using invoice `emissionDate`. |
+| Deadline and persistence time | PASS — one pre-body API boundary owns the monotonic 10-second deadline and first-terminal arbitration; repositories clamp to remaining/configured budgets; T076 alone calls the transactional clock once, assigns equal microsecond-representable timestamps, and replay preserves them without a clock call. |
+| Sensitive data and operations | PASS — stable Problem Details, safe correlation, bounded metrics, safe late-deadline telemetry, PostgreSQL-only readiness, process liveness, and negative sensitive/high-cardinality checks passed. OTLP export is operationally opt-in. |
+| Runtime and Definition of Done | PASS — formatting/static checks, real PostgreSQL 18.4 migration/integration suites, packaged JVM smoke, served OpenAPI comparison, maximum/concurrency performance, pool recovery, and blocked-event-loop log inspection passed. Native remains explicitly unclaimed as permitted. |
