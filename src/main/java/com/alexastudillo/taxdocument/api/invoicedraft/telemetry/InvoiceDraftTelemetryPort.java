@@ -1,5 +1,6 @@
-package com.alexastudillo.taxdocument.api.invoicedraft;
+package com.alexastudillo.taxdocument.api.invoicedraft.telemetry;
 
+import com.alexastudillo.taxdocument.api.invoicedraft.InvoiceDraftRequestState;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 
 /** API-facing operational evidence boundary implemented by Infrastructure. */

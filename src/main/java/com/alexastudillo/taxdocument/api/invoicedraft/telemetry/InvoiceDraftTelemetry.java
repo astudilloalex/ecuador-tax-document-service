@@ -1,7 +1,6 @@
-package com.alexastudillo.taxdocument.infrastructure.invoicedraft;
+package com.alexastudillo.taxdocument.api.invoicedraft.telemetry;
 
 import com.alexastudillo.taxdocument.api.invoicedraft.InvoiceDraftRequestState;
-import com.alexastudillo.taxdocument.api.invoicedraft.InvoiceDraftTelemetryPort;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
