@@ -37,8 +37,8 @@ import org.junit.jupiter.api.TestReporter;
 class FiscalPreparationJvmPerformanceIT {
   private static final String COMPANY = "c1111111-1111-4111-8111-111111111111";
   private static final UUID EMISSION_POINT =
-      UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-  private static AuthoritativeFiscalContextFixture fixture;
+      Objects.requireNonNull(UUID.fromString("123e4567-e89b-12d3-a456-426614174000"));
+  private static @Nullable AuthoritativeFiscalContextFixture fixture;
   private static @Nullable DevServicesContext devServicesContext;
 
   @BeforeAll
@@ -48,23 +48,23 @@ class FiscalPreparationJvmPerformanceIT {
 
   @AfterAll
   static void stopFixture() {
-    fixture.close();
+    Objects.requireNonNull(fixture).close();
   }
 
   @Test
   void packagedJvmSerializesSameDraftAndOneScopeLoadsWithinDeadlineAndRecoversPool(
       TestReporter reporter) throws Exception {
-    LocalDate today = LocalDate.now(ZoneId.of("America/Guayaquil"));
-    String suffix = UUID.randomUUID().toString();
+    LocalDate today = Objects.requireNonNull(LocalDate.now(ZoneId.of("America/Guayaquil")));
+    String suffix = Objects.requireNonNull(UUID.randomUUID().toString());
     String issuer = "performance-issuer-" + suffix;
     String establishment = "performance-establishment-" + suffix;
     configureProvider(issuer, establishment, today);
-    UUID baseline = UUID.randomUUID();
+    UUID baseline = Objects.requireNonNull(UUID.randomUUID());
     provisionBaseline(baseline, issuer, establishment);
 
     String oneDraft = createDraft(today, "same-draft-" + suffix, "Same Draft Buyer");
     long sameStarted = System.nanoTime();
-    List<Response> equivalent = concurrentPosts(java.util.Collections.nCopies(100, oneDraft));
+    List<Response> equivalent = concurrentPosts(Objects.requireNonNull(java.util.Collections.nCopies(100, oneDraft)));
     Duration sameDuration = elapsed(sameStarted);
     assertTrue(sameDuration.compareTo(Duration.ofSeconds(10)) < 0);
     assertEquals(1L, equivalent.stream().filter(response -> response.statusCode() == 201).count());
@@ -79,7 +79,8 @@ class FiscalPreparationJvmPerformanceIT {
 
     List<String> drafts = new ArrayList<>();
     for (int index = 0; index < 100; index++) {
-      drafts.add(createDraft(today, "scope-" + suffix + '-' + index, "Scope Buyer " + index));
+      LocalDate scopeDate = Objects.requireNonNull(today);
+      drafts.add(createDraft(scopeDate, "scope-" + suffix + '-' + index, "Scope Buyer " + index));
     }
     long scopeStarted = System.nanoTime();
     List<Response> allocated = concurrentPosts(drafts);
@@ -107,48 +108,55 @@ class FiscalPreparationJvmPerformanceIT {
     String runtimeLog = Files.readString(Path.of("build/quarkus.log"));
     assertFalse(runtimeLog.contains("blocked thread"));
     assertFalse(runtimeLog.contains("Thread blocked"));
-    reporter.publishEntry("sameDraftMillis", Long.toString(sameDuration.toMillis()));
-    reporter.publishEntry("oneScopeMillis", Long.toString(scopeDuration.toMillis()));
+    reporter.publishEntry("sameDraftMillis", Objects.requireNonNull(Long.toString(sameDuration.toMillis())));
+    reporter.publishEntry("oneScopeMillis", Objects.requireNonNull(Long.toString(scopeDuration.toMillis())));
     reporter.publishEntry("poolRecovery", "PASS");
   }
 
   private static List<Response> concurrentPosts(List<String> draftIds) throws Exception {
     try (ExecutorService executor = Executors.newFixedThreadPool(100)) {
       List<CompletableFuture<Response>> requests =
-          draftIds.stream()
-              .map(
-                  draftId ->
-                      CompletableFuture.supplyAsync(
-                          () -> given().header("X-Company-Id", COMPANY).when().post(path(draftId)),
-                          executor))
-              .toList();
+          Objects.requireNonNull(
+              draftIds.stream()
+                  .map(
+                      draftId ->
+                          CompletableFuture.supplyAsync(
+                              () ->
+                                  given()
+                                      .header("X-Company-Id", COMPANY)
+                                      .when()
+                                      .post(path(Objects.requireNonNull(draftId))),
+                              executor))
+                  .toList());
       CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).get(15, TimeUnit.SECONDS);
-      return requests.stream().map(CompletableFuture::join).toList();
+      return Objects.requireNonNull(
+          requests.stream().map(future -> Objects.requireNonNull(future).join()).toList());
     }
   }
 
   private static String createDraft(LocalDate date, String key, String buyer) {
-    return given()
-        .contentType("application/json")
-        .header("X-Company-Id", COMPANY)
-        .header("Idempotency-Key", key)
-        .body(
-            """
-            {"emissionPointId":"%s","emissionDate":"%s",
-             "buyer":{"identificationType":"06","identification":"PERF123","legalName":"%s"},
-             "lines":[{"productCode":"PERF1","description":"Performance service","quantity":"1",
-             "unitPrice":"10.000000","discount":"0.00",
-             "taxRuleId":"5b34b038-931c-50e3-a84c-10af272fdcd4"}],
-             "payments":[{"paymentMethodId":"639f2b7e-10a3-5d92-a1a3-28223896f5b5","amount":"11.50"}],
-             "additionalInformation":[]}
-            """
-                .formatted(EMISSION_POINT, date, buyer))
-        .when()
-        .post("/api/v1/invoice-drafts")
-        .then()
-        .statusCode(201)
-        .extract()
-        .path("id");
+    return Objects.requireNonNull(
+        given()
+            .contentType("application/json")
+            .header("X-Company-Id", COMPANY)
+            .header("Idempotency-Key", key)
+            .body(
+                """
+                {"emissionPointId":"%s","emissionDate":"%s",
+                 "buyer":{"identificationType":"06","identification":"PERF123","legalName":"%s"},
+                 "lines":[{"productCode":"PERF1","description":"Performance service","quantity":"1",
+                 "unitPrice":"10.000000","discount":"0.00",
+                 "taxRuleId":"5b34b038-931c-50e3-a84c-10af272fdcd4"}],
+                 "payments":[{"paymentMethodId":"639f2b7e-10a3-5d92-a1a3-28223896f5b5","amount":"11.50"}],
+                 "additionalInformation":[]}
+                """
+                    .formatted(EMISSION_POINT, date, buyer))
+            .when()
+            .post("/api/v1/invoice-drafts")
+            .then()
+            .statusCode(201)
+            .extract()
+            .<String>path("id"));
   }
 
   private static void provisionBaseline(UUID id, String issuer, String establishment)
@@ -188,39 +196,44 @@ class FiscalPreparationJvmPerformanceIT {
 
   private static Connection connection() throws Exception {
     DevServicesContext context = Objects.requireNonNull(devServicesContext, "devServicesContext");
-    return DriverManager.getConnection(
+    String url =
         context
             .devServicesProperties()
             .getOrDefault(
                 "quarkus.datasource.jdbc.url",
                 Objects.requireNonNullElse(
-                    System.getenv("DB_URL"), "jdbc:postgresql://localhost:5432/sri_db")),
+                    System.getenv("DB_URL"), "jdbc:postgresql://localhost:5432/sri_db"));
+    String user =
         context
             .devServicesProperties()
             .getOrDefault(
                 "quarkus.datasource.username",
-                Objects.requireNonNullElse(System.getenv("DB_USER"), "postgres")),
+                Objects.requireNonNullElse(System.getenv("DB_USER"), "postgres"));
+    String password =
         context
             .devServicesProperties()
             .getOrDefault(
                 "quarkus.datasource.password",
-                Objects.requireNonNullElse(System.getenv("DB_PASSWORD"), "admin")));
+                Objects.requireNonNullElse(System.getenv("DB_PASSWORD"), "admin"));
+    return Objects.requireNonNull(DriverManager.getConnection(url, user, password));
   }
 
   private static void configureProvider(String issuer, String establishment, LocalDate date) {
-    fixture.plan(
-        200,
-        """
-        {"issuerReference":"%s","issuerRuc":"1790012345001","legalName":"Performance Issuer",
-         "headOfficeAddress":"Quito","accountingRequired":true,"rimpeClassification":"NONE",
-         "establishmentReference":"%s","establishmentCode":"001","establishmentAddress":"Quito",
-         "emissionPointId":"%s","emissionPointCode":"001","environmentCode":"1",
-         "documentTypeCode":"01","emissionTypeCode":"1","invoiceIssuanceEligible":true,
-         "sourceEvidence":{"authority":"SRI fixture","revision":"%s","effectiveFrom":"%s",
-         "observedAt":"%s"}}
-        """
-            .formatted(issuer, establishment, EMISSION_POINT, issuer, date, Instant.now()),
-        Duration.ZERO);
+    Objects.requireNonNull(fixture)
+        .plan(
+            200,
+            Objects.requireNonNull(
+                """
+                {"issuerReference":"%s","issuerRuc":"1790012345001","legalName":"Performance Issuer",
+                 "headOfficeAddress":"Quito","accountingRequired":true,"rimpeClassification":"NONE",
+                 "establishmentReference":"%s","establishmentCode":"001","establishmentAddress":"Quito",
+                 "emissionPointId":"%s","emissionPointCode":"001","environmentCode":"1",
+                 "documentTypeCode":"01","emissionTypeCode":"1","invoiceIssuanceEligible":true,
+                 "sourceEvidence":{"authority":"SRI fixture","revision":"%s","effectiveFrom":"%s",
+                 "observedAt":"%s"}}
+                """
+                    .formatted(issuer, establishment, EMISSION_POINT, issuer, date, Instant.now())),
+            Objects.requireNonNull(Duration.ZERO));
   }
 
   private static String path(String draftId) {
@@ -228,6 +241,6 @@ class FiscalPreparationJvmPerformanceIT {
   }
 
   private static Duration elapsed(long started) {
-    return Duration.ofNanos(System.nanoTime() - started);
+    return Objects.requireNonNull(Duration.ofNanos(System.nanoTime() - started));
   }
 }
