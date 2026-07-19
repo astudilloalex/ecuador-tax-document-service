@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -49,11 +50,11 @@ public final class InvoiceDraftPersistenceMapper {
     root.createdAt = createdAt;
     root.updatedAt = createdAt;
 
-    List<InvoiceLineEntity> lines =
+    List<@NonNull InvoiceLineEntity> lines =
         draft.lines().stream()
             .map(line -> lineEntity(draft.id(), requireHydrated(line, "draft.lines element")))
             .toList();
-    List<InvoiceLineTaxEntity> lineTaxes =
+    List<@NonNull InvoiceLineTaxEntity> lineTaxes =
         draft.lines().stream()
             .map(
                 line ->
@@ -64,7 +65,7 @@ public final class InvoiceDraftPersistenceMapper {
                         line.id(),
                         line))
             .toList();
-    List<InvoiceTaxTotalEntity> totals =
+    List<@NonNull InvoiceTaxTotalEntity> totals =
         draft.taxTotals().stream()
             .map(
                 total ->
@@ -75,13 +76,13 @@ public final class InvoiceDraftPersistenceMapper {
                         draft.id(),
                         total))
             .toList();
-    List<InvoicePaymentEntity> payments =
+    List<@NonNull InvoicePaymentEntity> payments =
         draft.payments().stream()
             .map(
                 payment ->
                     paymentEntity(draft.id(), requireHydrated(payment, "draft.payments element")))
             .toList();
-    List<InvoiceAdditionalInformationEntity> additional =
+    List<@NonNull InvoiceAdditionalInformationEntity> additional =
         draft.additionalInformation().stream()
             .map(
                 value ->
@@ -99,15 +100,17 @@ public final class InvoiceDraftPersistenceMapper {
 
   public PersistedInvoiceDraft toPersisted(
       InvoiceDraftEntity root,
-      List<InvoiceLineEntity> lines,
-      List<InvoiceLineTaxEntity> lineTaxes,
-      List<InvoiceTaxTotalEntity> totals,
-      List<InvoicePaymentEntity> payments,
-      List<InvoiceAdditionalInformationEntity> additional) {
-    Map<UUID, InvoiceLineTaxEntity> taxByLine =
+      List<@NonNull InvoiceLineEntity> lines,
+      List<@NonNull InvoiceLineTaxEntity> lineTaxes,
+      List<@NonNull InvoiceTaxTotalEntity> totals,
+      List<@NonNull InvoicePaymentEntity> payments,
+      List<@NonNull InvoiceAdditionalInformationEntity> additional) {
+    Map<@NonNull UUID, @NonNull InvoiceLineTaxEntity> taxByLine =
         lineTaxes.stream()
             .collect(
-                Collectors.toUnmodifiableMap(value -> value.invoiceLineId, Function.identity()));
+                Collectors.toUnmodifiableMap(
+                    value -> requireHydrated(value.invoiceLineId, "lineTax.invoiceLineId"),
+                    Function.identity()));
     Buyer buyer =
         new Buyer(
             requireHydrated(root.buyerIdentificationTypeCode, "buyerIdentificationTypeCode"),
@@ -118,25 +121,25 @@ public final class InvoiceDraftPersistenceMapper {
             root.buyerTelephone,
             requireHydrated(
                 root.buyerIdentificationCatalogVersion, "buyerIdentificationCatalogVersion"));
-    List<InvoiceLine> domainLines =
+    List<@NonNull InvoiceLine> domainLines =
         lines.stream()
             .sorted(Comparator.comparingInt(value -> value.position))
             .map(
                 line ->
                     domainLine(line, requireHydrated(taxByLine.get(line.id), "persisted line tax")))
             .toList();
-    List<TaxTotal> domainTotals =
+    List<@NonNull TaxTotal> domainTotals =
         totals.stream()
             .map(value -> domainTaxTotal(requireHydrated(value, "taxTotals element")))
             .toList();
-    List<Payment> domainPayments =
+    List<@NonNull Payment> domainPayments =
         payments.stream()
             .map(value -> domainPayment(requireHydrated(value, "payments element")))
             .toList();
-    List<AdditionalInformation> domainAdditional =
+    List<@NonNull AdditionalInformation> domainAdditional =
         additional.stream()
             .sorted(Comparator.comparingInt(value -> value.position))
-            .<AdditionalInformation>map(
+            .<@NonNull AdditionalInformation>map(
                 value ->
                     new AdditionalInformation(
                         requireHydrated(value.id, "additionalInformation.id"),
@@ -290,15 +293,15 @@ public final class InvoiceDraftPersistenceMapper {
         requireHydrated(value.catalogVersion, "payment.catalogVersion"));
   }
 
-  private static <T> T requireHydrated(@Nullable T value, String field) {
+  private static <T> @NonNull T requireHydrated(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
   }
 
   public record MappedAggregate(
       InvoiceDraftEntity root,
-      List<InvoiceLineEntity> lines,
-      List<InvoiceLineTaxEntity> lineTaxes,
-      List<InvoiceTaxTotalEntity> taxTotals,
-      List<InvoicePaymentEntity> payments,
-      List<InvoiceAdditionalInformationEntity> additionalInformation) {}
+      List<@NonNull InvoiceLineEntity> lines,
+      List<@NonNull InvoiceLineTaxEntity> lineTaxes,
+      List<@NonNull InvoiceTaxTotalEntity> taxTotals,
+      List<@NonNull InvoicePaymentEntity> payments,
+      List<@NonNull InvoiceAdditionalInformationEntity> additionalInformation) {}
 }

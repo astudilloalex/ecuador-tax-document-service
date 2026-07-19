@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftCommand;
 import com.alexastudillo.taxdocument.application.requestcontext.RequestDeadline;
 import com.alexastudillo.taxdocument.domain.invoicedraft.CompanyId;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,6 +15,7 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 @NullMarked
@@ -53,7 +55,10 @@ class InvoiceDraftRequestValidationTest {
     var command = new InvoiceDraftApiMapper().toCommand(request, state);
     assertEquals(rawEmission, command.emissionPointId());
     assertEquals(rawName, command.buyer().legalName());
-    assertEquals(" SKU1 ", command.lines().getFirst().productCode());
+    CreateInvoiceDraftCommand.@Nullable LineInput nullableLine = command.lines().getFirst();
+    CreateInvoiceDraftCommand.LineInput firstLine =
+        requireNonNull(nullableLine, "first request line");
+    assertEquals(" SKU1 ", firstLine.productCode());
   }
 
   static String validJson(String emissionPoint, String buyerName) {

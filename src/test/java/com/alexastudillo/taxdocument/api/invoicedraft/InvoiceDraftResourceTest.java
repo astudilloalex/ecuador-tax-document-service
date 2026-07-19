@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
@@ -192,7 +193,7 @@ class InvoiceDraftResourceTest {
     private int persistCalls;
 
     @Override
-    public Uni<IdempotencyLookup> findByIdempotency(
+    public Uni<InvoiceDraftRepository.@NonNull IdempotencyLookup> findByIdempotency(
         CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
       if (stored == null) {
         return uniItem(new IdempotencyLookup.Missing());
@@ -207,7 +208,8 @@ class InvoiceDraftResourceTest {
     }
 
     @Override
-    public Uni<PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining) {
+    public Uni<@NonNull PersistedInvoiceDraft> persist(
+        InvoiceDraftCandidate candidate, Duration remaining) {
       persistCalls++;
       fingerprint = candidate.requestFingerprint();
       PersistedInvoiceDraft persisted =
@@ -222,7 +224,8 @@ class InvoiceDraftResourceTest {
     return requireNonNull(Instant.parse(value));
   }
 
-  private static <T> Uni<T> uniItem(T value) {
-    return requireNonNull(Uni.createFrom().item(value));
+  private static <T extends @NonNull Object> Uni<@NonNull T> uniItem(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
   }
 }

@@ -45,19 +45,19 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
                 client -> {
                   connections.add(client);
                   client.pause();
-                  client.closeHandler(ignored -> connections.remove(client));
+                  client.closeHandler(_ -> connections.remove(client));
                   vertx
                       .createNetClient()
                       .connect(upstreamPort, upstreamHost)
                       .onSuccess(
                           upstream -> {
                             connections.add(upstream);
-                            upstream.closeHandler(ignored -> connections.remove(upstream));
+                            upstream.closeHandler(_ -> connections.remove(upstream));
                             bridgeClient(state, client, upstream);
                             bridgeServer(state, upstream, client);
                             client.resume();
                           })
-                      .onFailure(ignored -> client.close());
+                      .onFailure(_ -> client.close());
                 })
             .listen(0, "127.0.0.1")
             .toCompletionStage()
@@ -100,8 +100,8 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
           }
           upstream.write(data);
         });
-    client.closeHandler(ignored -> upstream.close());
-    client.exceptionHandler(ignored -> upstream.close());
+    client.closeHandler(_ -> upstream.close());
+    client.exceptionHandler(_ -> upstream.close());
   }
 
   private static void bridgeServer(CommitFaultState state, NetSocket upstream, NetSocket client) {
@@ -114,8 +114,8 @@ public final class PostgreSqlCommitFaultProxy implements AutoCloseable {
             client.write(data);
           }
         });
-    upstream.closeHandler(ignored -> client.close());
-    upstream.exceptionHandler(ignored -> client.close());
+    upstream.closeHandler(_ -> client.close());
+    upstream.exceptionHandler(_ -> client.close());
   }
 
   private static boolean containsCommit(Buffer data) {

@@ -9,7 +9,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 @NullMarked
@@ -32,13 +34,29 @@ class FiscalContextSnapshotTest {
   void applicableDesignationsPersistTheirExactRequiredEvidenceAsCompleteValues() {
     FiscalContextSnapshot snapshot =
         snapshot(
-            Optional.of(new FiscalDesignation.SpecialTaxpayer("NAC-001")),
-            Optional.of(new FiscalDesignation.WithholdingAgent("42")),
-            Optional.of(new FiscalDesignation.LargeContributor("NAC-002", "LARGE CONTRIBUTOR")));
+            requireNonNull(Optional.of(new FiscalDesignation.SpecialTaxpayer("NAC-001"))),
+            requireNonNull(Optional.of(new FiscalDesignation.WithholdingAgent("42"))),
+            requireNonNull(
+                Optional.of(
+                    new FiscalDesignation.LargeContributor("NAC-002", "LARGE CONTRIBUTOR"))));
 
-    assertEquals("NAC-001", snapshot.specialTaxpayer().orElseThrow().resolutionIdentifier());
-    assertEquals("42", snapshot.withholdingAgent().orElseThrow().resolutionIdentifier());
-    assertEquals("LARGE CONTRIBUTOR", snapshot.largeContributor().orElseThrow().requiredLegend());
+    FiscalDesignation.@Nullable SpecialTaxpayer nullableSpecialTaxpayer =
+        snapshot.specialTaxpayer().orElseThrow();
+    FiscalDesignation.@Nullable WithholdingAgent nullableWithholdingAgent =
+        snapshot.withholdingAgent().orElseThrow();
+    FiscalDesignation.@Nullable LargeContributor nullableLargeContributor =
+        snapshot.largeContributor().orElseThrow();
+    assertEquals(
+        "NAC-001",
+        requireNonNull(nullableSpecialTaxpayer, "special-taxpayer designation")
+            .resolutionIdentifier());
+    assertEquals(
+        "42",
+        requireNonNull(nullableWithholdingAgent, "withholding-agent designation")
+            .resolutionIdentifier());
+    assertEquals(
+        "LARGE CONTRIBUTOR",
+        requireNonNull(nullableLargeContributor, "large-contributor designation").requiredLegend());
   }
 
   @Test
@@ -60,9 +78,9 @@ class FiscalContextSnapshotTest {
   }
 
   static FiscalContextSnapshot snapshot(
-      Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer,
-      Optional<FiscalDesignation.WithholdingAgent> withholdingAgent,
-      Optional<FiscalDesignation.LargeContributor> largeContributor) {
+      Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer,
+      Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent,
+      Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor) {
     return new FiscalContextSnapshot(
         "issuer-1",
         "1792146739001",
@@ -101,7 +119,7 @@ class FiscalContextSnapshotTest {
     return requireNonNull(Instant.parse(value));
   }
 
-  private static <T> Optional<T> emptyOptional() {
+  private static <T extends @NonNull Object> Optional<@NonNull T> emptyOptional() {
     return requireNonNull(Optional.empty());
   }
 }

@@ -5,25 +5,27 @@ import io.smallrye.mutiny.Uni;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 
 /** Transaction-shaped Company-scoped preparation persistence boundary. */
 @NullMarked
 public interface FiscalPreparationStore {
-  Uni<FiscalPreparationLookup> lookup(CompanyId companyId, UUID invoiceDraftId, Duration remaining);
+  Uni<@NonNull FiscalPreparationLookup> lookup(
+      CompanyId companyId, UUID invoiceDraftId, Duration remaining);
 
-  Uni<FiscalPreparationCommitResult> commit(
+  Uni<@NonNull FiscalPreparationCommitResult> commit(
       FiscalPreparationCommitIntent intent, Duration remaining);
 
-  default Uni<FiscalPreparationCommitResult> commit(
+  default Uni<@NonNull FiscalPreparationCommitResult> commit(
       FiscalPreparationCommitIntent intent,
       Duration remaining,
       FiscalPreparationCommitTracker commitTracker) {
     return Objects.requireNonNull(
         commit(intent, remaining)
-            .invoke(ignored -> commitTracker.committed())
+            .invoke(_ -> commitTracker.committed())
             .onFailure()
-            .invoke(ignored -> commitTracker.confirmedRollback()),
+            .invoke(_ -> commitTracker.confirmedRollback()),
         "tracked commit");
   }
 }

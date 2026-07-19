@@ -49,7 +49,7 @@ class InvoiceDraftJvmPerformanceIT {
             TYPICAL_SAMPLES,
             750.0,
             1_500.0,
-            sample -> post("typical-" + UUID.randomUUID(), typical, 201));
+            _ -> post("typical-" + UUID.randomUUID(), typical, 201));
 
     String maximum = maximumBody(today);
     Profile maximumProfile =
@@ -58,17 +58,13 @@ class InvoiceDraftJvmPerformanceIT {
             MAXIMUM_SAMPLES,
             3_000.0,
             5_000.0,
-            sample -> post("maximum-" + UUID.randomUUID(), maximum, 201));
+            _ -> post("maximum-" + UUID.randomUUID(), maximum, 201));
 
     String replayKey = "replay-profile-" + UUID.randomUUID();
     post(replayKey, typical, 201);
     Profile replayProfile =
         measure(
-            "equivalent-replay",
-            REPLAY_SAMPLES,
-            250.0,
-            500.0,
-            sample -> post(replayKey, typical, 200));
+            "equivalent-replay", REPLAY_SAMPLES, 250.0, 500.0, _ -> post(replayKey, typical, 200));
 
     String conflictKey = "conflict-profile-" + UUID.randomUUID();
     post(conflictKey, typical, 201);
@@ -79,7 +75,7 @@ class InvoiceDraftJvmPerformanceIT {
             CONFLICT_SAMPLES,
             250.0,
             500.0,
-            sample -> post(conflictKey, conflicting, 409));
+            _ -> post(conflictKey, conflicting, 409));
 
     ConcurrencyResult concurrency = runFiftyEquivalent(today);
     long recoveryStarted = System.nanoTime();
@@ -143,8 +139,7 @@ class InvoiceDraftJvmPerformanceIT {
     try (ExecutorService executor = Executors.newFixedThreadPool(50)) {
       List<CompletableFuture<Integer>> requests =
           java.util.stream.IntStream.range(0, 50)
-              .mapToObj(
-                  ignored -> CompletableFuture.supplyAsync(() -> postStatus(key, body), executor))
+              .mapToObj(_ -> CompletableFuture.supplyAsync(() -> postStatus(key, body), executor))
               .toList();
       CompletableFuture.allOf(requests.toArray(CompletableFuture[]::new)).get(10, TimeUnit.SECONDS);
       statuses = requests.stream().map(future -> future.join()).toList();

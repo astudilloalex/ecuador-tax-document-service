@@ -6,6 +6,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -28,7 +29,7 @@ public final class PrepareInvoiceForFiscalIssuanceService
   }
 
   @Override
-  public Uni<PrepareInvoiceForFiscalIssuanceResult> prepare(
+  public Uni<@NonNull PrepareInvoiceForFiscalIssuanceResult> prepare(
       PrepareInvoiceForFiscalIssuanceCommand command) {
     Objects.requireNonNull(command, "command");
     Duration remaining = requireRemaining(command);
@@ -43,27 +44,30 @@ public final class PrepareInvoiceForFiscalIssuanceService
         "fiscal preparation lookup result");
   }
 
-  @SuppressWarnings("null")
-  private Uni<PrepareInvoiceForFiscalIssuanceResult> afterLookup(
+  private Uni<@NonNull PrepareInvoiceForFiscalIssuanceResult> afterLookup(
       PrepareInvoiceForFiscalIssuanceCommand command, FiscalPreparationLookup lookup) {
-    return requireResult(
-        switch (lookup) {
-          case FiscalPreparationLookup.Existing existing ->
-              Uni.createFrom()
-                  .item(new PrepareInvoiceForFiscalIssuanceResult(existing.preparation(), true));
-          case FiscalPreparationLookup.NotFound _ ->
-              Uni.createFrom()
-                  .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_FOUND));
-          case FiscalPreparationLookup.NotPreparable _ ->
-              Uni.createFrom()
-                  .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE));
-          case FiscalPreparationLookup.EligibleDraft eligible ->
-              prepareFirst(command, eligible.draft());
-        },
-        "post-lookup result");
+    if (lookup instanceof FiscalPreparationLookup.Existing existing) {
+      return requireResult(
+          Uni.createFrom()
+              .item(new PrepareInvoiceForFiscalIssuanceResult(existing.preparation(), true)),
+          "existing preparation result");
+    }
+    if (lookup instanceof FiscalPreparationLookup.NotFound) {
+      return requireResult(
+          Uni.createFrom().failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_FOUND)),
+          "draft not found result");
+    }
+    if (lookup instanceof FiscalPreparationLookup.NotPreparable) {
+      return requireResult(
+          Uni.createFrom()
+              .failure(failure(FiscalPreparationFailure.Code.INVOICE_DRAFT_NOT_PREPARABLE)),
+          "draft not preparable result");
+    }
+    FiscalPreparationLookup.EligibleDraft eligible = (FiscalPreparationLookup.EligibleDraft) lookup;
+    return prepareFirst(command, eligible.draft());
   }
 
-  private Uni<PrepareInvoiceForFiscalIssuanceResult> prepareFirst(
+  private Uni<@NonNull PrepareInvoiceForFiscalIssuanceResult> prepareFirst(
       PrepareInvoiceForFiscalIssuanceCommand command, InvoiceDraftPreparationView draft) {
     if (!draft.companyId().equals(command.companyId())
         || !draft.invoiceDraftId().equals(command.invoiceDraftId())) {
@@ -104,8 +108,7 @@ public final class PrepareInvoiceForFiscalIssuanceService
         "fiscal preparation result");
   }
 
-  @SuppressWarnings("null")
-  private Uni<PrepareInvoiceForFiscalIssuanceResult> commit(
+  private Uni<@NonNull PrepareInvoiceForFiscalIssuanceResult> commit(
       PrepareInvoiceForFiscalIssuanceCommand command,
       InvoiceDraftPreparationView draft,
       FiscalContextSnapshot snapshot) {
@@ -117,13 +120,16 @@ public final class PrepareInvoiceForFiscalIssuanceService
                 command.commitTracker())
             .onItem()
             .transform(
-                result ->
-                    switch (result) {
-                      case FiscalPreparationCommitResult.Created created ->
-                          new PrepareInvoiceForFiscalIssuanceResult(created.preparation(), false);
-                      case FiscalPreparationCommitResult.Replay replay ->
-                          new PrepareInvoiceForFiscalIssuanceResult(replay.preparation(), true);
-                    }),
+                result -> {
+                  FiscalPreparationCommitResult required =
+                      Objects.requireNonNull(result, "commit result");
+                  if (required instanceof FiscalPreparationCommitResult.Created created) {
+                    return new PrepareInvoiceForFiscalIssuanceResult(created.preparation(), false);
+                  }
+                  FiscalPreparationCommitResult.Replay replay =
+                      (FiscalPreparationCommitResult.Replay) required;
+                  return new PrepareInvoiceForFiscalIssuanceResult(replay.preparation(), true);
+                }),
         "commit result");
   }
 
@@ -139,7 +145,7 @@ public final class PrepareInvoiceForFiscalIssuanceService
     return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(code));
   }
 
-  private static <T> T requireResult(@Nullable T value, String field) {
+  private static <T> @NonNull T requireResult(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
   }
 }

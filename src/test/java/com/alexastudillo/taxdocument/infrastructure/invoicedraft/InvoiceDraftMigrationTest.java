@@ -26,6 +26,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.flywaydb.core.api.MigrationInfo;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -445,13 +446,11 @@ class InvoiceDraftMigrationTest {
   }
 
   private Map<String, Integer> migrationChecksums() {
-    return database.appliedMigrations().stream()
-        .collect(
-            Collectors.toMap(
-                info -> info.getVersion().getVersion(),
-                info -> info.getChecksum(),
-                (left, right) -> right,
-                LinkedHashMap::new));
+    Map<String, Integer> checksums = new LinkedHashMap<>();
+    for (MigrationInfo info : database.appliedMigrations()) {
+      checksums.put(info.getVersion().getVersion(), info.getChecksum());
+    }
+    return checksums;
   }
 
   private Map<String, Long> approvedRowCounts() {

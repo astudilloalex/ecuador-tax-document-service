@@ -11,7 +11,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 /** Read-only Company-plus-draft reconciliation after an uncertain commit acknowledgement. */
 @ApplicationScoped
@@ -25,22 +27,25 @@ public final class FiscalPreparationCommitReconciler {
     this.mapper = Objects.requireNonNull(mapper, "mapper");
   }
 
-  public Uni<Result> reconcile(CompanyId companyId, UUID invoiceDraftId, Duration remaining) {
+  public Uni<@NonNull Result> reconcile(
+      CompanyId companyId, UUID invoiceDraftId, Duration remaining) {
     Objects.requireNonNull(companyId, "companyId");
     Objects.requireNonNull(invoiceDraftId, "invoiceDraftId");
     Objects.requireNonNull(remaining, "remaining");
     if (remaining.isZero() || remaining.isNegative()) {
-      return Uni.createFrom().item(new Result.Unknown());
+      return requireUni(Uni.createFrom().item(new Result.Unknown()), "unknown result");
     }
-    return pool.preparedQuery(FiscalPreparationRepositoryAdapter.SELECT_PREPARATION)
-        .execute(Tuple.of(companyId.value(), invoiceDraftId))
-        .ifNoItem()
-        .after(remaining)
-        .fail()
-        .onItem()
-        .transform(rows -> result(Objects.requireNonNull(rows, "reconciliation rows")))
-        .onFailure()
-        .recoverWithItem(new Result.Unknown());
+    return requireUni(
+        pool.preparedQuery(FiscalPreparationRepositoryAdapter.SELECT_PREPARATION)
+            .execute(Tuple.of(companyId.value(), invoiceDraftId))
+            .ifNoItem()
+            .after(remaining)
+            .fail()
+            .onItem()
+            .transform(rows -> result(Objects.requireNonNull(rows, "reconciliation rows")))
+            .onFailure()
+            .recoverWithItem(new Result.Unknown()),
+        "reconciliation result");
   }
 
   private Result result(RowSet<Row> rows) {
@@ -49,6 +54,11 @@ public final class FiscalPreparationCommitReconciler {
     }
     Row row = Objects.requireNonNull(rows.iterator().next(), "row");
     return new Result.Winner(mapper.fromRow(row));
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 
   public sealed interface Result {

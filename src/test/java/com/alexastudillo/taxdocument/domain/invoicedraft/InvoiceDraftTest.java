@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
@@ -18,14 +19,15 @@ class InvoiceDraftTest {
         new InvoiceDraftCalculator()
             .calculate(
                 DomainTestFixtures.buyer(),
-                List.of(
-                    DomainTestFixtures.line(
-                        1,
-                        "1.000000",
-                        "0.000000",
-                        "0.00",
-                        DomainTestFixtures.tax("0.00", TaxSelection.Treatment.ZERO_RATE))),
-                List.of(DomainTestFixtures.payment("0.00")));
+                requireNonNull(
+                    List.of(
+                        DomainTestFixtures.line(
+                            1,
+                            "1.000000",
+                            "0.000000",
+                            "0.00",
+                            DomainTestFixtures.tax("0.00", TaxSelection.Treatment.ZERO_RATE)))),
+                requireNonNull(List.of(DomainTestFixtures.payment("0.00"))));
     InvoiceDraft draft =
         new InvoiceDraft(
             requireNonNull(UUID.randomUUID()),
@@ -35,8 +37,8 @@ class InvoiceDraftTest {
             DomainTestFixtures.buyer(),
             calculation.lines(),
             calculation.taxTotals(),
-            List.of(DomainTestFixtures.payment("0.00")),
-            requireNonNull(List.of()),
+            requireNonNull(List.of(DomainTestFixtures.payment("0.00"))),
+            requireNonNull(List.<@NonNull AdditionalInformation>of()),
             calculation.subtotalBeforeTaxes(),
             calculation.totalDiscount(),
             calculation.grandTotal());

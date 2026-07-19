@@ -12,6 +12,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.Objects;
 import java.util.Set;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -36,7 +37,7 @@ public interface AuthoritativeFiscalContextClient {
               "PROVIDER_TIMEOUT"));
 
   @POST
-  Uni<AuthoritativeFiscalContextDto.Context> resolve(
+  Uni<AuthoritativeFiscalContextDto.@NonNull Context> resolve(
       @HeaderParam("X-Company-Id") String companyId,
       @HeaderParam("X-Correlation-Id") String safeCorrelationId,
       AuthoritativeFiscalContextDto.Selection selection);
@@ -46,9 +47,9 @@ public interface AuthoritativeFiscalContextClient {
     int status = response.getStatus();
     @Nullable String code = null;
     try {
-      AuthoritativeFiscalContextDto.ProviderProblem problem =
+      AuthoritativeFiscalContextDto.@Nullable ProviderProblem problem =
           response.readEntity(AuthoritativeFiscalContextDto.ProviderProblem.class);
-      if (SAFE_PROVIDER_CODES.contains(problem.code())) {
+      if (problem != null && SAFE_PROVIDER_CODES.contains(problem.code())) {
         code = problem.code();
       }
     } catch (RuntimeException ignored) {

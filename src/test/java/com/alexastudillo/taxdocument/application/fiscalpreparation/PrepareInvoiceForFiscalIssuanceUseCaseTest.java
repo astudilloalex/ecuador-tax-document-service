@@ -23,7 +23,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 @NullMarked
@@ -41,8 +43,10 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     FakeFiscalContextPort provider = new FakeFiscalContextPort(validResolution());
     PrepareInvoiceForFiscalIssuanceService service = service(store, provider);
 
-    PrepareInvoiceForFiscalIssuanceResult result =
+    @Nullable PrepareInvoiceForFiscalIssuanceResult nullableResult =
         service.prepare(command(date(2030, 1, 1))).await().indefinitely();
+    PrepareInvoiceForFiscalIssuanceResult result =
+        requireNonNull(nullableResult, "replayed preparation result");
 
     assertSame(winner, result.preparation());
     assertEquals(true, result.replayed());
@@ -58,8 +62,10 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     FakeStore store = new FakeStore(new FiscalPreparationLookup.EligibleDraft(draft));
     store.commitResult.set(new FiscalPreparationCommitResult.Created(preparation()));
     FakeFiscalContextPort provider = new FakeFiscalContextPort(validResolution());
-    PrepareInvoiceForFiscalIssuanceResult result =
+    @Nullable PrepareInvoiceForFiscalIssuanceResult nullableResult =
         service(store, provider).prepare(command(TODAY)).await().indefinitely();
+    PrepareInvoiceForFiscalIssuanceResult result =
+        requireNonNull(nullableResult, "created preparation result");
 
     assertEquals(false, result.replayed());
     assertEquals(1, provider.calls.get());
@@ -219,14 +225,14 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     }
 
     @Override
-    public Uni<FiscalPreparationLookup> lookup(
+    public Uni<@NonNull FiscalPreparationLookup> lookup(
         CompanyId companyId, UUID invoiceDraftId, Duration remaining) {
       lookupCalls.incrementAndGet();
       return uniItem(lookup);
     }
 
     @Override
-    public Uni<FiscalPreparationCommitResult> commit(
+    public Uni<@NonNull FiscalPreparationCommitResult> commit(
         FiscalPreparationCommitIntent value, Duration remaining) {
       commitCalls.incrementAndGet();
       intent.set(value);
@@ -236,26 +242,28 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
 
   private static final class FakeFiscalContextPort implements FiscalContextPort {
     private final AtomicInteger calls = new AtomicInteger();
-    private final Optional<FiscalContextResolution> resolution;
-    private final Optional<RuntimeException> failure;
+    private final Optional<@NonNull FiscalContextResolution> resolution;
+    private final Optional<@NonNull RuntimeException> failure;
 
     private FakeFiscalContextPort(FiscalContextResolution resolution) {
-      this.resolution = Optional.of(resolution);
+      this.resolution = requireNonNull(Optional.of(resolution));
       this.failure = emptyOptional();
     }
 
     private FakeFiscalContextPort(RuntimeException failure) {
       this.resolution = emptyOptional();
-      this.failure = Optional.of(failure);
+      this.failure = requireNonNull(Optional.of(failure));
     }
 
     @Override
-    public Uni<FiscalContextResolution> resolve(Request request) {
+    public Uni<@NonNull FiscalContextResolution> resolve(Request request) {
       calls.incrementAndGet();
       if (failure.isPresent()) {
-        return requireNonNull(Uni.createFrom().failure(failure.orElseThrow()));
+        @Nullable RuntimeException nullableFailure = failure.orElseThrow();
+        return failedUni(requireNonNull(nullableFailure, "provider failure"));
       }
-      return uniItem(resolution.orElseThrow());
+      @Nullable FiscalContextResolution nullableResolution = resolution.orElseThrow();
+      return uniItem(requireNonNull(nullableResolution, "provider resolution"));
     }
   }
 
@@ -271,15 +279,21 @@ class PrepareInvoiceForFiscalIssuanceUseCaseTest {
     return requireNonNull(Instant.parse(value));
   }
 
-  private static <T> Optional<T> optional(T value) {
+  private static <T extends @NonNull Object> Optional<@NonNull T> optional(T value) {
     return requireNonNull(Optional.of(value));
   }
 
-  private static <T> Optional<T> emptyOptional() {
+  private static <T extends @NonNull Object> Optional<@NonNull T> emptyOptional() {
     return requireNonNull(Optional.empty());
   }
 
-  private static <T> Uni<T> uniItem(T value) {
-    return requireNonNull(Uni.createFrom().item(value));
+  private static <T extends @NonNull Object> Uni<@NonNull T> uniItem(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> failedUni(RuntimeException failure) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().failure(failure);
+    return requireNonNull(nullable, "failed Uni");
   }
 }

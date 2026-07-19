@@ -31,8 +31,7 @@ public final class FiscalPreparationPersistenceMapper {
             require(row.getString("issuer_reference"), "issuerReference"),
             require(row.getString("issuer_ruc"), "issuerRuc"),
             require(row.getString("legal_name"), "legalName"),
-            require(
-                Optional.ofNullable(row.getString("commercial_name")), "commercialName optional"),
+            optional(row.getString("commercial_name"), "commercialName optional"),
             require(row.getString("head_office_address"), "headOfficeAddress"),
             require(row.getBoolean("accounting_required"), "accountingRequired"),
             specialTaxpayer(row.getString("special_taxpayer_resolution")),
@@ -56,8 +55,8 @@ public final class FiscalPreparationPersistenceMapper {
                 require(row.getString("source_authority"), "sourceAuthority"),
                 require(row.getString("source_revision"), "sourceRevision"),
                 require(row.getLocalDate("source_effective_from"), "sourceEffectiveFrom"),
-                require(
-                    Optional.ofNullable(row.getLocalDate("source_effective_through")),
+                optional(
+                    row.getLocalDate("source_effective_through"),
                     "sourceEffectiveThrough optional"),
                 require(
                     require(row.getOffsetDateTime("source_observed_at"), "sourceObservedAt")
@@ -126,7 +125,7 @@ public final class FiscalPreparationPersistenceMapper {
     return values;
   }
 
-  private static Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer(
+  private static Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer(
       @Nullable String resolution) {
     if (resolution == null) {
       return require(Optional.empty(), "empty special taxpayer");
@@ -135,7 +134,7 @@ public final class FiscalPreparationPersistenceMapper {
         Optional.of(new FiscalDesignation.SpecialTaxpayer(resolution)), "special taxpayer");
   }
 
-  private static Optional<FiscalDesignation.WithholdingAgent> withholdingAgent(
+  private static Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent(
       @Nullable String resolution) {
     if (resolution == null) {
       return require(Optional.empty(), "empty withholding agent");
@@ -144,34 +143,43 @@ public final class FiscalPreparationPersistenceMapper {
         Optional.of(new FiscalDesignation.WithholdingAgent(resolution)), "withholding agent");
   }
 
-  private static Optional<FiscalDesignation.LargeContributor> largeContributor(
+  private static Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor(
       @Nullable String resolution, @Nullable String legend) {
     if (resolution == null && legend == null) {
       return require(Optional.empty(), "empty large contributor");
     }
-    return Optional.of(
-        new FiscalDesignation.LargeContributor(
-            Objects.requireNonNull(resolution, "largeContributorResolution"),
-            Objects.requireNonNull(legend, "largeContributorLegend")));
+    return require(
+        Optional.of(
+            new FiscalDesignation.LargeContributor(
+                Objects.requireNonNull(resolution, "largeContributorResolution"),
+                Objects.requireNonNull(legend, "largeContributorLegend"))),
+        "large contributor");
   }
 
   private static <T> @NonNull T require(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
   }
 
-  private static @Nullable String optionalString(Optional<String> value, String field) {
-    Optional<String> optional = require(value, field);
+  private static <T extends @NonNull Object> Optional<@NonNull T> optional(
+      @Nullable T value, String field) {
+    return value == null ? require(Optional.empty(), field) : require(Optional.of(value), field);
+  }
+
+  private static @Nullable String optionalString(Optional<@NonNull String> value, String field) {
+    Optional<@NonNull String> optional = require(value, field);
     return optional.isPresent() ? require(optional.get(), field) : null;
   }
 
-  private static @Nullable LocalDate optionalDate(Optional<LocalDate> value, String field) {
-    Optional<LocalDate> optional = require(value, field);
+  private static @Nullable LocalDate optionalDate(
+      Optional<@NonNull LocalDate> value, String field) {
+    Optional<@NonNull LocalDate> optional = require(value, field);
     return optional.isPresent() ? require(optional.get(), field) : null;
   }
 
   private static @Nullable String specialTaxpayerResolution(
-      Optional<FiscalDesignation.SpecialTaxpayer> value) {
-    Optional<FiscalDesignation.SpecialTaxpayer> optional = require(value, "specialTaxpayer");
+      Optional<FiscalDesignation.@NonNull SpecialTaxpayer> value) {
+    Optional<FiscalDesignation.@NonNull SpecialTaxpayer> optional =
+        require(value, "specialTaxpayer");
     if (optional.isEmpty()) {
       return null;
     }
@@ -181,8 +189,9 @@ public final class FiscalPreparationPersistenceMapper {
   }
 
   private static @Nullable String withholdingAgentResolution(
-      Optional<FiscalDesignation.WithholdingAgent> value) {
-    Optional<FiscalDesignation.WithholdingAgent> optional = require(value, "withholdingAgent");
+      Optional<FiscalDesignation.@NonNull WithholdingAgent> value) {
+    Optional<FiscalDesignation.@NonNull WithholdingAgent> optional =
+        require(value, "withholdingAgent");
     if (optional.isEmpty()) {
       return null;
     }
@@ -192,8 +201,9 @@ public final class FiscalPreparationPersistenceMapper {
   }
 
   private static @Nullable String largeContributorResolution(
-      Optional<FiscalDesignation.LargeContributor> value) {
-    Optional<FiscalDesignation.LargeContributor> optional = require(value, "largeContributor");
+      Optional<FiscalDesignation.@NonNull LargeContributor> value) {
+    Optional<FiscalDesignation.@NonNull LargeContributor> optional =
+        require(value, "largeContributor");
     if (optional.isEmpty()) {
       return null;
     }
@@ -203,8 +213,9 @@ public final class FiscalPreparationPersistenceMapper {
   }
 
   private static @Nullable String largeContributorLegend(
-      Optional<FiscalDesignation.LargeContributor> value) {
-    Optional<FiscalDesignation.LargeContributor> optional = require(value, "largeContributor");
+      Optional<FiscalDesignation.@NonNull LargeContributor> value) {
+    Optional<FiscalDesignation.@NonNull LargeContributor> optional =
+        require(value, "largeContributor");
     if (optional.isEmpty()) {
       return null;
     }

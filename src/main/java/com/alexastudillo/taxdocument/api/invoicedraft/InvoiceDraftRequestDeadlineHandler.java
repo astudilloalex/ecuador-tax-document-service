@@ -61,7 +61,7 @@ public final class InvoiceDraftRequestDeadlineHandler {
                 .delayIt()
                 .by(remaining)
                 .onItem()
-                .transformToUni(ignored -> Uni.createFrom().failure(timeoutFailure()));
+                .transformToUni(_ -> Uni.createFrom().failure(timeoutFailure()));
     return Objects.requireNonNull(
         Uni.join()
             .first(application, timeout)

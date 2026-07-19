@@ -38,6 +38,7 @@ import java.util.UUID;
 import org.eclipse.microprofile.config.ConfigProvider;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -194,8 +195,9 @@ class FiscalPreparationRollbackTest {
       }
     }
 
-    FiscalPreparationCommitResult retry =
+    @Nullable FiscalPreparationCommitResult nullableRetry =
         store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
+    FiscalPreparationCommitResult retry = requireNonNull(nullableRetry, "commit retry");
     assertTrue(
         retry instanceof FiscalPreparationCommitResult.Created
             || retry instanceof FiscalPreparationCommitResult.Replay);

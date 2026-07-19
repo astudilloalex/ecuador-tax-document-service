@@ -51,19 +51,23 @@ class FiscalContextHttpAdapterTest {
 
   @Test
   void sendsExactCompanyAndSelectionOnceAndMapsCompleteAuthoritativeEvidence() {
-    FiscalContextResolution resolution =
+    @Nullable FiscalContextResolution nullableResolution =
         adapter
             .resolve(request(Objects.requireNonNull(Duration.ofSeconds(5))))
             .await()
             .indefinitely();
+    FiscalContextResolution resolution =
+        Objects.requireNonNull(nullableResolution, "fiscal-context resolution");
 
     assertEquals("1790012345001", resolution.issuerRuc());
     assertEquals("001", resolution.establishmentCode());
     assertEquals("001", resolution.emissionPointCode());
     assertEquals("fixture-revision-1", resolution.sourceEvidence().revision());
     assertEquals(1, fixture().callCount());
-    AuthoritativeFiscalContextFixture.CapturedRequest captured =
+    AuthoritativeFiscalContextFixture.@Nullable CapturedRequest nullableCaptured =
         fixture().lastRequest().orElseThrow();
+    AuthoritativeFiscalContextFixture.CapturedRequest captured =
+        Objects.requireNonNull(nullableCaptured, "captured request");
     assertEquals("11111111-1111-4111-8111-111111111111", captured.companyId());
     assertEquals("corr-1", captured.correlationId());
     assertFalse(captured.body().contains("company"));

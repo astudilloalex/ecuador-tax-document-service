@@ -15,7 +15,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 @NullMarked
@@ -118,12 +120,14 @@ class FiscalPreparationRequestDeadlineHandlerTest {
     return state;
   }
 
-  private static <T> Uni<T> item(T value) {
-    return requireNonNull(Uni.createFrom().item(value));
+  private static <T extends @NonNull Object> Uni<@NonNull T> item(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
   }
 
-  private static Uni<Object> nothing() {
-    return requireNonNull(Uni.createFrom().nothing());
+  private static Uni<@NonNull Object> nothing() {
+    @Nullable Uni<@NonNull Object> nullable = Uni.createFrom().<@NonNull Object>nothing();
+    return requireNonNull(nullable, "non-terminating Uni");
   }
 
   private static Instant instant(String value) {

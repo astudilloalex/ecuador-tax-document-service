@@ -5,6 +5,7 @@ import com.alexastudillo.taxdocument.domain.fiscalpreparation.FiscalSourceEviden
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 
 /**
@@ -15,13 +16,13 @@ public record FiscalContextResolution(
     String issuerReference,
     String issuerRuc,
     String legalName,
-    Optional<String> commercialName,
+    Optional<@NonNull String> commercialName,
     String headOfficeAddress,
     boolean accountingRequired,
-    Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer,
-    Optional<FiscalDesignation.WithholdingAgent> withholdingAgent,
+    Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer,
+    Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent,
     FiscalDesignation.RimpeClassification rimpeClassification,
-    Optional<FiscalDesignation.LargeContributor> largeContributor,
+    Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor,
     String establishmentReference,
     String establishmentCode,
     String establishmentAddress,
@@ -32,25 +33,49 @@ public record FiscalContextResolution(
     String emissionTypeCode,
     boolean invoiceIssuanceEligible,
     FiscalSourceEvidence sourceEvidence) {
-  public FiscalContextResolution {
-    Objects.requireNonNull(issuerReference, "issuerReference");
-    Objects.requireNonNull(issuerRuc, "issuerRuc");
-    Objects.requireNonNull(legalName, "legalName");
-    Objects.requireNonNull(commercialName, "commercialName");
-    Objects.requireNonNull(headOfficeAddress, "headOfficeAddress");
-    Objects.requireNonNull(specialTaxpayer, "specialTaxpayer");
-    Objects.requireNonNull(withholdingAgent, "withholdingAgent");
-    Objects.requireNonNull(rimpeClassification, "rimpeClassification");
-    Objects.requireNonNull(largeContributor, "largeContributor");
-    Objects.requireNonNull(establishmentReference, "establishmentReference");
-    Objects.requireNonNull(establishmentCode, "establishmentCode");
-    Objects.requireNonNull(establishmentAddress, "establishmentAddress");
-    Objects.requireNonNull(emissionPointId, "emissionPointId");
-    Objects.requireNonNull(emissionPointCode, "emissionPointCode");
-    Objects.requireNonNull(environmentCode, "environmentCode");
-    Objects.requireNonNull(documentTypeCode, "documentTypeCode");
-    Objects.requireNonNull(emissionTypeCode, "emissionTypeCode");
-    Objects.requireNonNull(sourceEvidence, "sourceEvidence");
+  public FiscalContextResolution(
+      String issuerReference,
+      String issuerRuc,
+      String legalName,
+      Optional<@NonNull String> commercialName,
+      String headOfficeAddress,
+      boolean accountingRequired,
+      Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer,
+      Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent,
+      FiscalDesignation.RimpeClassification rimpeClassification,
+      Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor,
+      String establishmentReference,
+      String establishmentCode,
+      String establishmentAddress,
+      UUID emissionPointId,
+      String emissionPointCode,
+      String environmentCode,
+      String documentTypeCode,
+      String emissionTypeCode,
+      boolean invoiceIssuanceEligible,
+      FiscalSourceEvidence sourceEvidence) {
+    this.issuerReference = Objects.requireNonNull(issuerReference, "issuerReference");
+    this.issuerRuc = Objects.requireNonNull(issuerRuc, "issuerRuc");
+    this.legalName = Objects.requireNonNull(legalName, "legalName");
+    this.commercialName = Objects.requireNonNull(commercialName, "commercialName");
+    this.headOfficeAddress = Objects.requireNonNull(headOfficeAddress, "headOfficeAddress");
+    this.accountingRequired = accountingRequired;
+    this.specialTaxpayer = Objects.requireNonNull(specialTaxpayer, "specialTaxpayer");
+    this.withholdingAgent = Objects.requireNonNull(withholdingAgent, "withholdingAgent");
+    this.rimpeClassification = Objects.requireNonNull(rimpeClassification, "rimpeClassification");
+    this.largeContributor = Objects.requireNonNull(largeContributor, "largeContributor");
+    this.establishmentReference =
+        Objects.requireNonNull(establishmentReference, "establishmentReference");
+    this.establishmentCode = Objects.requireNonNull(establishmentCode, "establishmentCode");
+    this.establishmentAddress =
+        Objects.requireNonNull(establishmentAddress, "establishmentAddress");
+    this.emissionPointId = Objects.requireNonNull(emissionPointId, "emissionPointId");
+    this.emissionPointCode = Objects.requireNonNull(emissionPointCode, "emissionPointCode");
+    this.environmentCode = Objects.requireNonNull(environmentCode, "environmentCode");
+    this.documentTypeCode = Objects.requireNonNull(documentTypeCode, "documentTypeCode");
+    this.emissionTypeCode = Objects.requireNonNull(emissionTypeCode, "emissionTypeCode");
+    this.invoiceIssuanceEligible = invoiceIssuanceEligible;
+    this.sourceEvidence = Objects.requireNonNull(sourceEvidence, "sourceEvidence");
   }
 
   public FiscalContextResolution withEmissionPointCode(String value) {

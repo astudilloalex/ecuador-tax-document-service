@@ -13,7 +13,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 @NullMarked
 public final class ApplicationTestFixtures {
@@ -37,7 +39,7 @@ public final class ApplicationTestFixtures {
         new CreateInvoiceDraftCommand.BuyerInput(
             "06", " ABC123 ", " Cafe\u0301 Buyer ", null, "Buyer@Example.COM", null),
         requireNonNull(
-            List.<CreateInvoiceDraftCommand.LineInput>of(
+            List.<CreateInvoiceDraftCommand.@NonNull LineInput>of(
                 new CreateInvoiceDraftCommand.LineInput(
                     " SKU1 ",
                     " Service 😀 ",
@@ -46,11 +48,11 @@ public final class ApplicationTestFixtures {
                     new BigDecimal("0.00"),
                     TAX_RULE))),
         requireNonNull(
-            List.<CreateInvoiceDraftCommand.PaymentInput>of(
+            List.<CreateInvoiceDraftCommand.@NonNull PaymentInput>of(
                 new CreateInvoiceDraftCommand.PaymentInput(
                     PAYMENT_METHOD, new BigDecimal("11.50")))),
         requireNonNull(
-            List.<CreateInvoiceDraftCommand.AdditionalInformationInput>of(
+            List.<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput>of(
                 new CreateInvoiceDraftCommand.AdditionalInformationInput(
                     " Client  Ref ", " A-1 "))));
   }
@@ -58,38 +60,33 @@ public final class ApplicationTestFixtures {
   public static ReferenceDataPort references() {
     return new ReferenceDataPort() {
       @Override
-      public Uni<BuyerIdentificationRule> buyerIdentificationRule(
+      public Uni<ReferenceDataPort.@NonNull BuyerIdentificationRule> buyerIdentificationRule(
           String officialCode, Duration remaining) {
-        return requireNonNull(
-            Uni.createFrom()
-                .<BuyerIdentificationRule>item(new BuyerIdentificationRule(officialCode, VERSION)));
+        return uniItem(new BuyerIdentificationRule(officialCode, VERSION));
       }
 
       @Override
-      public Uni<TaxSelection> ivaRule(UUID taxRuleId, LocalDate emissionDate, Duration remaining) {
-        return requireNonNull(
-            Uni.createFrom()
-                .<TaxSelection>item(
-                    new TaxSelection(
-                        taxRuleId,
-                        "IVA",
-                        TaxSelection.Treatment.PERCENTAGE_RATE,
-                        "2",
-                        "4",
-                        new BigDecimal("15.00"),
-                        VERSION,
-                        true,
-                        requireNonNull(LocalDate.of(2026, 7, 12)),
-                        null)));
+      public Uni<@NonNull TaxSelection> ivaRule(
+          UUID taxRuleId, LocalDate emissionDate, Duration remaining) {
+        return uniItem(
+            new TaxSelection(
+                taxRuleId,
+                "IVA",
+                TaxSelection.Treatment.PERCENTAGE_RATE,
+                "2",
+                "4",
+                new BigDecimal("15.00"),
+                VERSION,
+                true,
+                requireNonNull(LocalDate.of(2026, 7, 12)),
+                null));
       }
 
       @Override
-      public Uni<PaymentMethod> paymentMethod(
+      public Uni<ReferenceDataPort.@NonNull PaymentMethod> paymentMethod(
           UUID paymentMethodId, LocalDate emissionDate, Duration remaining) {
-        return requireNonNull(
-            Uni.createFrom()
-                .<PaymentMethod>item(
-                    new PaymentMethod(paymentMethodId, "01", "Without financial system", VERSION)));
+        return uniItem(
+            new PaymentMethod(paymentMethodId, "01", "Without financial system", VERSION));
       }
     };
   }
@@ -101,5 +98,10 @@ public final class ApplicationTestFixtures {
 
   private static UUID uuid(String value) {
     return requireNonNull(UUID.fromString(value));
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> uniItem(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
   }
 }

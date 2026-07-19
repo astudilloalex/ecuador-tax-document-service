@@ -15,6 +15,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -51,8 +52,8 @@ public final class InvoiceDraftResource {
   }
 
   @POST
-  public Uni<Response> create(JsonNode decodedRequest) {
-    Uni<CreateInvoiceDraftResult> application =
+  public Uni<@NonNull Response> create(JsonNode decodedRequest) {
+    Uni<@NonNull CreateInvoiceDraftResult> application =
         Objects.requireNonNull(
             Uni.createFrom()
                 .item(() -> bind(decodedRequest))
@@ -60,7 +61,7 @@ public final class InvoiceDraftResource {
                 .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
                 .onItem()
                 .transformToUni(useCase::create));
-    return Objects.requireNonNull(
+    return requireUni(
         deadlineHandler
             .race(application, state)
             .onItem()
@@ -75,7 +76,8 @@ public final class InvoiceDraftResource {
                           .header("Idempotency-Replayed", String.valueOf(result.replayed()))
                           .entity(mapper.toResponse(result))
                           .build());
-                }));
+                }),
+        "invoice draft response");
   }
 
   private CreateInvoiceDraftRequest bind(JsonNode request) {
@@ -93,6 +95,11 @@ public final class InvoiceDraftResource {
       throw new ProblemDetails.ApiException(
           400, "INVALID_REQUEST", "The request representation is invalid");
     }
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 
   private static void validateRepresentation(JsonNode request) {

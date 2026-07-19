@@ -15,7 +15,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 
 @NullMarked
 final class InfrastructureTestFixtures {
@@ -46,13 +48,13 @@ final class InfrastructureTestFixtures {
     InvoiceDraftRepository capture =
         new InvoiceDraftRepository() {
           @Override
-          public Uni<IdempotencyLookup> findByIdempotency(
+          public Uni<@NonNull IdempotencyLookup> findByIdempotency(
               CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
             return uniItem(new IdempotencyLookup.Missing());
           }
 
           @Override
-          public Uni<PersistedInvoiceDraft> persist(
+          public Uni<@NonNull PersistedInvoiceDraft> persist(
               InvoiceDraftCandidate candidate, Duration remaining) {
             result.set(candidate);
             Instant time = requireNonNull(Instant.parse("2026-07-17T12:00:01Z"));
@@ -64,14 +66,15 @@ final class InfrastructureTestFixtures {
         .create(command)
         .subscribe()
         .with(
-            ignored -> {},
+            _ -> {},
             failure -> {
               throw new IllegalStateException(failure);
             });
     return requireNonNull(result.get(), "captured candidate");
   }
 
-  private static <T> Uni<T> uniItem(T value) {
-    return requireNonNull(Uni.createFrom().item(value));
+  private static <T extends @NonNull Object> Uni<@NonNull T> uniItem(T value) {
+    @Nullable Uni<@NonNull T> nullable = Uni.createFrom().item(value);
+    return requireNonNull(nullable, "Uni item");
   }
 }

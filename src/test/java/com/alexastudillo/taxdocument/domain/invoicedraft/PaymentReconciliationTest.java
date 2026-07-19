@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
+import java.util.Objects;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
@@ -15,14 +16,15 @@ class PaymentReconciliationTest {
         new InvoiceDraftCalculator()
             .calculate(
                 DomainTestFixtures.buyer(),
-                List.of(
-                    DomainTestFixtures.line(
-                        1,
-                        "1.000000",
-                        "0.000000",
-                        "0.00",
-                        DomainTestFixtures.tax("0.00", TaxSelection.Treatment.ZERO_RATE))),
-                List.of(DomainTestFixtures.payment("0.00")));
+                Objects.requireNonNull(
+                    List.of(
+                        DomainTestFixtures.line(
+                            1,
+                            "1.000000",
+                            "0.000000",
+                            "0.00",
+                            DomainTestFixtures.tax("0.00", TaxSelection.Treatment.ZERO_RATE)))),
+                Objects.requireNonNull(List.of(DomainTestFixtures.payment("0.00"))));
     assertEquals("0.00", result.grandTotal().toPlainString());
   }
 
@@ -35,14 +37,16 @@ class PaymentReconciliationTest {
                 new InvoiceDraftCalculator()
                     .calculate(
                         DomainTestFixtures.buyer(),
-                        List.of(
-                            DomainTestFixtures.line(
-                                1,
-                                "1.000000",
-                                "10.000000",
-                                "0.00",
-                                DomainTestFixtures.tax("0.00", TaxSelection.Treatment.ZERO_RATE))),
-                        List.of(DomainTestFixtures.payment("9.99"))));
+                        Objects.requireNonNull(
+                            List.of(
+                                DomainTestFixtures.line(
+                                    1,
+                                    "1.000000",
+                                    "10.000000",
+                                    "0.00",
+                                    DomainTestFixtures.tax(
+                                        "0.00", TaxSelection.Treatment.ZERO_RATE)))),
+                        Objects.requireNonNull(List.of(DomainTestFixtures.payment("9.99")))));
     assertEquals("PAYMENT_TOTAL_MISMATCH", failure.code());
   }
 }

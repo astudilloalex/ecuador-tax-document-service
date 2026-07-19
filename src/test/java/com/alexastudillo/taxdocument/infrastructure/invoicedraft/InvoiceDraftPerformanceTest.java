@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ class InvoiceDraftPerformanceTest {
             true,
             requireNonNull(LocalDate.of(2026, 7, 12)),
             null);
-    List<InvoiceLine> lines = new ArrayList<>();
+    List<@NonNull InvoiceLine> lines = new ArrayList<>();
     for (int position = 1; position <= 500; position++) {
       lines.add(
           new InvoiceLine(

@@ -5,6 +5,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -14,13 +15,13 @@ public record FiscalContextSnapshot(
     String issuerReference,
     String issuerRuc,
     String legalName,
-    Optional<String> commercialName,
+    Optional<@NonNull String> commercialName,
     String headOfficeAddress,
     boolean accountingRequired,
-    Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer,
-    Optional<FiscalDesignation.WithholdingAgent> withholdingAgent,
+    Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer,
+    Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent,
     FiscalDesignation.RimpeClassification rimpeClassification,
-    Optional<FiscalDesignation.LargeContributor> largeContributor,
+    Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor,
     String establishmentReference,
     String establishmentCode,
     String establishmentAddress,
@@ -40,11 +41,31 @@ public record FiscalContextSnapshot(
   private static final Pattern RUC = Objects.requireNonNull(Pattern.compile("^[0-9]{13}$"));
   private static final Pattern THREE_DIGITS = Objects.requireNonNull(Pattern.compile("^[0-9]{3}$"));
 
-  public FiscalContextSnapshot {
+  public FiscalContextSnapshot(
+      String issuerReference,
+      String issuerRuc,
+      String legalName,
+      Optional<@NonNull String> commercialName,
+      String headOfficeAddress,
+      boolean accountingRequired,
+      Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer,
+      Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent,
+      FiscalDesignation.RimpeClassification rimpeClassification,
+      Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor,
+      String establishmentReference,
+      String establishmentCode,
+      String establishmentAddress,
+      UUID emissionPointId,
+      String emissionPointCode,
+      String environmentCode,
+      String documentTypeCode,
+      String emissionTypeCode,
+      FiscalSourceEvidence sourceEvidence,
+      String sriTechnicalRuleIdentifier,
+      LocalDate sriTechnicalRuleDate,
+      String numericCodePolicyVersion) {
     FiscalSourceEvidence.requireText(issuerReference, 128, "issuerReference");
-    if (issuerRuc == null || !RUC.matcher(issuerRuc).matches()) {
-      throw new IllegalArgumentException("Issuer RUC is invalid");
-    }
+    requireRuc(issuerRuc);
     FiscalSourceEvidence.requireText(legalName, 300, "legalName");
     Objects.requireNonNull(commercialName, "commercialName");
     commercialName.ifPresent(
@@ -77,6 +98,34 @@ public record FiscalContextSnapshot(
     }
     if (!NUMERIC_CODE_POLICY_VERSION.equals(numericCodePolicyVersion)) {
       throw new IllegalArgumentException("Numeric Code policy evidence is invalid");
+    }
+    this.issuerReference = issuerReference;
+    this.issuerRuc = issuerRuc;
+    this.legalName = legalName;
+    this.commercialName = commercialName;
+    this.headOfficeAddress = headOfficeAddress;
+    this.accountingRequired = accountingRequired;
+    this.specialTaxpayer = specialTaxpayer;
+    this.withholdingAgent = withholdingAgent;
+    this.rimpeClassification = rimpeClassification;
+    this.largeContributor = largeContributor;
+    this.establishmentReference = establishmentReference;
+    this.establishmentCode = establishmentCode;
+    this.establishmentAddress = establishmentAddress;
+    this.emissionPointId = emissionPointId;
+    this.emissionPointCode = emissionPointCode;
+    this.environmentCode = environmentCode;
+    this.documentTypeCode = documentTypeCode;
+    this.emissionTypeCode = emissionTypeCode;
+    this.sourceEvidence = sourceEvidence;
+    this.sriTechnicalRuleIdentifier = sriTechnicalRuleIdentifier;
+    this.sriTechnicalRuleDate = sriTechnicalRuleDate;
+    this.numericCodePolicyVersion = numericCodePolicyVersion;
+  }
+
+  private static void requireRuc(@Nullable String value) {
+    if (value == null || !RUC.matcher(value).matches()) {
+      throw new IllegalArgumentException("Issuer RUC is invalid");
     }
   }
 

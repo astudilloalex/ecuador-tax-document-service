@@ -13,7 +13,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.lang.reflect.RecordComponent;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -65,10 +65,12 @@ class SensitiveFiscalDataExposureTest {
 
   @Test
   void onlyExplicitSuccessRepresentationCarriesContractedFiscalIdentityFields() throws Exception {
-    Set<String> responseFields =
-        Arrays.stream(FiscalPreparationResponse.class.getRecordComponents())
-            .map(RecordComponent::getName)
-            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    Set<String> mutableResponseFields = new HashSet<>();
+    for (RecordComponent component :
+        requireNonNull(FiscalPreparationResponse.class.getRecordComponents())) {
+      mutableResponseFields.add(requireNonNull(component.getName(), "record-component name"));
+    }
+    Set<String> responseFields = requireNonNull(Set.copyOf(mutableResponseFields));
     assertTrue(responseFields.contains("accessKey"));
     assertTrue(responseFields.contains("numericCode"));
     assertTrue(responseFields.contains("fiscalContextSnapshot"));

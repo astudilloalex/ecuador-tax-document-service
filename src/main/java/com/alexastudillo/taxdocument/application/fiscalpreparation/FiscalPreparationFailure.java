@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 
 /** Stable transport-neutral safe failure with explicit retry and commit knowledge. */
@@ -12,7 +13,7 @@ public record FiscalPreparationFailure(
     Code code, String detail, boolean retryable, CommitKnowledge commitKnowledge)
     implements Serializable {
   private static final long serialVersionUID = 1L;
-  private static final Map<Code, String> DETAILS = details();
+  private static final Map<@NonNull Code, @NonNull String> DETAILS = details();
 
   public FiscalPreparationFailure {
     Objects.requireNonNull(code, "code");
@@ -64,8 +65,8 @@ public record FiscalPreparationFailure(
     POSSIBLE_COMMIT
   }
 
-  private static Map<Code, String> details() {
-    EnumMap<Code, String> values = new EnumMap<>(Code.class);
+  private static Map<@NonNull Code, @NonNull String> details() {
+    EnumMap<@NonNull Code, @NonNull String> values = new EnumMap<>(Code.class);
     values.put(Code.COMPANY_CONTEXT_REQUIRED, "X-Company-Id is required");
     values.put(Code.COMPANY_CONTEXT_INVALID, "X-Company-Id is invalid");
     values.put(Code.INVALID_REQUEST, "The Fiscal Preparation request is invalid");

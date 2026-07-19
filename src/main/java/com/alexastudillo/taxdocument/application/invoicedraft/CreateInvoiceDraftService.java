@@ -51,7 +51,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
   }
 
   @Override
-  public Uni<CreateInvoiceDraftResult> create(CreateInvoiceDraftCommand command) {
+  public Uni<@NonNull CreateInvoiceDraftResult> create(CreateInvoiceDraftCommand command) {
     return Objects.requireNonNull(
         Uni.createFrom()
             .item(() -> normalize(command))
@@ -61,7 +61,8 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
             .transform(this::mapValidationFailure));
   }
 
-  private Uni<CreateInvoiceDraftResult> createNormalized(CreateInvoiceDraftCommand normalized) {
+  private Uni<@NonNull CreateInvoiceDraftResult> createNormalized(
+      CreateInvoiceDraftCommand normalized) {
     requireBudget(normalized);
     byte[] keyHash = fingerprint.keyHash(normalized.idempotencyKey());
     byte[] requestFingerprint = fingerprint.requestFingerprint(normalized);
@@ -92,13 +93,13 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                                         false,
                                         emptyViolations()))));
                   }
-                  Uni<? extends CreateInvoiceDraftResult> prepared =
+                  Uni<? extends @NonNull CreateInvoiceDraftResult> prepared =
                       prepareAndPersist(normalized, keyHash, requestFingerprint);
                   return Objects.requireNonNull(prepared);
                 }));
   }
 
-  private Uni<CreateInvoiceDraftResult> prepareAndPersist(
+  private Uni<@NonNull CreateInvoiceDraftResult> prepareAndPersist(
       CreateInvoiceDraftCommand command, byte[] keyHash, byte[] requestFingerprint) {
     requireBudget(command);
     return Objects.requireNonNull(
@@ -127,11 +128,11 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                                                 requestFingerprint)))));
   }
 
-  private Uni<CreateInvoiceDraftResult> persistPrepared(
+  private Uni<@NonNull CreateInvoiceDraftResult> persistPrepared(
       CreateInvoiceDraftCommand command,
       ReferenceDataPort.BuyerIdentificationRule buyerRule,
-      List<TaxSelection> taxes,
-      List<ReferenceDataPort.PaymentMethod> paymentMethods,
+      List<@NonNull TaxSelection> taxes,
+      List<ReferenceDataPort.@NonNull PaymentMethod> paymentMethods,
       byte[] keyHash,
       byte[] requestFingerprint) {
     return Objects.requireNonNull(
@@ -147,7 +148,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                           command.buyer().email(),
                           command.buyer().telephone(),
                           buyerRule.catalogVersion());
-                  List<InvoiceLine> lineInputs = new ArrayList<>(command.lines().size());
+                  List<@NonNull InvoiceLine> lineInputs = new ArrayList<>(command.lines().size());
                   for (int index = 0; index < command.lines().size(); index++) {
                     CreateInvoiceDraftCommand.LineInput input =
                         Objects.requireNonNull(command.lines().get(index));
@@ -167,7 +168,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                             null,
                             null));
                   }
-                  List<Payment> payments = new ArrayList<>(command.payments().size());
+                  List<@NonNull Payment> payments = new ArrayList<>(command.payments().size());
                   for (int index = 0; index < command.payments().size(); index++) {
                     CreateInvoiceDraftCommand.PaymentInput input =
                         Objects.requireNonNull(command.payments().get(index));
@@ -182,7 +183,7 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                             input.amount(),
                             method.catalogVersion()));
                   }
-                  List<AdditionalInformation> additional = new ArrayList<>();
+                  List<@NonNull AdditionalInformation> additional = new ArrayList<>();
                   for (int index = 0; index < command.additionalInformation().size(); index++) {
                     CreateInvoiceDraftCommand.AdditionalInformationInput input =
                         Objects.requireNonNull(command.additionalInformation().get(index));
@@ -210,12 +211,12 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                           calculation.subtotalBeforeTaxes(),
                           calculation.totalDiscount(),
                           calculation.grandTotal());
-                  Map<UUID, UUID> lineTaxIdentifiers = new LinkedHashMap<>();
+                  Map<@NonNull UUID, @NonNull UUID> lineTaxIdentifiers = new LinkedHashMap<>();
                   calculation
                       .lines()
                       .forEach(
                           line -> lineTaxIdentifiers.put(line.id(), identifiers.nextIdentifier()));
-                  Map<String, UUID> taxTotalIdentifiers = new LinkedHashMap<>();
+                  Map<@NonNull String, @NonNull UUID> taxTotalIdentifiers = new LinkedHashMap<>();
                   calculation
                       .taxTotals()
                       .forEach(
@@ -242,8 +243,8 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                                     : CreateInvoiceDraftResult.replay(persisted))));
   }
 
-  private Uni<List<TaxSelection>> resolveTaxes(
-      CreateInvoiceDraftCommand command, int index, List<TaxSelection> values) {
+  private Uni<@NonNull List<@NonNull TaxSelection>> resolveTaxes(
+      CreateInvoiceDraftCommand command, int index, List<@NonNull TaxSelection> values) {
     if (index == command.lines().size()) {
       return Objects.requireNonNull(
           Uni.createFrom().item(Objects.requireNonNull(List.copyOf(values))));
@@ -263,8 +264,10 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
                 }));
   }
 
-  private Uni<List<ReferenceDataPort.PaymentMethod>> resolvePayments(
-      CreateInvoiceDraftCommand command, int index, List<ReferenceDataPort.PaymentMethod> values) {
+  private Uni<@NonNull List<ReferenceDataPort.@NonNull PaymentMethod>> resolvePayments(
+      CreateInvoiceDraftCommand command,
+      int index,
+      List<ReferenceDataPort.@NonNull PaymentMethod> values) {
     if (index == command.payments().size()) {
       return Objects.requireNonNull(
           Uni.createFrom().item(Objects.requireNonNull(List.copyOf(values))));
@@ -321,7 +324,8 @@ public final class CreateInvoiceDraftService implements CreateInvoiceDraftUseCas
               line.discount(),
               line.taxRuleId()));
     }
-    List<CreateInvoiceDraftCommand.AdditionalInformationInput> additional = new ArrayList<>();
+    List<CreateInvoiceDraftCommand.@NonNull AdditionalInformationInput> additional =
+        new ArrayList<>();
     for (int index = 0; index < command.additionalInformation().size(); index++) {
       CreateInvoiceDraftCommand.AdditionalInformationInput value =
           Objects.requireNonNull(command.additionalInformation().get(index));

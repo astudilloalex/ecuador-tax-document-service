@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftCandidate;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftRepository;
+import com.alexastudillo.taxdocument.application.invoicedraft.PersistedInvoiceDraft;
 import com.alexastudillo.taxdocument.support.FixedRequestClock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.vertx.RunOnVertxContext;
@@ -18,9 +19,9 @@ import io.vertx.core.Context;
 import jakarta.inject.Inject;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
-import java.util.function.Supplier;
-import java.util.stream.IntStream;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,16 +45,7 @@ class InvoiceDraftIdempotencyConcurrencyTest {
     InvoiceDraftCandidate candidate = InfrastructureTestFixtures.candidate();
     asserter
         .assertThat(
-            () ->
-                Uni.join()
-                    .all(
-                        IntStream.range(0, 50)
-                            .mapToObj(
-                                ignored ->
-                                    inIndependentContext(
-                                        () -> repository.persist(candidate, timeout())))
-                            .toList())
-                    .andCollectFailures(),
+            () -> joinPersistOperations(candidate),
             values ->
                 assertTrue(
                     values.stream()
@@ -64,21 +56,8 @@ class InvoiceDraftIdempotencyConcurrencyTest {
         .assertThat(
             () -> {
               int callsBeforeReplay = clock.persistenceCalls();
-              return Uni.join()
-                  .all(
-                      IntStream.range(0, 50)
-                          .mapToObj(
-                              ignored ->
-                                  inIndependentContext(
-                                      () ->
-                                          repository.findByIdempotency(
-                                              candidate.draft().companyId(),
-                                              requireNonNull(candidate.idempotencyKeyHash()),
-                                              requireNonNull(candidate.requestFingerprint()),
-                                              timeout())))
-                          .toList())
-                  .andCollectFailures()
-                  .invoke(ignored -> assertEquals(callsBeforeReplay, clock.persistenceCalls()));
+              return joinLookupOperations(candidate)
+                  .invoke(_ -> assertEquals(callsBeforeReplay, clock.persistenceCalls()));
             },
             values ->
                 assertTrue(
@@ -110,7 +89,47 @@ class InvoiceDraftIdempotencyConcurrencyTest {
             InvoiceDraftApplicationException.class);
   }
 
-  private <T> Uni<T> inIndependentContext(Supplier<Uni<T>> operation) {
+  private Uni<@NonNull List<@NonNull PersistedInvoiceDraft>> joinPersistOperations(
+      InvoiceDraftCandidate candidate) {
+    var builder = Uni.join().<@NonNull PersistedInvoiceDraft>builder();
+    for (int index = 0; index < 50; index++) {
+      builder =
+          requireNonNull(
+              builder.add(inIndependentContext(() -> repository.persist(candidate, timeout()))));
+    }
+    return requireNonNull(
+        builder
+            .joinAll()
+            .andCollectFailures()
+            .map(values -> requireNonNull(values, "persist-operation results")),
+        "persist-operation join");
+  }
+
+  private Uni<@NonNull List<InvoiceDraftRepository.@NonNull IdempotencyLookup>>
+      joinLookupOperations(InvoiceDraftCandidate candidate) {
+    var builder = Uni.join().<InvoiceDraftRepository.@NonNull IdempotencyLookup>builder();
+    for (int index = 0; index < 50; index++) {
+      builder =
+          requireNonNull(
+              builder.add(
+                  inIndependentContext(
+                      () ->
+                          repository.findByIdempotency(
+                              candidate.draft().companyId(),
+                              requireNonNull(candidate.idempotencyKeyHash()),
+                              requireNonNull(candidate.requestFingerprint()),
+                              timeout()))));
+    }
+    return requireNonNull(
+        builder
+            .joinAll()
+            .andCollectFailures()
+            .map(values -> requireNonNull(values, "lookup-operation results")),
+        "lookup-operation join");
+  }
+
+  private <T extends @NonNull Object> Uni<@NonNull T> inIndependentContext(
+      UniOperation<T> operation) {
     return requireNonNull(
         Uni.createFrom()
             .emitter(
@@ -120,7 +139,7 @@ class InvoiceDraftIdempotencyConcurrencyTest {
                           VertxContext.createNewDuplicatedContext(), "duplicated context");
                   VertxContextSafetyToggle.setContextSafe(context, true);
                   context.runOnContext(
-                      ignored -> {
+                      _ -> {
                         try {
                           operation.get().subscribe().with(emitter::complete, emitter::fail);
                         } catch (RuntimeException failure) {
@@ -136,5 +155,10 @@ class InvoiceDraftIdempotencyConcurrencyTest {
 
   private static Duration timeout() {
     return requireNonNull(Duration.ofSeconds(5));
+  }
+
+  @FunctionalInterface
+  private interface UniOperation<T extends @NonNull Object> {
+    Uni<@NonNull T> get();
   }
 }

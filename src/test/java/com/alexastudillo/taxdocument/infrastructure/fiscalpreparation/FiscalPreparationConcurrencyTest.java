@@ -21,7 +21,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,8 +53,8 @@ class FiscalPreparationConcurrencyTest {
   @Test
   void oneHundredEquivalentRequestsConvergeOnOneIdentityAndOneIncrement() {
     insertDraft(FiscalPreparationTestFixtures.DRAFT);
-    List<FiscalPreparation> preparations =
-        executeConcurrent(List.of(FiscalPreparationTestFixtures.intent()), 100);
+    List<@NonNull FiscalPreparation> preparations =
+        executeConcurrent(requireNonNull(List.of(FiscalPreparationTestFixtures.intent())), 100);
 
     assertEquals(100, preparations.size());
     assertEquals(1, new HashSet<>(preparations).size());
@@ -65,7 +67,7 @@ class FiscalPreparationConcurrencyTest {
 
   @Test
   void oneHundredDifferentDraftsInOneScopeReceiveExactlyTheNextOneHundredValuesAndKeys() {
-    List<FiscalPreparationCommitIntent> intents = new ArrayList<>();
+    List<@NonNull FiscalPreparationCommitIntent> intents = new ArrayList<>();
     for (int index = 1; index <= 100; index++) {
       UUID draftId = new UUID(0x2222222222224222L, 0x8222000000000000L + index);
       insertDraft(draftId);
@@ -80,7 +82,7 @@ class FiscalPreparationConcurrencyTest {
               FiscalPreparationTestFixtures.snapshot()));
     }
 
-    List<FiscalPreparation> preparations = executeConcurrent(intents, 1);
+    List<@NonNull FiscalPreparation> preparations = executeConcurrent(intents, 1);
     List<Integer> sequentialNumbers =
         preparations.stream()
             .map(value -> value.officialSequentialNumber().number())
@@ -130,8 +132,9 @@ class FiscalPreparationConcurrencyTest {
             FiscalPreparationTestFixtures.snapshot(
                 secondEmissionPoint, "issuer-2", "establishment-2", "002", "002"));
 
-    List<FiscalPreparation> preparations =
-        executeConcurrent(List.of(FiscalPreparationTestFixtures.intent(), secondIntent), 1);
+    List<@NonNull FiscalPreparation> preparations =
+        executeConcurrent(
+            requireNonNull(List.of(FiscalPreparationTestFixtures.intent(), secondIntent)), 1);
 
     assertEquals(
         List.of(1, 1),
@@ -147,26 +150,32 @@ class FiscalPreparationConcurrencyTest {
         1, database.lastAllocated(FiscalPreparationTestFixtures.COMPANY_UUID, secondBaseline));
   }
 
-  private List<FiscalPreparation> executeConcurrent(
-      List<FiscalPreparationCommitIntent> intents, int repetitions) {
+  private List<@NonNull FiscalPreparation> executeConcurrent(
+      List<@NonNull FiscalPreparationCommitIntent> intents, int repetitions) {
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-      List<CompletableFuture<FiscalPreparation>> futures = new ArrayList<>();
+      List<@NonNull CompletableFuture<@NonNull FiscalPreparation>> futures = new ArrayList<>();
       for (FiscalPreparationCommitIntent candidateIntent : intents) {
         FiscalPreparationCommitIntent intent = requireNonNull(candidateIntent);
         for (int repetition = 0; repetition < repetitions; repetition++) {
           futures.add(
-              CompletableFuture.supplyAsync(
-                  () ->
-                      preparation(
-                          requireNonNull(
-                              store
-                                  .commit(intent, requireNonNull(Duration.ofSeconds(10)))
-                                  .await()
-                                  .indefinitely())),
-                  executor));
+              requireNonNull(
+                  CompletableFuture.supplyAsync(
+                      () ->
+                          preparation(
+                              requireNonNull(
+                                  store
+                                      .commit(intent, requireNonNull(Duration.ofSeconds(10)))
+                                      .await()
+                                      .indefinitely())),
+                      executor)));
         }
       }
-      return requireNonNull(futures.stream().map(CompletableFuture::join).toList());
+      List<@NonNull FiscalPreparation> preparations = new ArrayList<>();
+      for (CompletableFuture<@NonNull FiscalPreparation> future : futures) {
+        @Nullable FiscalPreparation nullable = future.join();
+        preparations.add(requireNonNull(nullable, "concurrent preparation"));
+      }
+      return requireNonNull(List.copyOf(preparations));
     }
   }
 

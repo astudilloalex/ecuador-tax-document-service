@@ -26,24 +26,26 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
   private final Duration operationTimeout;
 
   public ReferenceDataRepositoryAdapter() {
-    this.operationTimeout =
+    @Nullable Duration configuredOperationTimeout =
         ConfigProvider.getConfig()
             .getValue("invoice-draft.persistence.operation-timeout", Duration.class);
+    this.operationTimeout =
+        requireHydrated(configuredOperationTimeout, "reference-data operation timeout");
   }
 
   @Override
-  public Uni<BuyerIdentificationRule> buyerIdentificationRule(
+  public Uni<@NonNull BuyerIdentificationRule> buyerIdentificationRule(
       String officialCode, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
-    Uni<BuyerIdentificationTypeEntity> query =
+    Uni<@NonNull BuyerIdentificationTypeEntity> query =
         Panache.withSession(
             () ->
                 BuyerIdentificationTypeEntity.find(
                         "officialCode = ?1 and active = true", officialCode)
                     .firstResult());
-    return requireHydrated(
+    return requireUni(
         bounded(requireHydrated(query, "buyer identification query"), remaining)
             .onItem()
             .ifNull()
@@ -54,7 +56,7 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
                         "buyer.identificationType",
                         "Buyer identification type is not approved"))
             .onItem()
-            .<BuyerIdentificationRule>transform(
+            .<@NonNull BuyerIdentificationRule>transform(
                 value ->
                     new BuyerIdentificationRule(
                         requireHydrated(value.officialCode, "buyerIdentification.officialCode"),
@@ -64,11 +66,12 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
   }
 
   @Override
-  public Uni<TaxSelection> ivaRule(UUID taxRuleId, LocalDate emissionDate, Duration remaining) {
+  public Uni<@NonNull TaxSelection> ivaRule(
+      UUID taxRuleId, LocalDate emissionDate, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
-    Uni<IvaTaxRuleEntity> query =
+    Uni<@NonNull IvaTaxRuleEntity> query =
         Panache.withSession(
             () ->
                 IvaTaxRuleEntity.find(
@@ -77,13 +80,13 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
                         taxRuleId,
                         emissionDate)
                     .firstResult());
-    return requireHydrated(
+    return requireUni(
         bounded(requireHydrated(query, "IVA rule query"), remaining)
             .onItem()
             .ifNull()
             .failWith(() -> invalidReference("lines[].taxRuleId", "IVA rule is not effective"))
             .onItem()
-            .<TaxSelection>transform(
+            .<@NonNull TaxSelection>transform(
                 value ->
                     new TaxSelection(
                         requireHydrated(value.id, "ivaRule.id"),
@@ -104,12 +107,12 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
   }
 
   @Override
-  public Uni<PaymentMethod> paymentMethod(
+  public Uni<@NonNull PaymentMethod> paymentMethod(
       UUID paymentMethodId, LocalDate emissionDate, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
-    Uni<PaymentMethodEntity> query =
+    Uni<@NonNull PaymentMethodEntity> query =
         Panache.withSession(
             () ->
                 PaymentMethodEntity.find(
@@ -118,7 +121,7 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
                         paymentMethodId,
                         emissionDate)
                     .firstResult());
-    return requireHydrated(
+    return requireUni(
         bounded(requireHydrated(query, "payment method query"), remaining)
             .onItem()
             .ifNull()
@@ -127,7 +130,7 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
                     invalidReference(
                         "payments[].paymentMethodId", "Payment method is not effective"))
             .onItem()
-            .<PaymentMethod>transform(
+            .<@NonNull PaymentMethod>transform(
                 value ->
                     new PaymentMethod(
                         requireHydrated(value.id, "paymentMethod.id"),
@@ -137,12 +140,13 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
         "payment method");
   }
 
-  private <T> Uni<T> bounded(Uni<T> operation, Duration remaining) {
+  private <T extends @NonNull Object> Uni<@NonNull T> bounded(
+      Uni<@NonNull T> operation, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
     ReactiveOperationBudget budget = ReactiveOperationBudget.clamp(remaining, operationTimeout);
-    return requireHydrated(
+    return requireUni(
         operation
             .ifNoItem()
             .after(budget.timeout())
@@ -161,7 +165,7 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
                     !(throwable instanceof InvoiceDraftApplicationException)
                         && !(throwable instanceof DraftValidationException))
             .transform(
-                throwable ->
+                _ ->
                     new InvoiceDraftApplicationException(
                         new InvoiceDraftFailure(
                             InvoiceDraftFailure.Code.PERSISTENCE_UNAVAILABLE,
@@ -188,7 +192,12 @@ public final class ReferenceDataRepositoryAdapter implements ReferenceDataPort {
     return requireHydrated(List.of(), "empty violations");
   }
 
-  private static <T> T requireHydrated(@Nullable T value, String field) {
+  private static <T> @NonNull T requireHydrated(@Nullable T value, String field) {
+    return Objects.requireNonNull(value, field);
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
     return Objects.requireNonNull(value, field);
   }
 }

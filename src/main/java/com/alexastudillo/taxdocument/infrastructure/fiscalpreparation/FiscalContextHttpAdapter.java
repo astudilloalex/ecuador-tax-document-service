@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -29,7 +30,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
   }
 
   @Override
-  public Uni<FiscalContextResolution> resolve(Request request) {
+  public Uni<@NonNull FiscalContextResolution> resolve(Request request) {
     Objects.requireNonNull(request, "request");
     Duration timeout =
         request.remaining().compareTo(RESPONSE_CEILING) < 0
@@ -38,15 +39,18 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
     AuthoritativeFiscalContextDto.Selection selection =
         new AuthoritativeFiscalContextDto.Selection(
             request.emissionPointId(), request.emissionDate(), request.documentTypeCode());
-    return client
-        .resolve(request.companyId().toString(), request.safeCorrelationId(), selection)
-        .ifNoItem()
-        .after(timeout)
-        .fail()
-        .onItem()
-        .transform(context -> map(Objects.requireNonNull(context, "authoritative fiscal context")))
-        .onFailure()
-        .transform(failure -> classify(Objects.requireNonNull(failure, "provider failure")));
+    return requireUni(
+        client
+            .resolve(request.companyId().toString(), request.safeCorrelationId(), selection)
+            .ifNoItem()
+            .after(timeout)
+            .fail()
+            .onItem()
+            .transform(
+                context -> map(Objects.requireNonNull(context, "authoritative fiscal context")))
+            .onFailure()
+            .transform(failure -> classify(Objects.requireNonNull(failure, "provider failure"))),
+        "fiscal context resolution");
   }
 
   private static FiscalContextResolution map(AuthoritativeFiscalContextDto.Context context) {
@@ -85,7 +89,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
     }
   }
 
-  private static Optional<FiscalDesignation.SpecialTaxpayer> specialTaxpayer(
+  private static Optional<FiscalDesignation.@NonNull SpecialTaxpayer> specialTaxpayer(
       AuthoritativeFiscalContextDto.@Nullable ResolutionDesignation designation) {
     if (designation == null) {
       return Objects.requireNonNull(Optional.empty(), "empty special taxpayer");
@@ -98,7 +102,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
         "special taxpayer");
   }
 
-  private static Optional<FiscalDesignation.WithholdingAgent> withholdingAgent(
+  private static Optional<FiscalDesignation.@NonNull WithholdingAgent> withholdingAgent(
       AuthoritativeFiscalContextDto.@Nullable ResolutionDesignation designation) {
     if (designation == null) {
       return Objects.requireNonNull(Optional.empty(), "empty withholding agent");
@@ -111,7 +115,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
         "withholding agent");
   }
 
-  private static Optional<FiscalDesignation.LargeContributor> largeContributor(
+  private static Optional<FiscalDesignation.@NonNull LargeContributor> largeContributor(
       AuthoritativeFiscalContextDto.@Nullable LargeContributorDesignation designation) {
     if (designation == null) {
       return Objects.requireNonNull(Optional.empty(), "empty large contributor");
@@ -124,7 +128,7 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
         "large contributor");
   }
 
-  private static <T> Optional<T> optional(@Nullable T value) {
+  private static <T extends @NonNull Object> Optional<@NonNull T> optional(@Nullable T value) {
     return value == null
         ? Objects.requireNonNull(Optional.empty(), "empty optional")
         : Objects.requireNonNull(Optional.of(value), "present optional");
@@ -170,5 +174,10 @@ public final class FiscalContextHttpAdapter implements FiscalContextPort {
 
   private static FiscalPreparationApplicationException failure(FiscalPreparationFailure.Code code) {
     return new FiscalPreparationApplicationException(FiscalPreparationFailure.of(code));
+  }
+
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
+    return Objects.requireNonNull(value, field);
   }
 }

@@ -65,9 +65,9 @@ public final class InvoiceDraftRequestBoundary {
                       .vertx()
                       .setTimer(
                           Math.max(1L, requestDeadline.toMillis()),
-                          ignored -> deadlineReached(context, state));
+                          _ -> deadlineReached(context, state));
               state.timerId(timerId);
-              context.addEndHandler(ignored -> context.vertx().cancelTimer(state.timerId()));
+              context.addEndHandler(_ -> context.vertx().cancelTimer(state.timerId()));
               context.next();
             });
   }
@@ -125,7 +125,7 @@ public final class InvoiceDraftRequestBoundary {
           .putHeader(HttpHeaders.CONNECTION, "close")
           .putHeader("X-Correlation-Id", state.correlation().safeValue())
           .end(body)
-          .onComplete(ignored -> context.request().connection().close());
+          .onComplete(_ -> context.request().connection().close());
     } catch (JsonProcessingException exception) {
       context.fail(exception);
     }

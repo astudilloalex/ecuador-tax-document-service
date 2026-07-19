@@ -20,6 +20,7 @@ import jakarta.inject.Inject;
 import java.time.Duration;
 import java.util.UUID;
 import org.jspecify.annotations.NullMarked;
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -45,7 +46,7 @@ class FiscalPreparationRepositoryAdapterTest {
 
   @Test
   void everyLookupIsCompanyScopedAndCrossCompanyIsIndistinguishableFromAbsence() {
-    FiscalPreparationLookup own =
+    @Nullable FiscalPreparationLookup nullableOwn =
         store
             .lookup(
                 FiscalPreparationTestFixtures.COMPANY,
@@ -53,9 +54,10 @@ class FiscalPreparationRepositoryAdapterTest {
                 timeout())
             .await()
             .indefinitely();
+    FiscalPreparationLookup own = requireNonNull(nullableOwn, "own-company lookup");
     assertInstanceOf(FiscalPreparationLookup.EligibleDraft.class, own);
 
-    FiscalPreparationLookup other =
+    @Nullable FiscalPreparationLookup nullableOther =
         store
             .lookup(
                 new CompanyId(
@@ -64,6 +66,7 @@ class FiscalPreparationRepositoryAdapterTest {
                 timeout())
             .await()
             .indefinitely();
+    FiscalPreparationLookup other = requireNonNull(nullableOther, "cross-company lookup");
     assertInstanceOf(FiscalPreparationLookup.NotFound.class, other);
   }
 
@@ -83,8 +86,9 @@ class FiscalPreparationRepositoryAdapterTest {
         database.draftSnapshot(
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.DRAFT);
 
-    FiscalPreparationCommitResult result =
+    @Nullable FiscalPreparationCommitResult nullableResult =
         store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
+    FiscalPreparationCommitResult result = requireNonNull(nullableResult, "commit result");
     FiscalPreparationCommitResult.Created created =
         assertInstanceOf(FiscalPreparationCommitResult.Created.class, result);
     assertEquals("000000123", created.preparation().officialSequentialNumber().value());
@@ -103,8 +107,9 @@ class FiscalPreparationRepositoryAdapterTest {
         database.draftSnapshot(
             FiscalPreparationTestFixtures.COMPANY_UUID, FiscalPreparationTestFixtures.DRAFT));
 
-    FiscalPreparationCommitResult replay =
+    @Nullable FiscalPreparationCommitResult nullableReplay =
         store.commit(FiscalPreparationTestFixtures.intent(), timeout()).await().indefinitely();
+    FiscalPreparationCommitResult replay = requireNonNull(nullableReplay, "commit replay");
     assertEquals(
         created.preparation(),
         assertInstanceOf(FiscalPreparationCommitResult.Replay.class, replay).preparation());

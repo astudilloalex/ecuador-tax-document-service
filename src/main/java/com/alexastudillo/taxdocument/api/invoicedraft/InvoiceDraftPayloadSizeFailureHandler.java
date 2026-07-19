@@ -101,7 +101,7 @@ public final class InvoiceDraftPayloadSizeFailureHandler {
           .putHeader(HttpHeaders.CONNECTION, "close")
           .putHeader("X-Correlation-Id", correlation.safeValue())
           .end(body)
-          .onComplete(ignored -> context.request().connection().close());
+          .onComplete(_ -> context.request().connection().close());
     } catch (JsonProcessingException exception) {
       context.fail(exception);
     }

@@ -4,10 +4,11 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -40,12 +41,21 @@ public final class IdempotencyFingerprint {
     putNullable(digest, command.buyer().address());
     putNullable(digest, command.buyer().email());
     putNullable(digest, command.buyer().telephone());
-    putCollection(digest, command.lines().stream().map(value -> value.toString()).toList(), false);
-    putCollection(
-        digest, command.payments().stream().map(value -> value.toString()).toList(), true);
     putCollection(
         digest,
-        command.additionalInformation().stream().map(value -> value.toString()).toList(),
+        Objects.requireNonNull(
+            command.lines().stream().map(value -> value.toString()).toList(), "line values"),
+        false);
+    putCollection(
+        digest,
+        Objects.requireNonNull(
+            command.payments().stream().map(value -> value.toString()).toList(), "payment values"),
+        true);
+    putCollection(
+        digest,
+        Objects.requireNonNull(
+            command.additionalInformation().stream().map(value -> value.toString()).toList(),
+            "additional-information values"),
         true);
     return Objects.requireNonNull(digest.digest());
   }
@@ -55,8 +65,8 @@ public final class IdempotencyFingerprint {
   }
 
   private static void putCollection(
-      MessageDigest digest, Collection<String> values, boolean sorted) {
-    Collection<String> source =
+      MessageDigest digest, List<@NonNull String> values, boolean sorted) {
+    List<@NonNull String> source =
         sorted ? values.stream().sorted(Comparator.naturalOrder()).toList() : values;
     digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(source.size()).array());
     source.forEach(value -> put(digest, Objects.requireNonNull(value)));

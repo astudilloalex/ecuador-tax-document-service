@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -56,10 +57,10 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
   private final HttpServer server;
   private final Set<HttpConnection> connections;
   private final AtomicInteger calls = new AtomicInteger();
-  private final AtomicReference<ResponsePlan> response =
+  private final AtomicReference<@NonNull ResponsePlan> response =
       new AtomicReference<>(new ResponsePlan(200, VALID_CONTEXT, zeroDuration()));
-  private final AtomicReference<Optional<CapturedRequest>> lastRequest =
-      new AtomicReference<>(Optional.empty());
+  private final AtomicReference<@NonNull Optional<@NonNull CapturedRequest>> lastRequest =
+      new AtomicReference<>(requireNonNull(Optional.empty()));
 
   private AuthoritativeFiscalContextFixture(
       Vertx vertx, HttpServer server, Set<HttpConnection> connections) {
@@ -85,12 +86,14 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
                               Objects.requireNonNull(fixture.get(), "fixture");
                           active.calls.incrementAndGet();
                           active.lastRequest.set(
-                              Optional.of(
-                                  new CapturedRequest(
-                                      context.request().getHeader("X-Company-Id"),
-                                      context.request().getHeader("X-Correlation-Id"),
-                                      requireNonNull(body.toString()))));
-                          ResponsePlan plan = active.response.get();
+                              requireNonNull(
+                                  Optional.of(
+                                      new CapturedRequest(
+                                          context.request().getHeader("X-Company-Id"),
+                                          context.request().getHeader("X-Correlation-Id"),
+                                          requireNonNull(body.toString())))));
+                          @Nullable ResponsePlan nullablePlan = active.response.get();
+                          ResponsePlan plan = requireNonNull(nullablePlan, "response plan");
                           Runnable send =
                               () ->
                                   context
@@ -102,9 +105,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
                           if (plan.delay().isZero()) {
                             send.run();
                           } else {
-                            context
-                                .vertx()
-                                .setTimer(plan.delay().toMillis(), ignored -> send.run());
+                            context.vertx().setTimer(plan.delay().toMillis(), _ -> send.run());
                           }
                         }));
     HttpServer server =
@@ -113,7 +114,7 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
             .connectionHandler(
                 connection -> {
                   connections.add(connection);
-                  connection.closeHandler(ignored -> connections.remove(connection));
+                  connection.closeHandler(_ -> connections.remove(connection));
                 })
             .requestHandler(router)
             .listen(PORT, "127.0.0.1")
@@ -176,13 +177,13 @@ public final class AuthoritativeFiscalContextFixture implements AutoCloseable {
     return calls.get();
   }
 
-  public Optional<CapturedRequest> lastRequest() {
-    return requireNonNull(lastRequest.get());
+  public Optional<@NonNull CapturedRequest> lastRequest() {
+    return requireNonNull(lastRequest.get(), "last captured request");
   }
 
   public void reset() {
     calls.set(0);
-    lastRequest.set(Optional.empty());
+    lastRequest.set(requireNonNull(Optional.empty()));
     valid();
   }
 

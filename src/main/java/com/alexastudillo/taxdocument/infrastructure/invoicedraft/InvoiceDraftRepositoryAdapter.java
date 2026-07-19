@@ -38,21 +38,23 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
   public InvoiceDraftRepositoryAdapter(RequestClock clock, InvoiceDraftPersistenceMapper mapper) {
     this.clock = clock;
     this.mapper = mapper;
-    this.queryTimeout =
+    @Nullable Duration configuredQueryTimeout =
         ConfigProvider.getConfig()
             .getValue("invoice-draft.persistence.operation-timeout", Duration.class);
-    this.writeTimeout =
+    @Nullable Duration configuredWriteTimeout =
         ConfigProvider.getConfig()
             .getValue("invoice-draft.persistence.write-transaction-timeout", Duration.class);
+    this.queryTimeout = requireHydrated(configuredQueryTimeout, "operation timeout");
+    this.writeTimeout = requireHydrated(configuredWriteTimeout, "write timeout");
   }
 
   @Override
-  public Uni<IdempotencyLookup> findByIdempotency(
+  public Uni<@NonNull IdempotencyLookup> findByIdempotency(
       CompanyId companyId, byte[] keyHash, byte[] requestFingerprint, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
-    Uni<IdempotencyLookup> operation =
+    Uni<@NonNull IdempotencyLookup> operation =
         Panache.withSession(
             () ->
                 InvoiceDraftIdempotencyEntity.find(
@@ -63,11 +65,11 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
                         binding -> {
                           if (binding == null) {
                             return Uni.createFrom()
-                                .<IdempotencyLookup>item(new IdempotencyLookup.Missing());
+                                .<@NonNull IdempotencyLookup>item(new IdempotencyLookup.Missing());
                           }
                           if (!Arrays.equals(binding.requestFingerprint, requestFingerprint)) {
                             return Uni.createFrom()
-                                .<IdempotencyLookup>item(
+                                .<@NonNull IdempotencyLookup>item(
                                     new IdempotencyLookup.Conflict(
                                         requireHydrated(
                                             binding.requestFingerprint,
@@ -78,7 +80,7 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
                                   requireHydrated(
                                       binding.invoiceDraftId, "idempotency.invoiceDraftId"))
                               .onItem()
-                              .<IdempotencyLookup>transform(
+                              .<@NonNull IdempotencyLookup>transform(
                                   persisted ->
                                       new IdempotencyLookup.Equivalent(
                                           requireHydrated(persisted, "persisted invoice draft")));
@@ -87,18 +89,19 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
   }
 
   @Override
-  public Uni<PersistedInvoiceDraft> persist(InvoiceDraftCandidate candidate, Duration remaining) {
+  public Uni<@NonNull PersistedInvoiceDraft> persist(
+      InvoiceDraftCandidate candidate, Duration remaining) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
-    Uni<PersistedInvoiceDraft> operation =
+    Uni<@NonNull PersistedInvoiceDraft> operation =
         Panache.withTransaction(
             () -> {
               Instant timestamp = clock.persistenceTime();
               InvoiceDraftPersistenceMapper.MappedAggregate aggregate =
                   mapper.toEntities(candidate, timestamp);
               InvoiceDraftIdempotencyEntity binding = binding(candidate, timestamp);
-              List<PanacheEntityBase> entities = new ArrayList<>();
+              List<@NonNull PanacheEntityBase> entities = new ArrayList<>();
               entities.add(aggregate.root());
               entities.addAll(aggregate.lines());
               entities.addAll(aggregate.lineTaxes());
@@ -117,42 +120,44 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
                           aggregate.additionalInformation()));
             });
     long startedNanos = System.nanoTime();
-    return requireHydrated(
+    return requireUni(
         bounded(requireHydrated(operation, "persist operation"), remaining, writeTimeout)
             .onFailure(
                 failure -> isUniqueViolation(requireHydrated(failure, "persistence failure")))
             .recoverWithUni(
-                ignored ->
+                _ ->
                     recoverIdempotencyWinner(
                         candidate, remainingAfter(remaining, System.nanoTime() - startedNanos))),
         "idempotency recovery");
   }
 
-  private Uni<PersistedInvoiceDraft> recoverIdempotencyWinner(
+  private Uni<@NonNull PersistedInvoiceDraft> recoverIdempotencyWinner(
       InvoiceDraftCandidate candidate, Duration remaining) {
-    return findByIdempotency(
-            candidate.draft().companyId(),
-            requireHydrated(candidate.idempotencyKeyHash(), "idempotencyKeyHash"),
-            requireHydrated(candidate.requestFingerprint(), "requestFingerprint"),
-            remaining)
-        .onItem()
-        .transformToUni(
-            lookup -> {
-              if (lookup instanceof IdempotencyLookup.Equivalent equivalent) {
-                return Uni.createFrom().item(equivalent.persisted());
-              }
-              if (lookup instanceof IdempotencyLookup.Conflict) {
-                return Uni.createFrom().failure(idempotencyConflict());
-              }
-              return Uni.createFrom()
-                  .failure(
-                      persistenceUnavailable(
-                          "The winning idempotency binding could not be loaded"));
-            });
+    return requireUni(
+        findByIdempotency(
+                candidate.draft().companyId(),
+                requireHydrated(candidate.idempotencyKeyHash(), "idempotencyKeyHash"),
+                requireHydrated(candidate.requestFingerprint(), "requestFingerprint"),
+                remaining)
+            .onItem()
+            .transformToUni(
+                lookup -> {
+                  if (lookup instanceof IdempotencyLookup.Equivalent equivalent) {
+                    return Uni.createFrom().item(equivalent.persisted());
+                  }
+                  if (lookup instanceof IdempotencyLookup.Conflict) {
+                    return Uni.createFrom().failure(idempotencyConflict());
+                  }
+                  return Uni.createFrom()
+                      .failure(
+                          persistenceUnavailable(
+                              "The winning idempotency binding could not be loaded"));
+                }),
+        "idempotency winner recovery");
   }
 
-  private Uni<PersistedInvoiceDraft> load(CompanyId companyId, UUID draftId) {
-    return requireHydrated(
+  private Uni<@NonNull PersistedInvoiceDraft> load(CompanyId companyId, UUID draftId) {
+    return requireUni(
         InvoiceDraftEntity.find("companyId = ?1 and id = ?2", companyId.value(), draftId)
             .<InvoiceDraftEntity>firstResult()
             .onItem()
@@ -164,18 +169,18 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
         "loaded invoice draft");
   }
 
-  private Uni<PersistedInvoiceDraft> loadAggregate(InvoiceDraftEntity root, UUID draftId) {
+  private Uni<@NonNull PersistedInvoiceDraft> loadAggregate(InvoiceDraftEntity root, UUID draftId) {
     LoadedAggregate loaded = new LoadedAggregate();
-    return requireHydrated(
+    return requireUni(
         InvoiceLineEntity.<InvoiceLineEntity>list("invoiceDraftId", draftId)
-            .invoke(lines -> loaded.lines = requireHydrated(lines, "loaded invoice lines"))
+            .invoke(lines -> loaded.lines = requireElements(lines, "loaded invoice lines"))
             .chain(() -> loadLineTaxes(loaded.lines))
             .invoke(lineTaxes -> loaded.lineTaxes = requireHydrated(lineTaxes, "loaded line taxes"))
             .chain(
                 () -> InvoiceTaxTotalEntity.<InvoiceTaxTotalEntity>list("invoiceDraftId", draftId))
-            .invoke(totals -> loaded.taxTotals = requireHydrated(totals, "loaded tax totals"))
+            .invoke(totals -> loaded.taxTotals = requireElements(totals, "loaded tax totals"))
             .chain(() -> InvoicePaymentEntity.<InvoicePaymentEntity>list("invoiceDraftId", draftId))
-            .invoke(payments -> loaded.payments = requireHydrated(payments, "loaded payments"))
+            .invoke(payments -> loaded.payments = requireElements(payments, "loaded payments"))
             .chain(
                 () ->
                     InvoiceAdditionalInformationEntity.<InvoiceAdditionalInformationEntity>list(
@@ -183,9 +188,9 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
             .invoke(
                 additional ->
                     loaded.additional =
-                        requireHydrated(additional, "loaded additional information"))
+                        requireElements(additional, "loaded additional information"))
             .map(
-                ignored ->
+                _ ->
                     mapper.toPersisted(
                         root,
                         loaded.lines,
@@ -196,15 +201,23 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
         "loaded invoice draft aggregate");
   }
 
-  private Uni<List<InvoiceLineTaxEntity>> loadLineTaxes(List<InvoiceLineEntity> lines) {
+  private Uni<@NonNull List<@NonNull InvoiceLineTaxEntity>> loadLineTaxes(
+      List<@NonNull InvoiceLineEntity> lines) {
     if (lines.isEmpty()) {
-      return requireHydrated(
+      return requireUni(
           Uni.createFrom().item(requireHydrated(List.of(), "empty line taxes")),
           "empty line taxes result");
     }
-    List<UUID> lineIds = lines.stream().map(value -> value.id).toList();
-    return requireHydrated(
-        InvoiceLineTaxEntity.list("invoiceLineId in ?1", lineIds), "loaded line taxes");
+    List<@NonNull UUID> lineIds =
+        Objects.requireNonNull(
+            lines.stream()
+                .<@NonNull UUID>map(value -> requireHydrated(value.id, "invoice line id"))
+                .toList(),
+            "invoice line ids");
+    return requireUni(
+        InvoiceLineTaxEntity.<InvoiceLineTaxEntity>list("invoiceLineId in ?1", lineIds)
+            .map(values -> requireElements(values, "loaded line taxes")),
+        "loaded line taxes");
   }
 
   private static InvoiceDraftIdempotencyEntity binding(
@@ -219,12 +232,13 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
     return entity;
   }
 
-  private <T> Uni<T> bounded(Uni<T> operation, Duration remaining, Duration configuredTimeout) {
+  private <T extends @NonNull Object> Uni<@NonNull T> bounded(
+      Uni<@NonNull T> operation, Duration remaining, Duration configuredTimeout) {
     if (remaining.isZero() || remaining.isNegative()) {
-      return requireHydrated(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
+      return requireUni(Uni.createFrom().failure(deadlineExhausted()), "deadline failure");
     }
     ReactiveOperationBudget budget = ReactiveOperationBudget.clamp(remaining, configuredTimeout);
-    return requireHydrated(
+    return requireUni(
         operation
             .ifNoItem()
             .after(budget.timeout())
@@ -301,16 +315,35 @@ public final class InvoiceDraftRepositoryAdapter implements InvoiceDraftReposito
     return requireHydrated(List.of(), "empty violations");
   }
 
-  private static <T> T requireHydrated(@Nullable T value, String field) {
+  private static <T> @NonNull T requireHydrated(@Nullable T value, String field) {
     return Objects.requireNonNull(value, field);
   }
 
+  private static <T extends @NonNull Object> Uni<@NonNull T> requireUni(
+      @Nullable Uni<@NonNull T> value, String field) {
+    return Objects.requireNonNull(value, field);
+  }
+
+  private static <T extends @NonNull Object> List<@NonNull T> requireElements(
+      @Nullable List<? extends @Nullable T> values, String field) {
+    List<? extends @Nullable T> required = Objects.requireNonNull(values, field);
+    List<@NonNull T> result = new ArrayList<>(required.size());
+    for (@Nullable T value : required) {
+      result.add(Objects.requireNonNull(value, field + " element"));
+    }
+    return Objects.requireNonNull(List.copyOf(result), field);
+  }
+
   private static final class LoadedAggregate {
-    private List<InvoiceLineEntity> lines = requireHydrated(List.of(), "empty invoice lines");
-    private List<InvoiceLineTaxEntity> lineTaxes = requireHydrated(List.of(), "empty line taxes");
-    private List<InvoiceTaxTotalEntity> taxTotals = requireHydrated(List.of(), "empty tax totals");
-    private List<InvoicePaymentEntity> payments = requireHydrated(List.of(), "empty payments");
-    private List<InvoiceAdditionalInformationEntity> additional =
+    private List<@NonNull InvoiceLineEntity> lines =
+        requireHydrated(List.of(), "empty invoice lines");
+    private List<@NonNull InvoiceLineTaxEntity> lineTaxes =
+        requireHydrated(List.of(), "empty line taxes");
+    private List<@NonNull InvoiceTaxTotalEntity> taxTotals =
+        requireHydrated(List.of(), "empty tax totals");
+    private List<@NonNull InvoicePaymentEntity> payments =
+        requireHydrated(List.of(), "empty payments");
+    private List<@NonNull InvoiceAdditionalInformationEntity> additional =
         requireHydrated(List.of(), "empty additional information");
 
     private LoadedAggregate() {}

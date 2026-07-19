@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.NullMarked;
 import org.jspecify.annotations.Nullable;
 
@@ -21,7 +23,8 @@ public final class InvoiceDraftCalculator {
   private static final BigDecimal ZERO = Objects.requireNonNull(BigDecimal.ZERO);
   private static final int MONEY_SCALE = 2;
 
-  public Calculation calculate(Buyer buyer, List<InvoiceLine> inputs, List<Payment> payments) {
+  public Calculation calculate(
+      Buyer buyer, List<@NonNull InvoiceLine> inputs, List<@NonNull Payment> payments) {
     Objects.requireNonNull(buyer, "buyer");
     Objects.requireNonNull(inputs, "inputs");
     Objects.requireNonNull(payments, "payments");
@@ -29,8 +32,8 @@ public final class InvoiceDraftCalculator {
       throw violation("LINE_CARDINALITY_INVALID", "lines", "Line count is invalid");
     }
 
-    List<InvoiceLine> lines = new ArrayList<>(inputs.size());
-    Map<String, MutableTaxTotal> grouped = new LinkedHashMap<>();
+    List<@NonNull InvoiceLine> lines = new ArrayList<>(inputs.size());
+    Map<@NonNull String, @Nullable MutableTaxTotal> grouped = new LinkedHashMap<>();
     BigDecimal subtotal = zero();
     BigDecimal totalDiscount = zero();
     for (InvoiceLine input :
@@ -54,9 +57,15 @@ public final class InvoiceDraftCalculator {
       subtotal = subtotal.add(net);
       totalDiscount = totalDiscount.add(discount);
       String key = groupKey(input.taxSelection());
-      grouped
-          .computeIfAbsent(key, ignored -> new MutableTaxTotal(input.taxSelection()))
-          .add(base, tax);
+      @Nullable MutableTaxTotal existing = grouped.get(key);
+      MutableTaxTotal total;
+      if (existing == null) {
+        total = new MutableTaxTotal(input.taxSelection());
+        grouped.put(key, total);
+      } else {
+        total = existing;
+      }
+      total.add(base, tax);
     }
 
     subtotal = money(subtotal);
@@ -64,10 +73,11 @@ public final class InvoiceDraftCalculator {
     requireMaximum(subtotal.abs(), Integer.MAX_VALUE, "subtotalBeforeTaxes");
     requireMaximum(totalDiscount, Integer.MAX_VALUE, "totalDiscount");
 
-    List<TaxTotal> taxTotals =
+    List<@NonNull TaxTotal> taxTotals =
         grouped.values().stream()
+            .map(value -> Objects.requireNonNull(value, "tax total"))
             .sorted(Comparator.comparing(total -> total.key()))
-            .<TaxTotal>map(total -> total.toTaxTotal())
+            .<@NonNull TaxTotal>map(total -> total.toTaxTotal())
             .toList();
     BigDecimal totalTax =
         money(
@@ -97,11 +107,11 @@ public final class InvoiceDraftCalculator {
         grandTotal);
   }
 
-  private static void validatePayments(BigDecimal grandTotal, List<Payment> payments) {
+  private static void validatePayments(BigDecimal grandTotal, List<@NonNull Payment> payments) {
     if (payments.isEmpty() || payments.size() > 8) {
       throw violation("PAYMENT_CARDINALITY_INVALID", "payments", "Payment count is invalid");
     }
-    Set<java.util.UUID> methods =
+    Set<@NonNull UUID> methods =
         payments.stream()
             .map(payment -> payment.paymentMethodId())
             .collect(Collectors.toUnmodifiableSet());
@@ -109,7 +119,8 @@ public final class InvoiceDraftCalculator {
       throw violation("DUPLICATE_PAYMENT_METHOD", "payments", "Payment method is duplicated");
     }
     if (grandTotal.signum() == 0) {
-      if (payments.size() != 1 || payments.getFirst().amount().signum() != 0) {
+      if (payments.size() != 1
+          || Objects.requireNonNull(payments.getFirst(), "first payment").amount().signum() != 0) {
         throw violation("PAYMENT_SHAPE_INVALID", "payments", "Zero total needs one zero payment");
       }
     } else if (payments.stream().anyMatch(payment -> payment.amount().signum() <= 0)) {
@@ -160,8 +171,8 @@ public final class InvoiceDraftCalculator {
   }
 
   public record Calculation(
-      List<InvoiceLine> lines,
-      List<TaxTotal> taxTotals,
+      List<@NonNull InvoiceLine> lines,
+      List<@NonNull TaxTotal> taxTotals,
       BigDecimal subtotalBeforeTaxes,
       BigDecimal totalDiscount,
       BigDecimal grandTotal,
