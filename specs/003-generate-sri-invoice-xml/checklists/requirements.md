@@ -47,3 +47,8 @@
 - Clarification session 2026-07-19 resolved four material choices: per-trigger standard-profile
   evidence, canonical Base64 success content, `201 Created` versus `200 OK` result semantics, and
   compact XML bytes. Re-evaluation left all 16 checklist items passed; no marker changed.
+- Phase 0 primary-source verification confirmed that the official SRI ZIP omits its XML Signature
+  dependency and that its pinned Invoice XSD rejects the v2.33 Popular Business legend. The
+  specification now records the exact offline dependency requirement and explicit unsupported
+  Popular Business result. These corrections resolve authority conflicts without introducing a
+  pending behavior; all 16 checklist items remain passed.

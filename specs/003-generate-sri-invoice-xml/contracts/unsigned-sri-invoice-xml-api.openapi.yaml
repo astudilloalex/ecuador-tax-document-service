@@ -1,0 +1,321 @@
+openapi: 3.1.0
+info:
+  title: Ecuador Tax Document Service - Unsigned SRI Invoice XML API
+  version: 1.0.0
+  x-capability-id: unsigned-sri-invoice-xml
+  description: >-
+    Internal synchronous target contract for generating or naturally replaying exactly one
+    immutable, schema-valid, unsigned SRI Invoice XML artifact for one prepared Company-owned
+    Invoice Draft. It performs no authentication, authorization, signing, certificate access,
+    sequence allocation, SRI communication, issuance, delivery, or current fiscal-context lookup.
+servers:
+  - url: /api/v1
+tags:
+  - name: Invoice XML
+
+paths:
+  /invoice-drafts/{invoiceDraftId}/unsigned-sri-invoice-xml:
+    post:
+      tags: [Invoice XML]
+      operationId: generateUnsignedSriInvoiceXml
+      summary: Generate or return the one unsigned SRI Invoice XML artifact
+      security: []
+      description: >-
+        Accepts no request body, query parameter, Company path value, caller fiscal/XML value, or
+        caller-generated idempotency key. Natural equivalence is exactly the canonical
+        X-Company-Id plus invoiceDraftId. A matching committed artifact is returned before profile
+        evaluation, XML generation, schema validation, external access, catalog access, or current
+        date access. Any non-empty body, query input, or Idempotency-Key is INVALID_REQUEST.
+      parameters:
+        - $ref: '#/components/parameters/InvoiceDraftId'
+        - $ref: '#/components/parameters/CompanyContext'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '201':
+          description: This request conclusively committed the one immutable artifact.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnsignedSriInvoiceXmlArtifactResponse'
+        '200':
+          description: >-
+            The original committed artifact was returned as an existing replay or concurrent
+            follower. Its body values are identical to the created representation and contain no
+            replay flag.
+          headers:
+            X-Correlation-Id:
+              $ref: '#/components/headers/CorrelationId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnsignedSriInvoiceXmlArtifactResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/DraftNotFound'
+        '409':
+          $ref: '#/components/responses/SourceConflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableInvoiceXml'
+        '500':
+          $ref: '#/components/responses/InternalFailure'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+        '504':
+          $ref: '#/components/responses/RequestTimeout'
+
+components:
+  parameters:
+    InvoiceDraftId:
+      name: invoiceDraftId
+      in: path
+      required: true
+      description: Existing non-nil Invoice Draft UUID interpreted only inside X-Company-Id scope.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        Exactly one nonblank non-nil UUID. It is authoritative Company ownership context, not an
+        authentication credential, and is never accepted from or repeated in another request input.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      description: >-
+        Optional safe correlation only. One valid value may be preserved. Missing, repeated,
+        blank, unsafe, or over-length input is replaced with a safe generated identifier and never
+        changes natural equivalence.
+      schema:
+        $ref: '#/components/schemas/CorrelationIdentifier'
+
+  headers:
+    CorrelationId:
+      description: Safe preserved or generated correlation identifier.
+      schema:
+        $ref: '#/components/schemas/CorrelationIdentifier'
+    NoStore:
+      description: Sensitive fiscal artifact responses must not be cached.
+      schema:
+        type: string
+        const: no-store
+
+  schemas:
+    NonNilUuid:
+      type: string
+      format: uuid
+      pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+
+    CorrelationIdentifier:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+
+    UnsignedSriInvoiceXmlArtifactResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - invoiceXmlArtifactId
+        - invoiceDraftId
+        - fiscalPreparationId
+        - schemaVersion
+        - integrityEvidence
+        - createdAt
+        - xmlContentBase64
+      properties:
+        invoiceXmlArtifactId:
+          $ref: '#/components/schemas/NonNilUuid'
+        invoiceDraftId:
+          $ref: '#/components/schemas/NonNilUuid'
+        fiscalPreparationId:
+          $ref: '#/components/schemas/NonNilUuid'
+        schemaVersion:
+          type: string
+          const: '1.1.0'
+        integrityEvidence:
+          $ref: '#/components/schemas/XmlIntegrityEvidence'
+        createdAt:
+          type: string
+          format: date-time
+          description: Original first-commit instant; not emission, signing, receipt, or authorization time.
+        xmlContentBase64:
+          type: string
+          minLength: 4
+          maxLength: 2796204
+          contentEncoding: base64
+          pattern: '^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$'
+          description: >-
+            Canonical padded RFC 4648 standard-alphabet Base64 of the exact persisted UTF-8 XML
+            bytes. Integrity evidence describes decoded bytes, not this text or the JSON envelope.
+
+    XmlIntegrityEvidence:
+      type: object
+      additionalProperties: false
+      required: [algorithm, digest, byteLength]
+      properties:
+        algorithm:
+          type: string
+          const: SHA-256
+        digest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Lowercase hexadecimal digest of the exact decoded XML bytes.
+        byteLength:
+          type: integer
+          minimum: 1
+          maximum: 2097152
+          description: Exact decoded XML byte count.
+
+    InvoiceXmlErrorCode:
+      type: string
+      enum:
+        - COMPANY_CONTEXT_REQUIRED
+        - COMPANY_CONTEXT_INVALID
+        - INVALID_REQUEST
+        - INVOICE_DRAFT_NOT_FOUND
+        - FISCAL_PREPARATION_REQUIRED
+        - INVOICE_XML_SOURCE_INCONSISTENT
+        - INVOICE_XML_PROFILE_UNDETERMINED
+        - INVOICE_XML_PROFILE_UNSUPPORTED
+        - INVOICE_XML_SOURCE_INVALID
+        - INVOICE_XML_GENERATION_FAILED
+        - INVOICE_XML_SCHEMA_INVALID
+        - INVOICE_XML_VALIDATOR_UNAVAILABLE
+        - PERSISTENCE_FAILURE
+        - INVOICE_XML_OUTCOME_UNKNOWN
+        - REQUEST_TIMEOUT
+        - INTERNAL_ERROR
+
+    ProblemDetails:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, detail, instance, correlationId]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: Stable urn:ecuador-tax-document-service:problem identifier.
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          $ref: '#/components/schemas/InvoiceXmlErrorCode'
+        detail:
+          type: string
+          description: >-
+            Static safe English detail with no XML, fiscal value, rejected source value, parser
+            message, stack trace, SQL, path, or internal endpoint.
+        instance:
+          type: string
+          format: uri
+        correlationId:
+          $ref: '#/components/schemas/CorrelationIdentifier'
+
+  responses:
+    BadRequest:
+      description: >-
+        COMPANY_CONTEXT_REQUIRED, COMPANY_CONTEXT_INVALID, or INVALID_REQUEST. No prohibited input
+        reaches Company-owned source access or XML work.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    DraftNotFound:
+      description: >-
+        INVOICE_DRAFT_NOT_FOUND. Absence and cross-Company ownership are indistinguishable.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    SourceConflict:
+      description: FISCAL_PREPARATION_REQUIRED or INVOICE_XML_SOURCE_INCONSISTENT.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    UnprocessableInvoiceXml:
+      description: >-
+        Profile undetermined/unsupported, source invalid, or exact XSD invalid. No artifact is
+        committed and no source or XML value is disclosed.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    InternalFailure:
+      description: INVOICE_XML_GENERATION_FAILED or safely classified INTERNAL_ERROR.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    Unavailable:
+      description: >-
+        INVOICE_XML_VALIDATOR_UNAVAILABLE, PERSISTENCE_FAILURE, or
+        INVOICE_XML_OUTCOME_UNKNOWN. Validation is never bypassed.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+    RequestTimeout:
+      description: >-
+        REQUEST_TIMEOUT. Zero artifact state is claimed only when commit did not begin or rollback
+        is confirmed; otherwise the same natural request must be replayed.
+      headers:
+        X-Correlation-Id:
+          $ref: '#/components/headers/CorrelationId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'

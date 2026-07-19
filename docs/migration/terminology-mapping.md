@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-12
 
-**Last verified**: 2026-07-18
+**Last verified**: 2026-07-19
 
 **Authority**: `.specify/memory/constitution.md` v2.0.1
 
@@ -42,11 +42,18 @@ otherwise.
 | `código numérico` | Numeric Code | Target Domain | Immutable system-generated eight-digit Access Key component assigned once to a Fiscal Preparation and never supplied by the caller. |
 | `clave de acceso` | Access Key | Target Domain | Immutable 49-digit fiscal identity generated and validated under SRI Offline Technical Sheet v2.33. Feature 001 correctly excluded it from Invoice Draft creation. |
 | — (no governing legacy term) | Fiscal Source Evidence | Target Domain | Immutable value recording source authority, source revision, applicable effective interval, and observation instant for the authoritative facts used by one Fiscal Preparation. |
+| — (no governing legacy term) | Standard Invoice XML Profile Evidence | Target Domain | Immutable Fiscal Preparation evidence selecting `STANDARD_DOMESTIC_INVOICE_1_1_0`, identifying its governed trigger set, and recording one conclusive or indeterminate assessment for every specialized-profile trigger. |
+| — (no governing legacy term) | Specialized Profile Trigger Assessment | Target Domain | One `APPLIES`, `DOES_NOT_APPLY`, or `INDETERMINATE` decision for a named trigger governed by the committed standard-profile evidence. It is never inferred during XML generation. |
+| — (no governing legacy term) | Unsigned SRI Invoice XML Artifact | Target Domain | The one immutable, schema-valid, unsigned UTF-8 Invoice XML byte sequence for a prepared Invoice Draft, together with stable source identity, integrity evidence, and creation instant. It is not signed, submitted, received, authorized, or issued. |
+| — (no governing legacy term) | XML Integrity Evidence | Target Domain | The fixed `SHA-256` algorithm identifier, lowercase hexadecimal digest, and byte length of the exact validated and persisted unsigned XML bytes. |
+| `factura_V1.1.0.xsd` | Official Invoice Schema | SRI Adapter Only | The exact SRI Invoice XSD `1.1.0` and its pinned authoritative offline dependency closure. It is validation authority, not a domain aggregate or current runtime catalog. |
+| `factura`, `infoTributaria`, `infoFactura`, `detalles`, `detalle`, `impuestos`, `pagos`, `infoAdicional`, `campoAdicional` | Exact official SRI XML element names | SRI Adapter Only | These case-sensitive official tags remain unchanged only inside the SRI XML adapter and schema fixtures; they do not authorize Spanish production names elsewhere. |
 
 ## Feature References
 
 - `specs/001-create-invoice-draft/spec.md`
 - `specs/002-prepare-invoice-issuance/spec.md`
+- `specs/003-generate-sri-invoice-xml/spec.md`
 
 ## Feature 001 Historical Classification Verification — 2026-07-18
 
@@ -72,3 +79,12 @@ semantics remain unchanged where SRI v2.33 governs them. This registration autho
 bounded pre-XML Fiscal Preparation outcome; it does not authorize master-data administration,
 baseline administration, XML generation, signing, SRI communication, or another excluded side
 effect.
+
+## Feature 003 Target-Domain Registration — 2026-07-19
+
+Feature 003 introduces Standard Invoice XML Profile Evidence, Specialized Profile Trigger
+Assessment, Unsigned SRI Invoice XML Artifact, XML Integrity Evidence, and Official Invoice Schema
+within the classifications above. Exact official SRI XML tags remain confined to the SRI adapter.
+The artifact is the immutable unsigned input intended for a separately approved signing feature;
+its existence never means that an Invoice is signed, submitted, received, authorized, fiscally
+issued, or legally valid as an authorized electronic document.

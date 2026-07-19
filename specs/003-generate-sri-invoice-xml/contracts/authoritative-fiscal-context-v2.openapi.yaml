@@ -1,0 +1,386 @@
+openapi: 3.1.0
+info:
+  title: Authoritative Fiscal Context Consumer Contract
+  version: 2.0.0
+  x-capability-id: authoritative-fiscal-context
+  x-accountable-role: Fiscal Context Provider Owner
+  x-consumer-contract-owner: Feature 002 Contract Owner
+  x-dependency-status: proposed-blocking-approval
+  x-replaces-consumer-contract: >-
+    specs/002-prepare-invoice-issuance/contracts/authoritative-fiscal-context.openapi.yaml
+  x-production-deployment-prerequisite: >-
+    The Fiscal Context Provider Owner and Feature 002 contract owner must approve and deploy this
+    complete evidence contract before Feature 003 first-generation acceptance. Existing 1.0.0
+    Fiscal Preparations are never inferred or rewritten.
+  description: >-
+    Proposed breaking evolution of the read-only consumer contract used by Feature 002. Version
+    2.0.0 adds complete, versioned Standard Invoice XML Profile Evidence so Feature 002 can commit
+    the provider's explicit per-trigger decisions with Fiscal Preparation. Feature 003 never calls
+    this provider; it consumes only the persisted result. The provider continues to own
+    authoritative fiscal relationships and does not allocate a sequence, Numeric Code, Access Key,
+    XML artifact, or signing state.
+servers:
+  - url: https://configured-authoritative-fiscal-context.invalid
+    description: >-
+      Deliberately non-routable planning placeholder. Runtime configuration owns the actual
+      provider destination; Feature 003 has no runtime provider destination.
+
+paths:
+  /fiscal-context-resolutions/invoice-issuance:
+    post:
+      operationId: resolveAuthoritativeInvoiceFiscalContextV2
+      summary: Resolve authoritative fiscal facts and complete Invoice profile evidence
+      security: []
+      description: >-
+        Structured read-only resolution. It creates, changes, reserves, and allocates nothing.
+        APPLIES and INDETERMINATE trigger assessments are valid evidence responses and are persisted
+        without inference; they do not mean Feature 003 supports the resulting profile.
+      parameters:
+        - $ref: '#/components/parameters/CompanyContext'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FiscalContextSelection'
+      responses:
+        '200':
+          description: >-
+            One complete, effective, versioned fiscal context with all fourteen profile-trigger
+            assessments, including conclusive unsupported or indeterminate decisions when true.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthoritativeFiscalContext'
+        '404':
+          description: No authoritative context exists for the exact selection.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '409':
+          description: Ambiguous or internally inconsistent authoritative relationship.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '422':
+          description: >-
+            The selection is not eligible for any Invoice issuance context or the provider cannot
+            supply a valid authoritative response. Specialized-profile APPLIES evidence alone does
+            not require this response.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '503':
+          description: Provider unavailable; Feature 002 maps safely and commits no preparation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+        '504':
+          description: Provider deadline expired; Feature 002 commits no preparation.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProviderProblem'
+
+components:
+  parameters:
+    CompanyContext:
+      name: X-Company-Id
+      in: header
+      required: true
+      description: >-
+        Exact canonical non-nil Company UUID forwarded by Feature 002 as business selection
+        context, never copied into the JSON body and never treated as authentication.
+      schema:
+        $ref: '#/components/schemas/NonNilUuid'
+    CorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: true
+      description: Safe correlation only; it never changes the resolved evidence.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+        pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$'
+
+  schemas:
+    NonNilUuid:
+      type: string
+      format: uuid
+      pattern: '^(?!00000000-0000-0000-0000-000000000000$)[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$'
+
+    FiscalContextSelection:
+      type: object
+      additionalProperties: false
+      required: [emissionPointId, emissionDate, documentTypeCode]
+      properties:
+        emissionPointId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionDate:
+          type: string
+          format: date
+          description: Exact unchanged Invoice Draft Ecuador civil date.
+        documentTypeCode:
+          type: string
+          const: '01'
+
+    AuthoritativeFiscalContext:
+      type: object
+      additionalProperties: false
+      required:
+        - issuerReference
+        - issuerRuc
+        - legalName
+        - headOfficeAddress
+        - accountingRequired
+        - rimpeClassification
+        - establishmentReference
+        - establishmentCode
+        - establishmentAddress
+        - emissionPointId
+        - emissionPointCode
+        - environmentCode
+        - documentTypeCode
+        - emissionTypeCode
+        - invoiceIssuanceEligible
+        - standardInvoiceXmlProfileEvidence
+        - sourceEvidence
+      properties:
+        issuerReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        issuerRuc:
+          type: string
+          pattern: '^[0-9]{13}$'
+        legalName:
+          $ref: '#/components/schemas/FiscalText'
+        commercialName:
+          $ref: '#/components/schemas/FiscalText'
+        headOfficeAddress:
+          $ref: '#/components/schemas/FiscalText'
+        accountingRequired:
+          type: boolean
+          description: Authoritative accounting obligation; it has no resolution identifier.
+        specialTaxpayer:
+          $ref: '#/components/schemas/SpecialTaxpayerDesignation'
+        withholdingAgent:
+          $ref: '#/components/schemas/WithholdingAgentDesignation'
+        rimpeClassification:
+          type: string
+          enum: [NONE, RIMPE_CONTRIBUTOR, POPULAR_BUSINESS]
+          description: >-
+            Truthful authoritative classification. POPULAR_BUSINESS remains valid provider
+            evidence even though Feature 003 rejects it under the pinned Invoice XSD 1.1.0.
+        largeContributor:
+          $ref: '#/components/schemas/LargeContributorDesignation'
+        establishmentReference:
+          $ref: '#/components/schemas/OpaqueReference'
+        establishmentCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        establishmentAddress:
+          $ref: '#/components/schemas/FiscalText'
+        emissionPointId:
+          $ref: '#/components/schemas/NonNilUuid'
+        emissionPointCode:
+          type: string
+          pattern: '^[0-9]{3}$'
+        environmentCode:
+          type: string
+          enum: ['1', '2']
+        documentTypeCode:
+          type: string
+          const: '01'
+        emissionTypeCode:
+          type: string
+          const: '1'
+        invoiceIssuanceEligible:
+          type: boolean
+          const: true
+          description: >-
+            Generic Invoice issuance eligibility retained from 1.0.0. It never substitutes for
+            the complete profile evidence.
+        standardInvoiceXmlProfileEvidence:
+          $ref: '#/components/schemas/StandardInvoiceXmlProfileEvidence'
+        sourceEvidence:
+          $ref: '#/components/schemas/SourceEvidence'
+
+    StandardInvoiceXmlProfileEvidence:
+      type: object
+      additionalProperties: false
+      required:
+        - profile
+        - technicalRuleId
+        - technicalRuleModifiedOn
+        - governedTriggerSetId
+        - triggerAssessments
+      properties:
+        profile:
+          type: string
+          const: STANDARD_DOMESTIC_INVOICE_1_1_0
+        technicalRuleId:
+          type: string
+          const: SRI-OFFLINE-2.33
+        technicalRuleModifiedOn:
+          type: string
+          format: date
+          const: '2026-07-13'
+        governedTriggerSetId:
+          type: string
+          const: SRI-OFFLINE-2.33-INVOICE-1.1.0-TRIGGERS-V1
+          description: Versioned exhaustive set understood by Feature 003.
+        triggerAssessments:
+          $ref: '#/components/schemas/SpecializedProfileTriggerAssessments'
+
+    SpecializedProfileTriggerAssessments:
+      type: object
+      additionalProperties: false
+      required:
+        - export
+        - reimbursement
+        - subsidy
+        - thirdPartyCharge
+        - deliveryGuideReplacement
+        - fuelSale
+        - presumptiveWithholding
+        - commercialTransport
+        - constructionMaterial
+        - fiscalMachine
+        - negotiableInvoice
+        - plasticBagDelivery
+        - automaticIvaRefund
+        - otherMandatoryExtension
+      properties:
+        export:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        reimbursement:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        subsidy:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        thirdPartyCharge:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        deliveryGuideReplacement:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        fuelSale:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        presumptiveWithholding:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        commercialTransport:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        constructionMaterial:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        fiscalMachine:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        negotiableInvoice:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        plasticBagDelivery:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        automaticIvaRefund:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+        otherMandatoryExtension:
+          $ref: '#/components/schemas/ProfileTriggerAssessment'
+
+    ProfileTriggerAssessment:
+      type: string
+      enum: [APPLIES, DOES_NOT_APPLY, INDETERMINATE]
+      description: >-
+        Explicit provider decision. Missing is invalid contract data; INDETERMINATE is a complete
+        but inconclusive decision and must be persisted as such.
+
+    SourceEvidence:
+      type: object
+      additionalProperties: false
+      required: [authority, revision, effectiveFrom, observedAt]
+      properties:
+        authority:
+          type: string
+          minLength: 1
+          maxLength: 128
+        revision:
+          type: string
+          minLength: 1
+          maxLength: 128
+        effectiveFrom:
+          type: string
+          format: date
+          description: Inclusive Ecuador civil-date start.
+        effectiveThrough:
+          type: string
+          format: date
+          description: Inclusive end; omission means open-ended.
+        observedAt:
+          type: string
+          format: date-time
+
+    OpaqueReference:
+      type: string
+      minLength: 1
+      maxLength: 128
+
+    FiscalText:
+      type: string
+      minLength: 1
+      maxLength: 300
+
+    SpecialTaxpayerDesignation:
+      type: object
+      additionalProperties: false
+      description: >-
+        Applicable Special Taxpayer designation already representable by Invoice XSD 1.1.0.
+        Omission means it does not apply.
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          pattern: '^[A-Za-z0-9]{3,13}$'
+
+    WithholdingAgentDesignation:
+      type: object
+      additionalProperties: false
+      description: >-
+        Applicable Withholding Agent designation in XML-ready form: at most eight digits, with no
+        leading zero except the single value 0. Omission means it does not apply.
+      required: [resolutionIdentifier]
+      properties:
+        resolutionIdentifier:
+          type: string
+          pattern: '^(0|[1-9][0-9]{0,7})$'
+
+    LargeContributorDesignation:
+      type: object
+      additionalProperties: false
+      description: >-
+        Complete applicable pair. The fixed legend becomes campoAdicional's nombre attribute and
+        the committed resolution identifier becomes its text. Omission means it does not apply.
+      required: [resolutionIdentifier, requiredLegend]
+      properties:
+        resolutionIdentifier:
+          type: string
+          minLength: 1
+          maxLength: 64
+        requiredLegend:
+          type: string
+          const: Gran Contribuyente
+
+    ProviderProblem:
+      type: object
+      additionalProperties: true
+      required: [code]
+      properties:
+        code:
+          type: string
+          enum:
+            - FISCAL_CONTEXT_NOT_FOUND
+            - FISCAL_CONTEXT_INEFFECTIVE
+            - FISCAL_CONTEXT_INELIGIBLE
+            - FISCAL_CONTEXT_AMBIGUOUS
+            - FISCAL_CONTEXT_INVALID
+            - FISCAL_CONTEXT_UNSUPPORTED
+            - FISCAL_CONTEXT_INCONSISTENT
+            - PROVIDER_UNAVAILABLE
+            - PROVIDER_TIMEOUT

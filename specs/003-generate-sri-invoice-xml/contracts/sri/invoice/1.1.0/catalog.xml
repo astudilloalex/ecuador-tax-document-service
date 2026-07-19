@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<catalog xmlns="urn:oasis:names:tc:entity:xmlns:xml:catalog" prefer="public">
+  <uri name="xmldsig-core-schema.xsd" uri="xmldsig-core-schema.xsd"/>
+  <uriSuffix uriSuffix="xmldsig-core-schema.xsd" uri="xmldsig-core-schema.xsd"/>
+  <public publicId="-//W3C//DTD XMLSchema 200102//EN" uri="XMLSchema.dtd"/>
+  <system systemId="http://www.w3.org/2001/XMLSchema.dtd" uri="XMLSchema.dtd"/>
+  <systemSuffix systemIdSuffix="/XMLSchema.dtd" uri="XMLSchema.dtd"/>
+  <public publicId="datatypes" uri="datatypes.dtd"/>
+  <system systemId="datatypes.dtd" uri="datatypes.dtd"/>
+  <systemSuffix systemIdSuffix="/datatypes.dtd" uri="datatypes.dtd"/>
+</catalog>

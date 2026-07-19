@@ -61,8 +61,8 @@ deliver, replace, or mutate the Invoice Draft or its Fiscal Preparation.
   specialized profile or field may apply.
 - Deterministic generation of the official SRI Invoice XML `1.1.0` representation exclusively from
   persisted commercial, calculated, fiscal-identity, and Fiscal Context Snapshot values.
-- Official conditional representation of Special Taxpayer, Withholding Agent, RIMPE, and Large
-  Contributor designations when their complete committed evidence applies.
+- Official conditional representation of Special Taxpayer, Withholding Agent, supported RIMPE
+  Contributor, and Large Contributor designations when their complete committed evidence applies.
 - Validation of the complete unsigned XML against the exact official SRI Invoice XSD `1.1.0`
   before artifact creation.
 - All-or-nothing persistence of the exact validated UTF-8 byte sequence, schema version, source
@@ -88,6 +88,8 @@ deliver, replace, or mutate the Invoice Draft or its Fiscal Preparation.
 - Fiscal-machine brand, model, or serial-number extensions.
 - Negotiable-invoice requirements or any other mandatory specialized extension for which the
   committed source lacks complete approved fields.
+- RIMPE Popular Business while the pinned official Invoice XSD `1.1.0` rejects its mandatory v2.33
+  legend; this classification fails closed rather than weakening or modifying the official schema.
 - Credit Notes, Debit Notes, Withholding Tax Documents, Delivery Guides, Purchase Settlements, or
   any tax document other than Invoice code `01`.
 - Certificate, PKCS#12, certificate-password, or private-key management or access.
@@ -112,7 +114,7 @@ deliver, replace, or mutate the Invoice Draft or its Fiscal Preparation.
 |-----------|---------------------------------------|---------------------------|
 | Applicable Ecuadorian legislation | [Regulation for Sales, Withholding, and Complementary Documents, consolidated through Executive Decree 99, Official Register 467, 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf), especially Invoice-content, numbering, electronic-document, retention, and issuer-responsibility provisions; [current SRI electronic-invoicing legal index](https://www.sri.gob.ec/facturacion-electronica), reviewed 2026-07-19 | Establishes the legal Invoice content and distinguishes an unsigned pre-submission artifact from a signed, authorized electronic tax document. |
 | Official SRI technical documentation | [Technical Sheet for Offline Electronic Tax Documents, v2.33, updated July 2026 and modified 2026-07-13](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/5a547488-80f3-4966-a2a4-841f2e951986/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.33.pdf), section 5.1, Annex 3 pages 65–68, and applicable Annexes 11, 12, 13, 16, and 18–25 | Governs XSD conformance, Invoice XML `1.1.0`, official elements and ordering, two-to-six-decimal quantity and unit price, conditional designations, and specialized-profile requirements. |
-| Official SRI schema artifact | [SRI Invoice XML and XSD bundle, published February 2022](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/05546998-6f29-4870-be3b-62650f312a6c/XML%20y%20XSD%20Factura.zip), specifically the official Invoice schema version `1.1.0` and its required dependencies | Governs machine-verifiable structure, sequence, cardinality, lexical constraints, and root attributes. The implementation plan must record the exact selected file path and cryptographic digest before use. |
+| Official SRI schema artifact | [SRI Invoice XML and XSD bundle, published February 2022](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/05546998-6f29-4870-be3b-62650f312a6c/XML%20y%20XSD%20Factura.zip), specifically the official Invoice schema version `1.1.0` | Governs machine-verifiable structure, sequence, cardinality, lexical constraints, and root attributes. The XSD imports `xmldsig-core-schema.xsd`, but the SRI ZIP does not contain that dependency; planning must pin its exact authoritative offline dependency chain and record every file's path, byte length, and cryptographic digest. |
 | Project constitution | `.specify/memory/constitution.md` v2.0.1, approved 2026-07-16 | Governs official-source precedence, English terminology, Company context, fiscal correctness, sensitive data, all-or-nothing outcomes, port-bound XML work, execution safety, and no-cache scope. |
 | Approved target source contract | `specs/001-create-invoice-draft/spec.md` and `src/main/resources/META-INF/openapi.yaml`, Invoice Draft contract as of 2026-07-19 | Defines the complete persisted Company-owned Invoice Draft, buyer, ordered lines, IVA selections, grouped totals, payments, additional information, exact decimal values, USD currency, and immutable dates and timestamps. |
 | Approved target fiscal contract | `specs/002-prepare-invoice-issuance/spec.md` and `specs/002-prepare-invoice-issuance/contracts/authoritative-fiscal-context.openapi.yaml` v1.0.0 | Defines the immutable Fiscal Preparation, Fiscal Context Snapshot, Official Sequential Number, Numeric Code, Access Key, fiscal designations, and source evidence. Its generic invoice-eligibility assertion is not sufficient by itself for this feature's standard XML profile. |
@@ -139,6 +141,16 @@ deliver, replace, or mutate the Invoice Draft or its Fiscal Preparation.
 - The official XSD bundle is published separately from Technical Sheet v2.33. The exact Invoice
   XSD `1.1.0` governs structural validation, while v2.33 governs current conditional obligations
   and specialized-profile eligibility. Both must pass; neither may be weakened to match the other.
+- Technical Sheet v2.33 Annex 22 requires `CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE` for
+  RIMPE Popular Business, while the pinned official `factura_V1.1.0.xsd` accepts only
+  `CONTRIBUYENTE RÉGIMEN RIMPE`. Because this feature requires both exact-XSD validity and
+  fail-closed handling, `POPULAR_BUSINESS` is schema-incompatible and returns
+  `INVOICE_XML_PROFILE_UNSUPPORTED` before generation. The schema is not edited, relaxed, or
+  replaced.
+- The official SRI ZIP omits the relative `xmldsig-core-schema.xsd` imported by
+  `factura_V1.1.0.xsd`. The implementation plan must pin the dated authoritative W3C XML Signature
+  schema and its DTD dependency chain as immutable offline resources, resolve them locally, and
+  prohibit runtime network resolution.
 - The official schema permits optional fields that the current Invoice Draft does not own. This
   feature omits an optional field when it has no persisted authoritative source and rejects the
   request when that field is mandatory for the applicable profile.
@@ -206,9 +218,9 @@ content.
    currency.
 7. **Given** the draft does not support tips, **when** XML is generated, **then** `propina` is
    exactly `0.00`, `importeTotal` remains the persisted grand total, and payments remain unchanged.
-8. **Given** applicable complete Special Taxpayer, Withholding Agent, RIMPE, or Large Contributor
-   evidence, **when** XML is generated, **then** each required official field or legend is present
-   in its official location and representation using only committed evidence.
+8. **Given** applicable complete Special Taxpayer, Withholding Agent, supported RIMPE Contributor,
+   or Large Contributor evidence, **when** XML is generated, **then** each required official field
+   or legend is present in its official location and representation using only committed evidence.
 9. **Given** none of those conditional designations applies, **when** XML is generated, **then** the
    corresponding optional elements are absent rather than populated with invented empty, false, or
    placeholder values.
@@ -288,7 +300,8 @@ mutation, and zero excluded side effects.
    mandatory-extension decision, **when** generation is requested, **then** the standard profile is
    not inferred and no artifact is created.
 6. **Given** committed evidence that an export, reimbursement, subsidy, transport, construction,
-   fuel, fiscal-machine, delivery-guide replacement, or other unsupported mandatory profile applies,
+   fuel, presumptive-withholding, plastic-bag, fiscal-machine, delivery-guide replacement, or other
+   unsupported mandatory profile applies,
    **when** generation is requested, **then** the unsupported-profile outcome is returned before XML
    generation.
 7. **Given** a mandatory ordinary-profile value is absent, incomplete, out of the XSD envelope, or
@@ -321,6 +334,8 @@ mutation, and zero excluded side effects.
 - A Special Taxpayer or Withholding Agent designation without its required resolution, a RIMPE
   value outside the committed enumeration, or a Large Contributor designation missing either its
   required legend or resolution fails closed.
+- `POPULAR_BUSINESS` returns `INVOICE_XML_PROFILE_UNSUPPORTED` before XML generation because its
+  mandatory v2.33 legend cannot pass the pinned unmodified official Invoice XSD `1.1.0`.
 - If 15 persisted Additional Information entries already consume the official cardinality and a
   mandatory Large Contributor entry also applies, generation fails; no entry is dropped,
   overwritten, merged, or truncated.
@@ -442,18 +457,21 @@ mutation, and zero excluded side effects.
   `INDETERMINATE` result, MUST return `INVOICE_XML_PROFILE_UNDETERMINED` before XML generation and
   create no artifact.
 - **FR-027**: An `APPLIES` assessment for export, reimbursement, subsidy, third-party charge,
-  replacement of a delivery guide, fuel/presumptive-withholding case, commercial-transport
-  requirement, construction-material requirement, fiscal-machine requirement, negotiable-invoice
-  requirement, automatic IVA-refund requirement, or any other unsupported mandatory extension
-  governed by the referenced rule version MUST return `INVOICE_XML_PROFILE_UNSUPPORTED` before XML
-  generation.
+  replacement of a delivery guide, fuel-specific case, presumptive-withholding case,
+  commercial-transport requirement, construction-material requirement, fiscal-machine requirement,
+  negotiable-invoice requirement, plastic-bag requirement, automatic IVA-refund requirement, or
+  any other unsupported mandatory extension
+  governed by the referenced rule version, and a committed RIMPE classification of
+  `POPULAR_BUSINESS`, MUST return `INVOICE_XML_PROFILE_UNSUPPORTED` before XML generation.
 - **FR-028**: The standard-profile evidence MUST be part of immutable fiscal evidence committed
   before this operation and MUST identify the governing SRI technical rule version, its complete
   governed-trigger set, the separate assessment for each trigger, applicable effective evidence,
   and source revision. Generation MUST NOT add, collapse, infer, or repair that evidence.
-- **FR-029**: Special Taxpayer, Withholding Agent, RIMPE, and Large Contributor designations are
-  supported conditional attributes of the ordinary profile and MUST NOT by themselves classify an
-  otherwise eligible Invoice as an unsupported specialized profile.
+- **FR-029**: Special Taxpayer, Withholding Agent, RIMPE Contributor, and Large Contributor
+  designations are supported conditional attributes of the ordinary profile and MUST NOT by
+  themselves classify an otherwise eligible Invoice as an unsupported specialized profile. RIMPE
+  Popular Business is the explicit exception in FR-027 because its mandatory v2.33 representation
+  is incompatible with the pinned official Invoice XSD `1.1.0`.
 - **FR-030**: Every mandatory value for the eligible standard profile MUST already exist in the
   persisted sources with a representation that can satisfy official rules without changing its
   business meaning. Missing, incomplete, or unrepresentable mandatory source data MUST return
@@ -534,9 +552,9 @@ mutation, and zero excluded side effects.
   to `agenteRetencion` in the exact official numeric representation; otherwise that element MUST be
   absent.
 - **FR-054**: RIMPE classification `RIMPE_CONTRIBUTOR` MUST map to exact text
-  `CONTRIBUYENTE RÉGIMEN RIMPE`; `POPULAR_BUSINESS` MUST map to exact text
-  `CONTRIBUYENTE NEGOCIO POPULAR - RÉGIMEN RIMPE`; `NONE` MUST omit
-  `contribuyenteRimpe`.
+  `CONTRIBUYENTE RÉGIMEN RIMPE`; `NONE` MUST omit `contribuyenteRimpe`;
+  `POPULAR_BUSINESS` MUST fail under FR-027 before XML generation and MUST NOT emit an altered,
+  omitted, or schema-invalid substitute legend.
 - **FR-055**: An optional XML element MUST be omitted when its authoritative persisted source is
   absent. The generator MUST NOT use empty elements, placeholders, defaults, current values, or
   inferred values unless this specification explicitly requires the fixed value.
@@ -700,8 +718,10 @@ mutation, and zero excluded side effects.
   monetary calculation or rounding decision.
 - **DR-008**: `propina=0.00` is a required XML constant for the unsupported-tip profile and does not
   participate in the persisted grand total calculation.
-- **DR-009**: `USD` → `DOLAR`, boolean → `SI`/`NO`, Ecuador civil date → `dd/MM/yyyy`, and RIMPE enum
-  → exact official legend are SRI-representation mappings only; source values remain unchanged.
+- **DR-009**: `USD` → `DOLAR`, boolean → `SI`/`NO`, Ecuador civil date → `dd/MM/yyyy`, and supported
+  RIMPE Contributor → exact official legend are SRI-representation mappings only; source values
+  remain unchanged. Popular Business has no schema-valid mapping under the pinned official XSD and
+  fails before generation.
 - **DR-010**: Text escaping changes XML syntax bytes but not the parsed business value. Escaping is
   neither business-text normalization nor permission to alter unsupported characters.
 - **DR-011**: The artifact digest identifies exact unsigned bytes, not semantic XML equivalence.
@@ -726,7 +746,7 @@ mutation, and zero excluded side effects.
 | `infoTributaria` | `ambiente`, `tipoEmision` | Fiscal Context Snapshot environment and emission-type codes |
 | `infoTributaria` | `razonSocial`, optional `nombreComercial`, `ruc`, `dirMatriz` | Committed Legal Name, optional Commercial Name, Issuer RUC, and Head Office Address |
 | `infoTributaria` | `claveAcceso`, `codDoc`, `estab`, `ptoEmi`, `secuencial` | Committed Access Key, `01`, Establishment Code, Emission Point Code, and Official Sequential Number |
-| `infoTributaria` | optional `agenteRetencion`, optional `contribuyenteRimpe` | Complete Withholding Agent evidence and exact RIMPE legend mapping |
+| `infoTributaria` | optional `agenteRetencion`, optional `contribuyenteRimpe` | Complete Withholding Agent evidence and exact supported RIMPE Contributor legend mapping; Popular Business fails before generation |
 | `infoFactura` | `fechaEmision`, `dirEstablecimiento` | Persisted emission date formatted `dd/MM/yyyy`; committed Establishment Address |
 | `infoFactura` | optional `contribuyenteEspecial`, `obligadoContabilidad` | Complete Special Taxpayer resolution; committed boolean mapped to `SI`/`NO` |
 | `infoFactura` | buyer fields | Persisted buyer identification type, Legal Name, identification, and optional address |
@@ -793,7 +813,8 @@ mutation, and zero excluded side effects.
   vector produces its specified failure before XML generation and leaves zero artifact state.
 - **SC-009**: Every generic, missing, incomplete, absent-trigger, or `INDETERMINATE`
   profile-evidence vector returns `INVOICE_XML_PROFILE_UNDETERMINED`; every governed trigger marked
-  `APPLIES` returns `INVOICE_XML_PROFILE_UNSUPPORTED`; none builds or stores XML.
+  `APPLIES` and every `POPULAR_BUSINESS` classification returns
+  `INVOICE_XML_PROFILE_UNSUPPORTED`; none builds or stores XML.
 - **SC-010**: Every XML metacharacter and approved Unicode fixture round-trips to its exact persisted
   text after parsing, with zero truncated, silently replaced, normalized, or double-escaped values.
 - **SC-011**: Every numeric fixture uses plain official representation: quantity and unit price have
@@ -839,10 +860,12 @@ mutation, and zero excluded side effects.
   preparation lacking the new evidence remains readable but returns
   `INVOICE_XML_PROFILE_UNDETERMINED` for first generation.
 - **Dependency**: The official SRI Invoice XML and XSD bundle published February 2022 supplies the
-  exact `1.1.0` schema artifact and dependencies; SRI Technical Sheet v2.33, modified 2026-07-13,
-  supplies current conditional and specialized-profile rules. Planning must preserve an approved
-  repository copy of the exact schema and record its source URL, retrieval date, file path, byte
-  length, and SHA-256 digest. Production validation must not depend on live SRI-site availability.
+  exact `1.1.0` schema artifact but omits its declared XML Signature dependency; SRI Technical Sheet
+  v2.33, modified 2026-07-13, supplies current conditional and specialized-profile rules. Planning
+  must preserve an approved repository copy of the exact schema, pin the dated authoritative W3C
+  dependency chain as offline resources, and record every source URL, retrieval date, file path,
+  byte length, and SHA-256 digest. Production validation must not depend on SRI or W3C site
+  availability.
 - **Assumption**: Optional buyer email and telephone are not automatically invented as
   `campoAdicional` values; only persisted Additional Information and mandatory committed Large
   Contributor evidence populate `infoAdicional`. — **Basis**: The ordinary official schema has no
