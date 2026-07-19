@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftResult;
 import com.alexastudillo.taxdocument.application.invoicedraft.CreateInvoiceDraftUseCase;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -46,13 +47,12 @@ public final class InvoiceDraftResource {
 
   @POST
   public Uni<Response> create(JsonNode decodedRequest) {
-    Uni<CreateInvoiceDraftResult> application =
-        Uni.createFrom()
-            .item(() -> bind(decodedRequest))
-            .onItem()
-            .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
-            .onItem()
-            .transformToUni(useCase::create);
+    Uni<CreateInvoiceDraftResult> application = Uni.createFrom()
+        .item(() -> bind(decodedRequest))
+        .onItem()
+        .transform(mapperRequest -> mapper.toCommand(mapperRequest, state))
+        .onItem()
+        .transformToUni(useCase::create);
     return deadlineHandler
         .race(application, state)
         .onItem()

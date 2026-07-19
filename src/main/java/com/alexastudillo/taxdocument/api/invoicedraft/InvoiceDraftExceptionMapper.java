@@ -1,5 +1,6 @@
 package com.alexastudillo.taxdocument.api.invoicedraft;
 
+import com.alexastudillo.taxdocument.api.invoicedraft.telemetry.InvoiceDraftTelemetryPort;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftApplicationException;
 import com.alexastudillo.taxdocument.application.invoicedraft.InvoiceDraftFailure;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -34,16 +35,15 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     state.acceptedStatus(mapping.status());
     telemetry.failed(state, telemetryOutcome(mapping), mapping.status());
     List<ProblemDetails.Violation> violations = mapping.violations();
-    ProblemDetails problem =
-        new ProblemDetails(
-            URI.create("urn:ecuador-tax-document-service:problem:" + mapping.code().toLowerCase()),
-            mapping.title(),
-            mapping.status(),
-            mapping.code(),
-            mapping.detail(),
-            URI.create("/api/v1/invoice-drafts"),
-            correlation,
-            violations.isEmpty() ? null : violations);
+    ProblemDetails problem = new ProblemDetails(
+        URI.create("urn:ecuador-tax-document-service:problem:" + mapping.code().toLowerCase()),
+        mapping.title(),
+        mapping.status(),
+        mapping.code(),
+        mapping.detail(),
+        URI.create("/api/v1/invoice-drafts"),
+        correlation,
+        violations.isEmpty() ? null : violations);
     return Response.status(mapping.status())
         .type(PROBLEM_JSON)
         .header("X-Correlation-Id", correlation)
@@ -68,17 +68,14 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
     if (exception instanceof InvoiceDraftApplicationException application) {
       InvoiceDraftFailure failure = application.failure();
       int status = status(failure.code());
-      List<ProblemDetails.Violation> violations =
-          failure.violations().stream()
-              .<ProblemDetails.Violation>map(
-                  value ->
-                      new ProblemDetails.Violation(
-                          value.code(),
-                          value.field(),
-                          value.validationStage(),
-                          value.maximum(),
-                          value.countingUnit()))
-              .toList();
+      List<ProblemDetails.Violation> violations = failure.violations().stream().<ProblemDetails.Violation>map(
+          value -> new ProblemDetails.Violation(
+              value.code(),
+              value.field(),
+              value.validationStage(),
+              value.maximum(),
+              value.countingUnit()))
+          .toList();
       return new Mapping(
           status,
           failure.code().name(),
@@ -128,7 +125,7 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
           "IDEMPOTENCY_KEY_INVALID",
           "IDEMPOTENCY_KEY_MULTIPLE",
           "INVALID_REQUEST" ->
-          "Invalid request";
+        "Invalid request";
       case "PROHIBITED_CALCULATED_FIELD", "BUSINESS_VALIDATION_FAILED" -> "Validation failed";
       case "IDEMPOTENCY_CONFLICT" -> "Idempotency conflict";
       case "REQUEST_PAYLOAD_TOO_LARGE" -> "Payload too large";
@@ -143,5 +140,6 @@ public final class InvoiceDraftExceptionMapper implements ExceptionMapper<Throwa
       String code,
       String title,
       String detail,
-      List<ProblemDetails.Violation> violations) {}
+      List<ProblemDetails.Violation> violations) {
+  }
 }
