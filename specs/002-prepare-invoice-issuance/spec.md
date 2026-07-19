@@ -82,7 +82,7 @@ The Invoice Draft and all of its commercial content remain unchanged.
 | Official SRI technical documentation | [Technical Sheet for Offline Electronic Tax Documents, v2.33, updated July 2026, modification dated 2026-07-13](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/5a547488-80f3-4966-a2a4-841f2e951986/FICHA%20TE%CC%81CNICA%20COMPROBANTES%20ELECTRO%CC%81NICOS%20ESQUEMA%20OFFLINE%20Versio%CC%81n%202.33.pdf), sections 5.2-5.5 and Tables 1-4 | Governs the unique 49-digit Access Key, its exact fields and widths, invoice code `01`, environment codes `1` and `2`, normal emission code `1`, nine-digit sequential, eight-digit Numeric Code, and Modulo 11 Verification Digit. |
 | Project constitution | `.specify/memory/constitution.md` v2.0.1, approved 2026-07-16 | Governs official-source precedence, Company context, external fiscal boundaries, all-or-nothing local outcomes, idempotency, sensitive data, and feature scope. |
 | Approved target baseline | `specs/001-create-invoice-draft/spec.md`, created 2026-07-12 and approved through 2026-07-17 clarifications | Defines the Company-owned Invoice Draft, immutable Company Identifier, opaque `emissionPointId`, preserved commercial data and totals, Ecuador emission-date semantics, and the absence of fiscal identity at draft creation. |
-| Canonical terminology | `docs/migration/terminology-mapping.md`, last verified 2026-07-18 | Governs Invoice, Invoice Draft, Company, Issuer, Establishment, Emission Point, Fiscal Context Snapshot, Access Key, and Official Sequential Number. |
+| Canonical terminology | `docs/migration/terminology-mapping.md`, Feature 002 registration verified 2026-07-18 | Governs Invoice, Invoice Draft, Company, Issuer, Establishment, Emission Point, Fiscal Preparation, Fiscal Context Snapshot, Official Sequence Baseline, Official Sequential Number, Numeric Code, Access Key, and Fiscal Source Evidence while preserving Feature 001 historical scope. |
 | Legacy evidence | `docs/legacy/source-baseline.md` (`PROVISIONAL`, inspected 2026-07-12); `docs/legacy/as-is/05-business-rules.md` BR-003 through BR-005 and BR-014; `docs/legacy/as-is/06-validation-rules.md` VR-003 through VR-005 and VR-021 through VR-023; `docs/legacy/as-is/07-process-flows.md` DF-002 and DF-003; `docs/legacy/as-is/13-technical-debt.md` RISK-015, RISK-019, and RISK-023; `docs/legacy/as-is/14-pending-functional-validation.md` PFV-020, PFV-022, PFV-023, PFV-030, PFV-032, and PFV-033 | Historical observations and candidate failure/test vectors only. The provisional baseline and every legacy behavior remain non-authoritative. |
 
 **Source Conflicts**:
@@ -111,23 +111,31 @@ The Invoice Draft and all of its commercial content remain unchanged.
 **Terminology Mapping**: `factura` → Invoice; `borrador de factura` → Invoice Draft; `empresa` →
 Company; `emisor` → Issuer; `establecimiento` → Establishment; `punto de emisión` → Emission Point;
 `datos fiscales utilizados` → Fiscal Context Snapshot; `secuencial` → Official Sequential Number;
-`clave de acceso` → Access Key. Exact SRI codes and official field semantics remain unchanged where
-required by the official technical sheet. Fiscal Preparation, Official Sequence Baseline, Numeric
-Code, and Verification Digit are English canonical terms for this specification and require
-terminology-map registration before planning completes.
+`clave de acceso` → Access Key. Fiscal Preparation, Fiscal Context Snapshot, Official Sequence
+Baseline, Official Sequential Number, Numeric Code, Access Key, and Fiscal Source Evidence are
+registered Target Domain terms for Feature 002. Exact SRI acronyms, codes, digit widths, and
+official field semantics remain unchanged where the official technical sheet governs them. Feature
+001 correctly excluded these fiscal-identity values from Invoice Draft creation; Feature 002
+introduces them only for the bounded pre-XML preparation outcome and does not rewrite Feature 001
+history.
 
 ### Pending Functional Validation
 
 None. The Product Owner resolved first-preparation emission-date eligibility on 2026-07-18: only an
 Invoice Draft whose emission date equals the Ecuador civil date fixed at request entry is eligible.
+The `authoritative-fiscal-context` provider boundary, Official Sequence Baseline provisioning, and
+sensitive-data platform controls are approved architecture or deployment dependencies with the
+accountable roles and evidence paths recorded under Assumptions and Dependencies. Their approval
+does not claim that a production provider destination, a production baseline, or target-environment
+controls already exist. No remaining dependency requires a new material business decision.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Prepare an Invoice Exactly Once (Priority: P1)
 
 As an internal billing client, I prepare one existing eligible Company-owned Invoice Draft so that
-later XML generation can use one immutable authoritative fiscal snapshot, one official sequential
-identity, and one valid SRI Access Key without duplicating fiscal identity on retries.
+later XML generation can use one immutable authoritative Fiscal Context Snapshot, one Official
+Sequential Number, and one valid SRI Access Key without duplicating fiscal identity on retries.
 
 **Why this priority**: Fiscal identity must be fixed before XML generation, and the smallest safe
 outcome is one complete, immutable, recoverable preparation for one draft. Any partial or duplicate
@@ -282,9 +290,9 @@ Invoice Draft and all excluded systems remain unchanged.
 - **FR-007**: On first preparation, the unchanged Invoice Draft emission date MUST equal the Ecuador
   civil date fixed at initial request entry; a prior or future date MUST return
   `EMISSION_DATE_STALE` without being replaced, normalized, or advanced.
-- **FR-008**: Fiscal Preparation identity, its link to the Invoice Draft, all fiscal snapshot fields,
-  Official Sequential Number, Numeric Code, Access Key, source evidence, and creation timestamp MUST
-  be immutable after commit.
+- **FR-008**: Fiscal Preparation identity, its link to the Invoice Draft, all Fiscal Context Snapshot
+  fields, Official Sequential Number, Numeric Code, Access Key, Fiscal Source Evidence, and creation
+  timestamp MUST be immutable after commit.
 - **FR-009**: Exactly zero or one Fiscal Preparation MAY exist for one Company and Invoice Draft; no
   operation in this feature may update, delete, cancel, reverse, or replace it.
 
@@ -313,8 +321,10 @@ Invoice Draft and all excluded systems remain unchanged.
 #### Authoritative Fiscal Context and Snapshot
 
 - **FR-018**: For a first preparation, fiscal data MUST be obtained through the approved external
-  Company bounded-context fiscal capability that is authoritative for current Company-to-Issuer,
-  Establishment, Emission Point, and issuance eligibility information.
+  Company bounded-context capability identified as `authoritative-fiscal-context`, using consumer
+  contract `contracts/authoritative-fiscal-context.openapi.yaml` version `1.0.0`. That provider is
+  authoritative for current Company-to-Issuer, Establishment, Emission Point, issuance eligibility,
+  effective-period, and immutable source-revision information.
 - **FR-019**: The fiscal-context interaction MUST be read-only and MUST use the authoritative Company
   Identifier, the Invoice Draft's exact opaque Emission Point reference and emission date, and
   invoice document type as selection context; it MUST NOT accept editable fiscal values from the
@@ -337,12 +347,16 @@ Invoice Draft and all excluded systems remain unchanged.
   `ISSUER_COMPANY_MISMATCH` behavior.
 - **FR-025**: A successful first preparation MUST persist one Fiscal Context Snapshot containing,
   at minimum: authoritative external Issuer reference; Issuer RUC; Legal Name; optional Commercial
-  Name when authoritative and applicable; registered Head Office Address; applicable accounting,
-  special-taxpayer, withholding-agent, RIMPE, and large-contributor designations with their required
-  resolution identifiers when applicable; authoritative external Establishment reference and
-  three-digit Establishment Code; Establishment Address; the draft's exact opaque Emission Point
-  reference and authoritative three-digit Emission Point Code; SRI Environment Code; invoice
-  Document Type Code `01`; normal Emission Type Code `1`; and the evidence fields in FR-026.
+  Name when authoritative and applicable; registered Head Office Address; authoritative
+  `accountingRequired` boolean without a resolution identifier; `rimpeClassification` as `NONE`,
+  `RIMPE_CONTRIBUTOR`, or `POPULAR_BUSINESS` without an invented resolution identifier; applicable
+  Special Taxpayer and Withholding Agent designations with their authoritative resolution
+  identifiers; applicable Large Contributor designation with the authoritative resolution and
+  legend evidence required by the approved provider contract and governing official source;
+  authoritative external Establishment reference and three-digit Establishment Code; Establishment
+  Address; the draft's exact opaque Emission Point reference and authoritative three-digit Emission
+  Point Code; SRI Environment Code; invoice Document Type Code `01`; normal Emission Type Code `1`;
+  and the evidence fields in FR-026.
 - **FR-026**: Snapshot evidence MUST include a nonblank source authority identifier, the immutable
   source record or revision identifier used for the decision, the source effective date or interval
   applicable to the Invoice Draft emission date, and the observation time as an unambiguous instant.
@@ -350,9 +364,11 @@ Invoice Draft and all excluded systems remain unchanged.
   representation; Issuer RUC MUST be 13 digits, Establishment Code and Emission Point Code MUST each
   be exactly three digits, Environment Code MUST be `1` or `2`, Document Type Code MUST be `01`, and
   Emission Type Code MUST be `1`.
-- **FR-028**: Conditional fiscal designations and resolution identifiers MUST be persisted together
-  when applicable and absent together when the authoritative context says they do not apply; a
-  partial pair MUST be invalid.
+- **FR-028**: Conditional fiscal designations for which the governing official source requires a
+  resolution identifier or paired evidence MUST be persisted atomically with that required evidence
+  when applicable and MUST be absent together when not applicable. Accounting Required and RIMPE
+  Classification MUST be represented without an invented resolution identifier. Any partial
+  required pair MUST be rejected as invalid.
 - **FR-029**: The service MUST persist no complete Company, Issuer, Establishment, or Emission Point
   master-data model, editable administrative attributes, status history, authentication data,
   contact directory, or unrelated external fields.
@@ -659,12 +675,38 @@ Invoice Draft and all excluded systems remain unchanged.
 - **Assumption**: Current SRI v2.33 governs Access Key generation for this feature; its 2026-07-13
   change does not alter Access Key composition. — **Basis**: v2.33 revision history and sections
   5.2-5.5.
-- **Dependency**: The approved external Company fiscal-context capability must provide one
-  authoritative, versioned, effective, observable fiscal result within a bounded time and must not
-  require this service to own or administer Company, Issuer, Establishment, or Emission Point master
-  data.
-- **Dependency**: A controlled Official Sequence Baseline for the exact fiscal scope must already
-  exist and be valid; its creation and administration occur outside this feature.
+- **Approved architecture dependency**: Logical capability `authoritative-fiscal-context` and its
+  consumer contract `contracts/authoritative-fiscal-context.openapi.yaml` version `1.0.0` are
+  approved contract-first dependencies. The accountable role is `Fiscal Context Provider Owner`.
+  The provider owns authoritative Company-to-Issuer, Establishment, Emission Point, eligibility,
+  effective-period, and source-revision data. Feature 002 owns only its consumer port, validation,
+  mapping, timeout, and safe error classification and MUST NOT introduce a local Company, Issuer,
+  Establishment, or Emission Point master-data copy. The provider implementation, master-data
+  administration, and deployment remain outside Feature 002. Its base URL is environment
+  configuration and MUST NOT be hardcoded. Implementation and automated acceptance MAY use the
+  approved contract fixture; production deployment remains blocked until a concrete provider
+  destination and accountable operational owner are registered in deployment configuration.
+- **Approved operational dependency**: The accountable `Database Operations Owner` provisions
+  production Official Sequence Baselines outside Feature 002 through a controlled, reviewed,
+  auditable SQL/runbook procedure. Provisioning MUST validate Company ownership, the exact Issuer,
+  Establishment, Emission Point, official code, and document-type scope, and the initial
+  `lastAllocated` value. Evidence MUST identify requester, approver, execution time, scope, and
+  resulting baseline identifier without exposing sensitive values in general telemetry. Feature 002
+  MAY only read, lock, validate, and increment an existing baseline in a successful Fiscal
+  Preparation transaction and MUST NOT create, seed, upsert, reset, decrement, repair, wrap, reuse,
+  or expose administration for one. Production readiness for a fiscal scope requires approved
+  provisioning evidence before its first preparation request; tests MAY provision fixture rows only.
+- **Approved platform dependency**: The accountable `Platform Operations Owner` owns TLS in transit,
+  PostgreSQL encryption at rest, encrypted backup handling and restoration controls, and the
+  Invoice-record retention policy applicable to Fiscal Preparation. Required release evidence is:
+  TLS-enabled service and PostgreSQL connections in the target environment; an approved
+  encryption-at-rest control for the PostgreSQL destination; encrypted backup policy and successful
+  restore evidence; an approved Invoice-record retention policy; and confirmation that Fiscal
+  Preparation is retained and disposed of with its related Invoice record. Feature 002 MUST NOT
+  implement custom application-level database encryption, key management, deletion APIs, or a
+  separate retention scheduler. Raw provider requests, responses, credentials, and internal errors
+  remain outside persistence and backups because they are never stored; absence of a deletion API
+  does not override the platform retention policy.
 - **Dependency**: The IANA `America/Guayaquil` timezone definition governs Ecuador civil-date
   determination, while source observation and preparation creation times are unambiguous instants.
 - **Assumption**: First preparation is eligible only on exact equality between the Invoice Draft
@@ -673,3 +715,8 @@ Invoice Draft and all excluded systems remain unchanged.
 - **Dependency**: Later implementation work must retain the project's warning-free null-safety
   policy. — **Basis**: Explicit project-owner direction recorded 2026-07-18 and the existing
   warning-as-error quality baseline.
+- **Readiness statement**: Provider availability, baseline provisioning, and platform controls are
+  approved dependencies with accountable roles and evidence paths, not Pending Functional
+  Validation. The planning artifacts do not claim their production deployment evidence already
+  exists, and no remaining dependency requires a new material business decision or expands the
+  bounded outcome.

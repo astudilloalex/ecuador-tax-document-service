@@ -51,9 +51,12 @@ queue, and notification tests assert absence only.
 runtime evidence for REST Client JSON mapping, Hibernate Reactive persistence, configuration,
 reflection, and resource loading; JVM remains mandatory.
 
-**External Integrations**: One approved read-only authoritative fiscal-context REST capability.
-There is no SRI, SOAP/XML, certificate, storage, rendering, broker, notification, Company master,
-or identity integration.
+**External Integrations**: One approved contract-first, read-only REST capability identified as
+`authoritative-fiscal-context`, governed for this consumer by
+`contracts/authoritative-fiscal-context.openapi.yaml` version `1.0.0` and accountable to the
+`Fiscal Context Provider Owner`. The provider base URL is environment configuration and is never
+hardcoded. There is no SRI, SOAP/XML, certificate, storage, rendering, broker, notification,
+Company master, or identity integration.
 
 **Company Context Boundary**: Require exactly one `X-Company-Id` value, trim only surrounding ASCII
 SP/HTAB, parse a syntactically valid non-nil UUID, normalize it canonically, and map it to the
@@ -79,11 +82,14 @@ evidence. Other tax documents and batch preparation are outside scope.
 
 **Sensitive Data**: Snapshot RUC, names, addresses, source evidence, Numeric Code, and Access Key are
 stored only in the existing managed PostgreSQL boundary and returned only in the explicitly
-contracted successful internal representation with `Cache-Control: no-store`. Platform TLS and
-encryption at rest remain deployment controls. Errors, logs, traces, metrics, health, audit signals,
-and test production-like examples omit complete values, raw source bodies, credentials, internal
-endpoints, SQL, and baseline values. No certificate lifecycle exists. No deletion API or separate
-purge is introduced; preparation follows Invoice record retention.
+contracted successful internal representation with `Cache-Control: no-store`. The `Platform
+Operations Owner` is accountable for TLS in transit, PostgreSQL encryption at rest, encrypted
+backup handling/restoration, and the Invoice-record retention policy. Errors, logs, traces,
+metrics, health, audit signals, and test production-like examples omit complete values, raw source
+bodies, credentials, internal endpoints, SQL, and baseline values. No certificate lifecycle,
+custom application database encryption/key management, deletion API, or separate retention
+scheduler is introduced; Fiscal Preparation is retained and disposed of with its related Invoice
+record under the approved platform policy.
 
 ## Source and Terminology Evidence
 
@@ -94,7 +100,7 @@ purge is introduced; preparation follows Invoice record retention.
 | Approved specification and clarifications | `specs/002-prepare-invoice-issuance/spec.md`, especially FR-001–FR-081, DR-001–DR-011, SC-001–SC-016; clarification 2026-07-18 `Q1: A` | Complete target behavior, exact same-Ecuador-date rule, errors, exclusions, null safety |
 | Approved prior feature | `specs/001-create-invoice-draft/spec.md`, `plan.md`, `data-model.md`, implementation and V1–V5 migrations | Existing Company-owned Invoice Draft, commercial authority, opaque Emission Point UUID, `DRAFT` state, PostgreSQL and API patterns |
 | Architecture decisions | No ADR exists; decisions are recorded in `research.md` and `data-model.md` | Capability naming, external boundary, locks, two-table model, recovery, nullness enforcement |
-| Canonical terminology | `docs/migration/terminology-mapping.md`, verified 2026-07-18 | English target names and required reclassification described below |
+| Canonical terminology | `docs/migration/terminology-mapping.md`, Feature 002 registration verified 2026-07-18 | English Target Domain registration for Fiscal Preparation, Fiscal Context Snapshot, Official Sequence Baseline, Official Sequential Number, Numeric Code, Access Key, and Fiscal Source Evidence while preserving Feature 001 history |
 | Legacy evidence | `docs/legacy/source-baseline.md`; `docs/legacy/as-is/05-business-rules.md`, `06-validation-rules.md`, `07-process-flows.md`, `13-technical-debt.md`, and `14-pending-functional-validation.md` citations already enumerated in `spec.md` | Discovery and negative/candidate vectors only; no target behavior derives from legacy authority |
 
 **Source Conflicts and Resolutions**:
@@ -102,10 +108,10 @@ purge is introduced; preparation follows Invoice record retention.
 1. SRI v2.33 page 64 prints an Access Key ending in `6`, but independent application of its own
    v2.33 Modulo 11 rule produces `0`. The rule sections govern; the printed value is a negative
    regression vector, not a target positive vector.
-2. `docs/migration/terminology-mapping.md` still classifies Access Key and Official Sequential
-   Number as `SRI Adapter Only` because Feature 001 excluded them. Feature 002 now makes them
-   immutable target-domain values; implementation must update the mapping without rewriting
-   Feature 001 history.
+2. Feature 001 correctly excluded Fiscal Context Snapshot, Access Key, Official Sequential Number,
+   and the other fiscal-identity values from Invoice Draft creation. The canonical terminology
+   mapping now registers them for Feature 002 as Target Domain concepts without rewriting that
+   historical scope.
 3. Existing Feature 001 architecture tests globally prohibit fiscal capability artifacts and its
    OpenAPI test expects whole-file equality to a one-path contract. Those lower-level guards are
    narrowed to Feature 001 and replaced with Feature-002-aware positive/negative assertions; the
@@ -115,14 +121,59 @@ purge is introduced; preparation follows Invoice record retention.
    incremental JSpecify/NullAway enforcement rather than claiming the prior state was null-safe.
 
 **Pending Functional Validation**: None. The later XML feature must choose its own exact Invoice XSD
-version, but Feature 002 is deliberately schema-neutral and this does not block its fiscal snapshot
-or identity outcome.
+version, but Feature 002 is deliberately schema-neutral and this does not block its Fiscal Context Snapshot
+or identity outcome. Provider availability, baseline provisioning, and sensitive-data platform
+controls are approved architecture/deployment dependencies with accountable roles and evidence
+paths below. Approval does not claim that a production provider destination, production baseline,
+or target-environment control evidence already exists. No remaining dependency requires a new
+material business decision.
 
-**Terminology Mapping Impact**: Reclassify `Access Key` and `Official Sequential Number` as Target
-Domain values for Feature 002 while preserving their external SRI representations; add `Fiscal
-Preparation`, `Numeric Code`, `Official Sequence Baseline`, and `Fiscal Source Evidence`; retain
-Company, Issuer, Establishment, Emission Point, and Fiscal Context Snapshot meanings. Raw provider
-field names remain Infrastructure-only.
+**Terminology Mapping Impact**: The canonical mapping now classifies `Fiscal Preparation`, `Fiscal
+Context Snapshot`, `Official Sequence Baseline`, `Official Sequential Number`, `Numeric Code`,
+`Access Key`, and `Fiscal Source Evidence` as Target Domain concepts for Feature 002 while retaining
+exact SRI representations and Feature 001 historical exclusions. Company, Issuer, Establishment,
+and Emission Point remain externally owned; raw provider field names remain Infrastructure-only.
+
+## Approved Architecture and Deployment Dependencies
+
+**Fiscal-context provider**: The approved logical capability identifier is
+`authoritative-fiscal-context`; the approved consumer contract is
+`contracts/authoritative-fiscal-context.openapi.yaml` version `1.0.0`; and the accountable role is
+`Fiscal Context Provider Owner`. The provider owns authoritative Company-to-Issuer, Establishment,
+Emission Point, eligibility, effective-period, and immutable source-revision data. Feature 002 owns
+only the consumer port, response validation/mapping, bounded timeout, and caller-safe error
+classification. Provider implementation, master-data administration, and deployment are outside
+scope. The contract's `.invalid` server is deliberately non-routable metadata, not a runtime
+destination; the base URL comes only from environment configuration. Implementation and automated
+acceptance may proceed against the approved contract fixture. Production deployment is blocked
+until a concrete provider destination and accountable operational owner are registered in
+deployment configuration. No local Company, Issuer, Establishment, or Emission Point master-data
+copy is permitted.
+
+**Official Sequence Baseline provisioning**: The accountable role is `Database Operations Owner`.
+Production baselines are provisioned outside Feature 002 through a controlled, reviewed, auditable
+SQL/runbook procedure that validates Company ownership, exact Issuer/Establishment/Emission Point/
+document-type scope including the official codes, and initial `lastAllocated`. Its external audit
+evidence identifies requester, approver, execution time, scope, and resulting baseline identifier
+without exposing sensitive values in general telemetry. Feature 002 only reads, locks, validates,
+and increments an existing baseline inside the successful preparation transaction. It exposes no
+administration API and performs no missing-row creation, Flyway seed, upsert-on-missing, reset,
+decrement, repair, wrap, or reuse. Tests may provision fixture rows only. Production readiness for
+one fiscal scope requires approved provisioning evidence before its first preparation request; this
+is an operational gate, not a Company-specific service-readiness probe.
+
+**Sensitive-data platform controls**: The accountable role is `Platform Operations Owner`. That
+role owns TLS-enabled service and PostgreSQL connections, approved PostgreSQL encryption at rest,
+encrypted backup policy/handling, successful restoration evidence, and the approved Invoice-record
+retention policy under which Fiscal Preparation is retained and disposed of with its Invoice.
+These artifacts are required release evidence for the target environment. Feature 002 introduces
+no custom application-level database encryption, key management, deletion API, or retention
+scheduler. Raw provider requests, responses, credentials, and internal errors are absent from
+primary persistence and backups because they are never stored. The intentional absence of a
+deletion API does not override the platform retention policy.
+
+These are approved responsibilities and evidence paths, not claims that target production
+destinations, baseline rows, or platform controls are already deployed.
 
 ## Constitution Check
 
@@ -132,7 +183,7 @@ field names remain Infrastructure-only.
 |------|-----------------------|----------------------|
 | Greenfield scope: one bounded outcome; no implicit legacy compatibility | PASS — one existing draft becomes zero-or-one preparation; legacy is evidence only | PASS — one `fiscalpreparation` capability, no compatibility route/schema/status |
 | Authority: official sources are versioned; conflicts and Pending Functional Validation are recorded | PASS — legislation and SRI v2.33/version/date cited | PASS — page-64 defect resolved explicitly; no PFV remains |
-| Language: target names are English and terminology mapping decisions are respected | PASS — spec uses canonical English | PASS — all packages/contracts/models use English; mapping updates are planned |
+| Language: target names are English and terminology mapping decisions are respected | PASS — spec uses canonical English | PASS — Feature 002 Target Domain registrations are complete and preserve Feature 001 historical exclusions |
 | Baseline: required technologies are fixed; Quarkus version research is identified pre-research and resolved with justification post-design | PASS — repository baseline and one client unknown identified | PASS — Java 25, Quarkus 3.33.2.1, PostgreSQL 18.4 retained; only BOM REST Client added |
 | Architecture: `api`, `application`, `domain`, and `infrastructure` dependencies and mappings comply | PASS — four-boundary design required | PASS — capability-local boundaries, transport-neutral ports, pure domain, explicit mappings |
 | Domain purity: no framework, transport, persistence, JSON, security, or Mutiny types in `domain` | PASS — pure fiscal values planned | PASS — Access Key, snapshot, sequence, preparation are Java-only immutable values |
@@ -140,13 +191,13 @@ field names remain Infrastructure-only.
 | Fiscal correctness: official rules, `BigDecimal` policies, time semantics, and invalid-data behavior are explicit | PASS — no monetary calculation; SRI/date research required | PASS — exact v2.33 composition/DV, secure code policy, named Ecuador zone, unchanged totals/date |
 | Internal caller boundary: no authentication, authorization, identity, token, security scheme, `401`, or `403` behavior is introduced | PASS — explicitly excluded | PASS — neither inbound nor outbound contract defines security behavior |
 | Company boundary: Company context uses the mandatory single `X-Company-Id` UUID header; Company identifiers are absent from request bodies/input schemas and appear in responses only when explicitly contracted; Company-owned aggregate/persistence/idempotency operations enforce the UUID while immutable global SRI catalogs remain outside automatic Company scope; no Company lookup, snapshot, shared persistence, cache, or replication exists | PASS — exact header and ownership requirements approved | PASS — Company carried by every port/query/FK/scope and provider header; omitted from bodies/response; no master state |
-| Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | PASS — fiscal snapshot is sensitive; certificates excluded | PASS — PostgreSQL-only storage, platform encryption/TLS, no-store success, telemetry redaction, Invoice retention, no certificate data |
-| Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | PASS — baseline must be existing/atomic | PASS — V6 after immutable V1–V5, two tables/no seed, constraints/triggers, empty and V5-upgrade tests |
+| Sensitive data: storage, encryption, redaction, retention, and certificate lifecycle are defined before implementation | PASS — Fiscal Context Snapshot is sensitive; certificates excluded | PASS — `Platform Operations Owner`, target TLS/at-rest/backup-restore/Invoice-retention evidence, PostgreSQL-only storage, no-store success, and telemetry redaction are explicit |
+| Persistence: Flyway-only evolution, immutable migrations, database invariants, and empty-database tests are defined | PASS — baseline must be existing/atomic | PASS — V6 after immutable V1–V5, two tables/no seed, constraints/triggers, empty/V5-upgrade tests, and external `Database Operations Owner` provisioning evidence |
 | Boundary consistency: states, retries, idempotency, duplicates, timeouts, recovery, reconciliation, and terminal outcomes are defined | PASS — natural replay/unknown outcome required | PASS — draft-first arbitration, no hidden identity retry, Company+draft reconciliation, exact stable outcomes |
 | API and async quality: DTO separation, validation ownership, stable errors, correlation, and result observation are defined | PASS — synchronous terminal contract | PASS — bodyless POST, 201/200, replay header, separate DTOs, safe correlation, Problem Details catalog |
-| External adapters: ports, endpoint configuration, sanitized observability, resilience, and contract evidence are defined | PASS — approved fiscal boundary explicitly required | PASS — consumer contract, configured REST Client, 1s/2s limits, no auto-retry, sanitized mapping |
+| External adapters: ports, endpoint configuration, sanitized observability, resilience, and contract evidence are defined | PASS — approved fiscal boundary explicitly required | PASS — `authoritative-fiscal-context` v1.0.0, `Fiscal Context Provider Owner`, configurable destination, fixture acceptance, production registration gate, 1s/2s limits, no auto-retry, sanitized mapping |
 | Testing: acceptance scenarios and applicable risk-based tests are identified before production tasks | PASS — 24 acceptance scenarios/16 success criteria | PASS — domain, use-case, provider, PostgreSQL, concurrency, API, architecture, JVM evidence paths listed |
-| Operations: meaningful liveness/readiness, structured logs, auditing, and destination-consistent health checks are defined | PASS — PostgreSQL/provider semantics identified | PASS — process liveness, PostgreSQL readiness, provider business metrics, sanitized audit, same DB destination |
+| Operations: meaningful liveness/readiness, structured logs, auditing, and destination-consistent health checks are defined | PASS — PostgreSQL/provider semantics identified | PASS — service health semantics and separate production provider/baseline/platform evidence gates have accountable roles without false deployment claims |
 | Simplicity: every dependency, abstraction, process, store, and distributed interaction is justified | PASS — bounded outcome permits one source/one baseline | PASS — one production extension, one port, one transaction-shaped store, two tables, no background process |
 | Runtime evidence: JVM verification is mandatory and native status has an evidence path | PASS — JVM required/native unclaimed | PASS — exact JVM commands/scenarios planned; native remains honestly deferred |
 
@@ -191,17 +242,19 @@ global Company-scoped SRI catalog in this feature.
 
 **Company Master-Data Boundary**: No generic Company/Issuer/Establishment/Emission Point repository,
 administration client, local master table, cache, replication, shared database, cross-service FK, or
-distributed transaction is added. The one approved fiscal-context port is a read-only issuance
+distributed transaction is added. The approved `authoritative-fiscal-context` port is a read-only issuance
 resolution required by Constitution Principle XVI and the Feature 002 spec; it returns one minimal
 versioned decision, not master data. Per-Company baseline presence is not a readiness probe.
 
 **Sensitive Data and Certificate Lifecycle**: Required snapshot/identity fields are stored together
-in PostgreSQL under Company ownership, returned only in success, protected by deployment TLS/at-rest
-controls, and retained with the Invoice record. Complete Access Key, Numeric Code, RUC, names,
+in PostgreSQL under Company ownership, returned only in success, and governed by the `Platform
+Operations Owner` controls and release evidence defined above. Complete Access Key, Numeric Code, RUC, names,
 addresses, source revision, raw response/request, provider error/body, internal endpoint, SQL, and
 baseline values are excluded from error/telemetry/audit labels. There is no certificate, PKCS#12,
 private key, encryption-key, rotation, expiration, revocation, or certificate-deletion lifecycle in
-scope. Provider credentials are neither defined nor persisted by this feature.
+scope. Provider credentials are neither defined nor persisted by this feature. Fiscal Preparation
+retention/disposal follows its related Invoice record; no application deletion or retention process
+is introduced.
 
 ## Data and External Consistency Design
 
@@ -305,7 +358,7 @@ capability-specific. Architecture and Feature 001 semantic regression tests prot
 | Requirement/risk | Test level and environment | Planned path | Observable behavior or invariant | Failure/boundary cases |
 |------------------|----------------------------|--------------|----------------------------------|------------------------|
 | FR-043–053 / SC-005 Access Key | Pure domain/JUnit | `domain/fiscalpreparation/AccessKeyGeneratorTest.java`; vector JSON | Exact 49 digits, components, widths, DV, policy values | official vectors, raw 10/11, 48/50/nondigit, every component mutation, invalid page-64 sample |
-| FR-025–033 snapshot | Pure domain/JUnit | `domain/fiscalpreparation/FiscalContextSnapshotTest.java` | Complete immutable minimal values/evidence; exact optionality | missing/partial designations, ineffective interval, unsupported codes, source mismatch |
+| FR-025–033 snapshot | Pure domain/JUnit | `domain/fiscalpreparation/FiscalContextSnapshotTest.java` | Complete immutable minimal values/evidence; exact optionality | missing Special Taxpayer/Withholding Agent resolution, partial Large Contributor resolution/legend, invented accounting/RIMPE resolution, ineffective interval, unsupported codes, source mismatch |
 | DR-001–011 aggregate/nullness | Domain + compile analysis | `domain/fiscalpreparation/FiscalPreparationTest.java`; Gradle compile | One indivisible immutable identity; no null/partial state | null inputs, mutation attempts, optional values, warning-as-error |
 | FR-003–008 / Q1=A date | Application/JUnit with fixed clock | `application/fiscalpreparation/PrepareInvoiceForFiscalIssuanceUseCaseTest.java` | replay first; fixed Ecuador date once; draft unchanged | prior/future/exact date, midnight crossing, inconsistent prior state |
 | FR-018–024 external ordering | Application/port fakes | same use-case test | provider called only after eligibility and before commit; replay skips it | unavailable/invalid/unsupported/inconsistent, different Emission Point, deadline |
@@ -321,6 +374,9 @@ capability-specific. Architecture and Feature 001 semantic regression tests prot
 | FR-076–080 exclusions/architecture | Static architecture and dependency tests | `architecture/FiscalPreparationBoundaryTest.java`; updated existing boundary tests | clean dependencies; no XML/SRI/cert/security/admin/queue/Company master paths | forbidden imports, routes, entities, dependencies, executors/background jobs |
 | FR-081 / SC-016 null safety | Compile/static analysis | Gradle `compileJava`/`compileTestJava`, package-info tests | all new/changed packages null-marked; zero NullAway/JSpecify/javac warnings | framework nullable edges, Panache first-result null, hydration, optional columns, no suppressions |
 | SC-001/003/004 JVM runtime | Packaged JVM + PG18.4 + provider fixture | `runtime/FiscalPreparationJvmSmokeIT.java`, `FiscalPreparationJvmPerformanceIT.java` | mandatory packaged JVM success/replay/concurrency/deadline/pool recovery | provider/DB outage, response loss, midnight, 100-request loads, event-loop blocking |
+| Approved provider deployment prerequisite | Contract fixture plus target-environment release review | outbound contract metadata and deployment configuration evidence | fixture acceptance may proceed; production has a concrete configured destination and accountable operational owner | `.invalid` placeholder never used at runtime; no hardcoded URL or local master-data fallback |
+| Approved baseline provisioning responsibility | Operational evidence review plus PostgreSQL 18.4 fixture setup | controlled SQL/runbook evidence owned by `Database Operations Owner` | requester, approver, execution time, exact scope, resulting baseline identifier, and valid initial value are evidenced before first production use | fixture-only inserts remain non-production; no seed, auto-init, upsert, repair, reset, wrap, or admin API |
+| Sensitive-data platform controls | Target-environment release evidence | platform TLS/encryption/backup/restore/retention records owned by `Platform Operations Owner` | TLS service/DB connections, at-rest approval, encrypted backup and successful restore, approved Invoice retention, linked disposal confirmation | no application encryption/key management/deletion/scheduler; raw provider material never stored or backed up |
 
 **Liveness and Readiness**: Liveness reports only process/event-loop viability. Readiness requires
 the configured PostgreSQL destination and successfully applied Flyway schema. It does not depend on
@@ -328,7 +384,9 @@ a representative Company, a baseline row, or a Company-specific provider call. F
 outage remains a monitored business dependency that returns `FISCAL_CONTEXT_UNAVAILABLE` for first
 preparation while allowing committed replay. A provider health dependency may be added only if the
 provider later supplies a safe non-Company-specific read-only health contract against the exact same
-base destination; none is invented here.
+base destination; none is invented here. Separately, production enablement for a fiscal scope is
+blocked until the provider destination/owner, baseline provisioning evidence, and platform-control
+release evidence are registered; those deployment gates do not change service health semantics.
 
 **Structured Observability**: Propagate one safe correlation value; record new/replay/error outcome,
 stable error code, total/source/database/lock latency, deadline owner, commit-knowledge class, and
@@ -344,7 +402,8 @@ raw fiscal payload store. There are no certificate events.
 **External Destination Consistency**: Business persistence, readiness, Flyway, and tests resolve the
 same configured PostgreSQL database, with JDBC used only by Flyway and reactive client used at
 runtime. Fiscal REST calls use one named configured base URL; no separate probe destination exists
-without an approved provider health contract.
+without an approved provider health contract. The planning `.invalid` URL is never a runtime
+destination, and this plan does not claim that target production destination evidence already exists.
 
 ## Complexity Tracking
 
@@ -352,7 +411,7 @@ without an approved provider health contract.
 |----------|-------------------------------|--------------------------------|------------------|--------------------------------------|
 | BOM-managed `quarkus-rest-client-jackson` | FR-018–024 authoritative external fiscal context | Blocking client; local data; caller fields | Blocking violates reactive path; local/caller data is non-authoritative/forbidden | Contract fixture, configured limits, provider failure metrics; no automatic retry |
 | One external fiscal-context port/adapter and consumer contract | FR-018–033 | Direct adapter call from API; generic master-data client | Clean Architecture requires port; generic client expands scope | Application fakes, adapter contract tests, redaction, configured endpoint |
-| `official_sequence_baseline` controlled Company-owned table with globally unique exact fiscal scope | FR-034–042 | PostgreSQL sequence, max+1, JVM counter | `nextval` is non-rollback; others are unsafe across processes; Company is ownership, not another numbering dimension | Row-lock/rollback/concurrency/duplicate-cross-Company-scope tests; no seed/admin/readiness dependency |
+| `official_sequence_baseline` controlled Company-owned table with globally unique exact fiscal scope | FR-034–042 | PostgreSQL sequence, max+1, JVM counter | `nextval` is non-rollback; others are unsafe across processes; Company is ownership, not another numbering dimension | Row-lock/rollback/concurrency/duplicate-cross-Company-scope tests; no seed/runtime admin, plus external `Database Operations Owner` provisioning evidence before first production use of a scope |
 | Append-only `fiscal_preparation` table with embedded snapshot | FR-008–009, FR-025–031, FR-045–064 | Separate snapshot table; JSONB; no durable snapshot | Separate table/JSON weakens atomic/minimal typed invariants; no persistence cannot replay | Flyway constraints/guard, immutable reads, sensitive-data retention |
 | Database immutability/scope guards and fixed row-lock order | FR-008, FR-042, FR-058–062 | Repository convention only; advisory locks; serializable isolation | Direct SQL/concurrency needs final arbiter; row targets already exist | Direct mutation negative tests, lock timeout/deadlock evidence |
 | Test-only commit-boundary transport fault harness | FR-059, FR-064, SC-010 | Mocked exception; HTTP response-loss hook only | Those prove mapping/replay but not a genuinely lost PostgreSQL COMMIT acknowledgement | No production dependency; isolated PostgreSQL transport-fault scenario accepts either DB truth, then proves retry converges to zero-or-one and never two |

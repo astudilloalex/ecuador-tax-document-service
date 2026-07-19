@@ -6,6 +6,18 @@
 **Status**: Complete — all material technical unknowns are resolved; no Pending Functional
 Validation or unresolved clarification marker remains
 
+**Canonical terminology**: `docs/migration/terminology-mapping.md` registers Fiscal Preparation,
+Fiscal Context Snapshot, Official Sequence Baseline, Official Sequential Number, Numeric Code,
+Access Key, and Fiscal Source Evidence as Feature 002 Target Domain concepts. Feature 001 correctly
+excluded these fiscal-identity values from Invoice Draft creation; this research preserves that
+historical boundary.
+
+Provider availability, baseline provisioning, and sensitive-data platform controls are approved
+architecture/deployment dependencies with accountable roles and evidence paths described below.
+Approval does not claim that a production provider destination, production baseline, or target-
+environment control evidence already exists, and no remaining dependency requires a new material
+business decision.
+
 **Primary legal authority**: [Consolidated Regulation for Sales, Withholding, and Complementary
 Documents, last modified 2023-12-29](https://www.sri.gob.ec/o/sri-portlet-biblioteca-alfresco-internet/descargar/9fb49475-f058-49a1-b08a-f31bf4deb074/Reglamento_Comprobantes_Venta_RetencionYDC_29122023.pdf),
 especially articles 18, 19, 26, 41, 42, 49, and 50. It governs required invoice facts,
@@ -101,10 +113,23 @@ caller authentication or authorization.
 
 ## 4. Authoritative Fiscal Context Boundary
 
-**Decision**: Define a read-only application port resolved by a Quarkus REST Client adapter. The
-adapter sends `X-Company-Id` plus the exact draft emission-point UUID, unchanged emission date, and
-document type `01` to the approved Company bounded-context fiscal capability. It accepts no caller
-fiscal values and uses no local Company/Issuer/Establishment/Emission Point master data.
+**Decision**: The approved logical capability is `authoritative-fiscal-context`, governed for this
+consumer by `contracts/authoritative-fiscal-context.openapi.yaml` version `1.0.0`; the accountable
+role is `Fiscal Context Provider Owner`. Define a read-only application port resolved by a Quarkus
+REST Client adapter. The adapter sends `X-Company-Id` plus the exact draft emission-point UUID,
+unchanged emission date, and document type `01` to that approved Company bounded-context fiscal
+capability. It accepts no caller fiscal values and uses no local Company/Issuer/Establishment/
+Emission Point master data.
+
+The provider owns authoritative Company-to-Issuer, Establishment, Emission Point, eligibility,
+effective-period, and immutable source-revision data. Feature 002 owns only the consumer port,
+validation, mapping, bounded timeout, and safe error classification. Provider implementation,
+master-data administration, and deployment remain outside scope. The provider base URL is
+environment configuration and is not hardcoded. The contract's `.invalid` server is deliberately
+non-routable planning metadata, not an unapproved runtime endpoint. Implementation and automated
+acceptance may use the approved contract fixture; production deployment remains blocked until a
+concrete provider destination and accountable operational owner are registered in deployment
+configuration.
 
 The external contract is `POST /fiscal-context-resolutions/invoice-issuance`. Although expressed as
 POST to carry a structured selection request, the provider contract declares it read-only. One
@@ -137,10 +162,12 @@ plus immutable evidence:
 - authoritative Issuer and Establishment references and the draft's exact emission-point UUID;
 - 13-digit RUC, Legal Name, optional Commercial Name, Head Office Address, three-digit
   Establishment and Emission Point codes, and Establishment Address;
-- accounting obligation as an exact boolean; optional Special Taxpayer and Withholding Agent
-  designations with their required resolution identifiers; optional RIMPE classification without
-  an invented resolution; optional Large Contributor designation and its applicable resolution or
-  legend evidence;
+- accounting obligation as an exact boolean with no resolution identifier; optional Special
+  Taxpayer and Withholding Agent designations with their authoritative required resolution
+  identifiers; required RIMPE classification `NONE`, `RIMPE_CONTRIBUTOR`, or `POPULAR_BUSINESS`
+  without an invented resolution; optional Large Contributor designation with the authoritative
+  resolution and legend evidence required together by the approved consumer contract and governing
+  source;
 - environment `1` or `2`, document type `01`, normal emission type `1`;
 - technical-rule identifier `SRI-OFFLINE-2.33`, rule modification date `2026-07-13`, and Numeric
   Code policy identifier/version;
@@ -148,8 +175,10 @@ plus immutable evidence:
   civil dates (with an explicitly open end when applicable), and observation `Instant`.
 
 An optional designation is represented as an optional value object, not as unrelated nullable
-flags and strings. Resolution pairing applies only to SRI designations that actually require a
-resolution; accounting obligation and RIMPE do not invent one.
+flags and strings. A designation for which the governing source requires a resolution identifier or
+paired evidence is persisted atomically with that evidence when applicable and is absent with it
+when not applicable; any partial required pair is invalid. Accounting Required and RIMPE
+Classification never invent a resolution identifier.
 
 **Rationale**: These values are immutable issuance evidence, not administrative master data. The
 shape is sufficient to validate the Access Key and later construct common invoice fiscal headers
@@ -202,6 +231,16 @@ The baseline stores one non-null `lastAllocated` integer in `0..999999999`; the 
 `lastAllocated + 1`, while `999999999` is explicitly exhausted. A `0` row exists only when a
 controlled provisioning process has deliberately established a new scope; absence never implies
 zero. No migration or runtime path seeds or initializes a missing scope.
+
+The approved accountable role for production provisioning is `Database Operations Owner`.
+Provisioning occurs outside Feature 002 through a controlled, reviewed, auditable SQL/runbook
+procedure. It validates Company ownership, the exact Issuer/Establishment/Emission Point/document-
+type scope including official codes, and the initial `lastAllocated`. Its external evidence records
+requester, approver, execution time, scope, and resulting baseline identifier without placing
+sensitive values in general telemetry. Production readiness for a fiscal scope requires that
+approved evidence before the first preparation request. Tests may insert controlled fixture rows
+only. Feature 002 still performs no missing-row creation, Flyway seed, upsert-on-missing, reset,
+decrement, repair, wrap, reuse, or administration operation.
 
 For a first preparation, one short reactive PostgreSQL transaction acquires row locks in a fixed
 order: Company-scoped Invoice Draft first, exact sequence baseline second. After locking the draft,
@@ -408,11 +447,18 @@ and concurrency. They never carry full Company UUID, RUC, names, addresses, Nume
 Key, provider body, source revision, or baseline value as labels.
 
 Snapshot fiscal data and Access Key are stored only in the existing managed PostgreSQL boundary and
-returned in the explicitly contracted successful representation. Platform encryption at rest and
-transport TLS remain deployment controls; this feature introduces no certificate material. It adds
-no deletion API and follows the Invoice record retention policy. Secrets/raw provider messages are
-not persisted. Audit records are sanitized success/failure operational events, not a second fiscal
-payload store.
+returned in the explicitly contracted successful representation. The accountable role is
+`Platform Operations Owner`. That role owns TLS-enabled service and PostgreSQL connections,
+approved PostgreSQL encryption at rest, encrypted backup policy and handling, successful
+restoration evidence, and the approved Invoice-record retention policy applicable to Fiscal
+Preparation. Release evidence must
+show each control in the target environment and confirm that Fiscal Preparation is retained and
+disposed of with its related Invoice record. Feature 002 introduces no custom application-level
+database encryption, key management, deletion API, or retention scheduler. The intentional absence
+of a deletion API does not override platform retention. Secrets, raw provider requests/responses,
+credentials, and internal provider errors are excluded from primary persistence and backups because
+they are never stored. Audit records are sanitized success/failure operational events, not a second
+fiscal payload store.
 
 JVM build/runtime evidence is mandatory. Native support is deferred until an actual native build
 and runtime suite verifies REST Client JSON mapping, Hibernate Reactive entities, configuration,
@@ -422,3 +468,9 @@ not applicable to this feature.
 **Alternatives considered**: marking readiness down on every provider outage was rejected because
 it would also block safe replay; logging fiscal payloads for diagnostics was rejected as unnecessary
 sensitive-data exposure; claiming native compatibility from JVM tests was rejected.
+
+**Readiness resolution**: Fiscal-context provider ownership, Official Sequence Baseline
+provisioning, and sensitive-data platform controls now have approved accountable roles and evidence
+paths. These decisions close planning ambiguity without asserting completed production deployment
+evidence and without introducing authentication, master-data or baseline administration, XML,
+signing, SRI communication, PDF, messaging, or background processing.

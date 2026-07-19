@@ -2,13 +2,26 @@ openapi: 3.1.0
 info:
   title: Authoritative Fiscal Context Consumer Contract
   version: 1.0.0
+  x-capability-id: authoritative-fiscal-context
+  x-accountable-role: Fiscal Context Provider Owner
+  x-dependency-status: approved-contract-first
+  x-production-deployment-prerequisite: >-
+    A concrete provider destination and accountable operational owner must be registered in
+    deployment configuration before production deployment. Contract-fixture implementation and
+    automated acceptance may proceed before that deployment evidence exists.
   description: >-
-    Consumer-side contract required from the approved external Company bounded-context fiscal
-    capability. The interaction is read-only and has no authentication or authorization contract
-    in this repository. Provider implementation and fiscal master-data administration are outside
-    Feature 002.
+    Approved consumer-side contract for logical capability authoritative-fiscal-context. The
+    provider owns authoritative Company-to-Issuer, Establishment, Emission Point, eligibility,
+    effective-period, and source-revision data. Feature 002 owns only the consumer port,
+    validation, mapping, timeout, and safe error classification. The interaction is read-only and
+    has no authentication or authorization contract in this repository. Provider implementation,
+    fiscal master-data administration, and deployment are outside Feature 002; no local Company,
+    Issuer, Establishment, or Emission Point master-data copy is permitted.
 servers:
   - url: https://configured-authoritative-fiscal-context.invalid
+    description: >-
+      Deliberately non-routable planning placeholder. The runtime base URL is supplied only by
+      environment configuration and must never be hardcoded from this value.
 
 paths:
   /fiscal-context-resolutions/invoice-issuance:
@@ -145,6 +158,7 @@ components:
           $ref: '#/components/schemas/FiscalText'
         accountingRequired:
           type: boolean
+          description: Authoritative accounting obligation; it has no resolution identifier.
         specialTaxpayer:
           $ref: '#/components/schemas/ResolutionDesignation'
         withholdingAgent:
@@ -152,6 +166,7 @@ components:
         rimpeClassification:
           type: string
           enum: [NONE, RIMPE_CONTRIBUTOR, POPULAR_BUSINESS]
+          description: Authoritative classification; no RIMPE resolution identifier is invented.
         largeContributor:
           $ref: '#/components/schemas/LargeContributorDesignation'
         establishmentReference:
@@ -219,6 +234,9 @@ components:
     ResolutionDesignation:
       type: object
       additionalProperties: false
+      description: >-
+        Applicable Special Taxpayer designation. Presence requires its authoritative resolution
+        identifier; omission means the designation does not apply.
       required: [resolutionIdentifier]
       properties:
         resolutionIdentifier:
@@ -229,6 +247,9 @@ components:
     WithholdingAgentDesignation:
       type: object
       additionalProperties: false
+      description: >-
+        Applicable Withholding Agent designation. Presence requires its authoritative resolution
+        identifier; omission means the designation does not apply.
       required: [resolutionIdentifier]
       properties:
         resolutionIdentifier:
@@ -238,6 +259,10 @@ components:
     LargeContributorDesignation:
       type: object
       additionalProperties: false
+      description: >-
+        Applicable Large Contributor designation. Consumer contract 1.0.0 requires the
+        authoritative resolution identifier and required legend as one complete pair; omission
+        means the designation does not apply and any partial pair is invalid.
       required: [resolutionIdentifier, requiredLegend]
       properties:
         resolutionIdentifier:

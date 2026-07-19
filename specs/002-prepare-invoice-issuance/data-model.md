@@ -1,5 +1,11 @@
 # Data Model: Prepare Invoice for Fiscal Issuance
 
+Canonical Target Domain terms follow `docs/migration/terminology-mapping.md`: Fiscal Preparation,
+Fiscal Context Snapshot, Official Sequence Baseline, Official Sequential Number, Numeric Code,
+Access Key, and Fiscal Source Evidence. Feature 001 correctly excluded these values from Invoice
+Draft creation; this model introduces them only for Feature 002 and does not change Invoice Draft
+ownership or history.
+
 **Feature**: `002-prepare-invoice-issuance`  
 **Constitution**: v2.0.1  
 **Sources**: `spec.md`, `research.md`, SRI Offline Technical Sheet v2.33, and the completed
@@ -115,14 +121,17 @@ errors or telemetry.
 | `specialTaxpayer` | `Optional<ResolutionDesignation>` | nullable resolution `varchar(64)` | Presence means applicable; resolution is nonblank and stored with it |
 | `withholdingAgent` | `Optional<ResolutionDesignation>` | nullable resolution `varchar(8)` | Presence means applicable; exact SRI numeric resolution representation, including no invented left padding |
 | `rimpeClassification` | enum | `varchar(32) NOT NULL` | `NONE`, `RIMPE_CONTRIBUTOR`, or `POPULAR_BUSINESS`; no resolution is invented |
-| `largeContributor` | `Optional<LargeContributorDesignation>` | paired nullable resolution/legend columns | Both required fields are present together or both absent |
+| `largeContributor` | `Optional<LargeContributorDesignation>` | paired nullable resolution/legend columns | The authoritative resolution and required legend are both present together under consumer contract v1.0.0 or both absent |
 
 Optional objects, not independent booleans and strings, enforce applicability and pairing in the
-domain. Corresponding database checks reject partial pairs. Later XML work derives only the exact
-legend behavior defined by its approved schema/version; this feature records the current
+domain. A designation for which the governing source requires a resolution identifier or paired
+evidence is persisted atomically with that evidence when applicable and absent with it when not
+applicable. Corresponding database checks reject any partial required pair. Accounting Required and
+RIMPE Classification never acquire an invented resolution identifier. Later XML work derives only
+the exact legend behavior defined by its approved schema/version; this feature records the current
 authoritative classification/evidence but generates no XML.
 
-### Governing-rule and source evidence
+### Fiscal Source Evidence and governing rule
 
 | Field | Type | PostgreSQL type | Required | Rule |
 |-------|------|-----------------|----------|------|
@@ -185,7 +194,7 @@ Logical persistence name: `official_sequence_baseline`.
 | `companyId` | `CompanyId` | `uuid` | Yes | Company-owned numbering scope |
 | `scope` | `OfficialSequenceScope` | flattened exact-scope columns | Yes | Immutable after provisioning |
 | `lastAllocated` | integer value | `integer` | Yes | `0..999999999`; `0` is valid only on an explicitly provisioned row |
-| `createdAt` | `Instant` | `timestamptz` | Yes | Provisioning evidence; administration is outside this feature |
+| `createdAt` | `Instant` | `timestamptz` | Yes | Provisioning execution instant correlated to external operational evidence; administration is outside this feature |
 | `updatedAt` | `Instant` | `timestamptz` | Yes | Changes only with a successful allocation |
 
 Required constraints:
@@ -204,6 +213,23 @@ Required constraints:
   preparation;
 - no Flyway seed row, runtime default row, upsert-on-missing behavior, reset, decrement, wrap, or
   administration route.
+
+### Approved production provisioning responsibility
+
+The accountable role is `Database Operations Owner`. Production rows are created outside Feature
+002 through a controlled, reviewed, auditable SQL/runbook procedure. Before creation, that procedure
+validates Company ownership, the exact Issuer/Establishment/Emission Point/document-type scope and
+official codes, and initial `lastAllocated`. The external audit record identifies requester,
+approver, execution time, exact scope, and resulting baseline identifier without exposing sensitive
+values in general telemetry. The baseline identifier, immutable scope, and `createdAt` in this model
+correlate the row to that evidence; Feature 002 does not replicate requester/approver administration
+data into its domain model.
+
+Production readiness for a fiscal scope requires approved provisioning evidence before its first
+preparation request. Tests may create controlled fixture rows only. Feature 002 may read, lock,
+validate, and increment an existing row in the same successful Fiscal Preparation transaction; it
+cannot create a missing row, seed one through Flyway, upsert on missing, reset, decrement, repair,
+wrap, reuse, or expose baseline administration.
 
 Derivation:
 
@@ -327,7 +353,14 @@ increment, allowing the next waiter to use that same candidate; local failure cr
   update/delete attempts.
 - Baseline mutation cannot update any committed preparation or snapshot.
 - No cancellation, reversal, sequential reuse, or deletion capability is introduced.
-- The row follows the Invoice record's legal/operational retention policy; no independent purge is
-  introduced by this feature.
-- Database backups inherit platform controls. Raw provider messages and credentials are excluded
-  from both primary storage and backups because they are never persisted.
+- The accountable `Platform Operations Owner` owns TLS-enabled service and PostgreSQL connections,
+  approved PostgreSQL encryption at rest, encrypted backup handling, successful restore evidence,
+  and the approved Invoice-record retention policy applicable to this row.
+- Release evidence must confirm the target-environment TLS connections, approved at-rest control,
+  encrypted backup policy and successful restoration, applicable Invoice-record retention policy,
+  and retention/disposal of Fiscal Preparation with its related Invoice record.
+- No custom application database encryption, key management, independent purge, deletion API, or
+  retention scheduler is introduced. The absence of a deletion API does not override platform
+  retention/disposal.
+- Raw provider requests, responses, credentials, and internal errors are excluded from both primary
+  storage and backups because they are never persisted.
