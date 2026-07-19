@@ -2,7 +2,7 @@
 
 **Created**: 2026-07-18
 
-**Status**: Specification complete; ready for planning
+**Status**: Specification complete; implementation planning and task generation complete
 
 **Input**: Prepare one existing Company-owned Invoice Draft for fiscal issuance by attaching one
 immutable authoritative Fiscal Context Snapshot, allocating its next Official Sequential Number,

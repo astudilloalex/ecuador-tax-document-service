@@ -418,6 +418,13 @@ all new/modified Feature 002 code without falsely declaring the unaudited Featur
 safe. NullAway 0.13.7 includes current Jakarta Persistence initialization handling and Java 25+
 compatibility work.
 
+The checked-scope boundary is exact: new Feature 002 and extracted shared packages use package-level
+`@NullMarked`; an existing Feature 001 type modified by Feature 002 uses type-level `@NullMarked`
+without marking untouched neighbors. Feature 002 packaged-JVM tests use the dedicated
+`runtime.fiscalpreparation` package rather than marking the existing Feature 001 `runtime` package.
+The service-wide health types move from false Invoice Draft ownership to the new null-marked
+`infrastructure.health` boundary, with their regression test in the same checked package.
+
 **Alternatives considered**:
 
 - JSpecify annotations without an analyzer were rejected because they do not satisfy zero
