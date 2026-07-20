@@ -1,10 +1,12 @@
 # Feature Specification: Generate Standard SRI Invoice XML
 
-**Feature Branch**: Not created; no `before_specify` branch hook is configured
+**Feature Branch**: `003-generate-sri-invoice-xml` feature context (workspace Git branch: `10-ft-3`)
 
 **Created**: 2026-07-19
 
-**Status**: Draft
+**Status**: Specification complete; implementation planning and task generation complete;
+implementation remains subject to the analysis gate and documented external acceptance and
+release gates.
 
 **Input**: Generate, validate, persist, and expose exactly one immutable unsigned SRI Invoice XML
 for one Company-owned Invoice Draft that already has one committed Fiscal Preparation.
