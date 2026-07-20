@@ -42,7 +42,7 @@ description: "Dependency-ordered implementation tasks for Feature 003"
 
 ### Required Foundational Evidence
 
-- [ ] T007 [P] Add semantic consumer-contract tests for version `2.0.0`, the fixed profile/rule/trigger-set identifiers, all fourteen assessments, designation constraints, no security scheme, and proposed approval status in `src/test/java/com/alexastudillo/taxdocument/infrastructure/fiscalpreparation/AuthoritativeFiscalContextContractTest.java` (FR-024–FR-030; R-007)
+- [ ] T007 [P] Add semantic consumer-contract tests for version `2.0.0`, the fixed profile/rule/trigger-set identifiers, all fourteen assessments, designation constraints, no security scheme, and the current pre-approval `proposed-blocking-approval` status in `src/test/java/com/alexastudillo/taxdocument/infrastructure/fiscalpreparation/AuthoritativeFiscalContextContractTest.java`; T073 owns the evidence-gated transition to the project-standard `approved-contract-first` status (FR-024–FR-030; R-007)
 - [ ] T008 [P] Add Feature 002 HTTP-adapter tests for complete profile mapping, missing/unknown fields, each assessment value, and zero Feature 003 runtime provider use in `src/test/java/com/alexastudillo/taxdocument/infrastructure/fiscalpreparation/FiscalContextHttpAdapterTest.java` (FR-021, FR-024–FR-028; R-007)
 - [ ] T009 [P] Add pure-domain tests for exhaustive trigger lookup, eligibility classification, technical-rule matching, tightened Special Taxpayer/Withholding Agent/Large Contributor evidence, and legacy absence in `src/test/java/com/alexastudillo/taxdocument/domain/fiscalpreparation/StandardInvoiceXmlProfileEvidenceTest.java` and `src/test/java/com/alexastudillo/taxdocument/domain/fiscalpreparation/FiscalContextSnapshotTest.java` (FR-024–FR-030, DR-004–DR-005)
 - [ ] T010 [P] Add Feature 002 use-case regression fixtures proving complete provider evidence is atomically carried into a new preparation while invalid responses commit nothing in `src/test/java/com/alexastudillo/taxdocument/application/fiscalpreparation/PrepareInvoiceForFiscalIssuanceUseCaseTest.java`, `src/test/java/com/alexastudillo/taxdocument/support/fiscalpreparation/AuthoritativeFiscalContextFixture.java`, and `src/test/java/com/alexastudillo/taxdocument/support/fiscalpreparation/FiscalPreparationTestFixtures.java` (FR-028; SC-009)
@@ -168,8 +168,8 @@ description: "Dependency-ordered implementation tasks for Feature 003"
 - [ ] T070 Build the packaged JVM and run `InvoiceXmlJvmSmokeIT`, then record exact resource, PostgreSQL round-trip, worker-isolation, first/replay, restart, invalid-XSD, and zero-side-effect evidence in `specs/003-generate-sri-invoice-xml/plan.md` (SC-001–SC-006/SC-014–SC-017; Constitution III/XII)
 - [ ] T071 Run `InvoiceXmlJvmPerformanceIT` in a warmed packaged JVM and record maximum-source, 100-request convergence, ten-second deadline, event-loop, pool, worker, and queue recovery evidence in `specs/003-generate-sri-invoice-xml/quickstart.md` (SC-004–SC-005; R-009/R-015)
 - [ ] T072 Record the evidence-based native deferral as unclaimed, including the future Mandrel/GraalVM 25 resource/catalog/JAXP/SHA-256/runtime proof required before any claim, in `specs/003-generate-sri-invoice-xml/plan.md` (R-018; Constitution III/Definition of Done)
-- [ ] T073 Record actual approval/deployment evidence from the Fiscal Context Provider Owner and Feature 002 Contract Owner plus Platform Operations TLS/encryption/backup/restore/retention/disposal evidence in `specs/003-generate-sri-invoice-xml/plan.md`; leave this task open and block first-generation acceptance or production release while either evidence set is absent (spec Assumptions and Dependencies; plan Approved architecture and release dependencies)
-- [ ] T074 Verify that no unresolved critical `$speckit-analyze` finding remains, then run `spotlessCheck`, static analysis, the full unit/integration suite, `quarkusBuild`, and the packaged JVM suites and record the final constitution/Definition-of-Done review in `specs/003-generate-sri-invoice-xml/plan.md` (Constitution XIV/Definition of Done)
+- [ ] T073 Once actual approval and deployed-path evidence exists from the Fiscal Context Provider Owner and Feature 002 Contract Owner, change `x-dependency-status` from `proposed-blocking-approval` to the project-standard `approved-contract-first` value and replace the proposed description with an approved description in `specs/003-generate-sri-invoice-xml/contracts/authoritative-fiscal-context-v2.openapi.yaml`, update the approved metadata assertion in `src/test/java/com/alexastudillo/taxdocument/infrastructure/fiscalpreparation/AuthoritativeFiscalContextContractTest.java`, and record those evidence references plus Platform Operations TLS/encryption/backup/restore/retention/disposal evidence in `specs/003-generate-sri-invoice-xml/plan.md`; leave this task open and block first-generation acceptance or production release while either evidence set or the canonical metadata/test transition is incomplete (spec Assumptions and Dependencies; plan Approved architecture and release dependencies)
+- [ ] T074 After T073 is complete, verify that no unresolved critical `$speckit-analyze` finding remains, then run `spotlessCheck`, static analysis, the full unit/integration suite, `quarkusBuild`, and the packaged JVM suites and record the final constitution/Definition-of-Done review in `specs/003-generate-sri-invoice-xml/plan.md` (Constitution XIV/Definition of Done)
 
 ---
 
@@ -179,7 +179,7 @@ description: "Dependency-ordered implementation tasks for Feature 003"
 
 - The constitution is approved on `main`, and the completed specification, clarifications, requirement checklist, plan, research, model, contracts, and quickstart are inputs to this file.
 - `$speckit-analyze` MUST run after this file and before implementation; unresolved critical findings block `$speckit-implement`.
-- Tests may use the proposed provider `2.0.0` synthetic contract, but T073 is a non-waivable acceptance/release gate and cannot be marked complete without actual accountable-owner evidence.
+- Tests may use the proposed provider `2.0.0` synthetic contract, but T073 is a non-waivable acceptance/release gate and cannot be marked complete without actual accountable-owner evidence, deployed-path evidence, and the corresponding canonical contract/test transition from `proposed-blocking-approval` to `approved-contract-first`.
 
 ### Phase and Story Graph
 
@@ -197,7 +197,7 @@ Phase 1 Setup
 - **US1** depends on Foundational Controls because it requires committed profile evidence, V7, exact schema resources, and the bounded worker.
 - **US2** depends on US1's committed artifact/store/API but is independently verified through replay, concurrency, and commit-uncertainty scenarios.
 - **US3** depends on US1's endpoint/orchestration surfaces and the foundational profile/migration controls; after US1 it can proceed in parallel with US2 if shared-file ownership is coordinated.
-- **Final Validation** depends on US1, US2, and US3 and cannot waive T073 or a critical analysis finding.
+- **Final Validation** depends on US1, US2, and US3; T074 additionally depends on completed T073 contract, deployment, and protected-storage evidence and cannot waive a critical analysis finding.
 
 ### Within-Phase Ordering
 
@@ -205,6 +205,7 @@ Phase 1 Setup
 - In US1, T021 establishes shared synthetic builders, then T022–T029 can be authored in parallel. T030 precedes ports/models that reference artifact values; T031–T034 precede adapters/orchestration; T039 precedes T040; T040–T043 precede T044.
 - In US2, T046–T050 precede production changes; T051 precedes repository recovery T052, which precedes application/API completion T053–T054.
 - In US3, T055–T061 precede T062–T067. Coordinate edits to `GenerateUnsignedSriInvoiceXmlService.java`, `InvoiceXmlArtifactRepositoryAdapter.java`, and `InvoiceXmlExceptionMapper.java` with earlier story work.
+- In Final Validation, T068–T072 may proceed while external evidence is gathered; T073 performs the evidence-gated canonical approval transition, and T074 runs only after T073 is complete.
 
 ## Parallel Opportunities
 

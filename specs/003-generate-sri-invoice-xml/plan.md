@@ -163,6 +163,16 @@ must validate and atomically persist the complete evidence. Tests may use a cont
 Feature 003 first-generation acceptance is blocked until both owners approve the contract and the
 deployed Feature 002 path writes it. Existing rows remain all-null profile evidence and fail closed.
 
+**Approval-state transition**: While that evidence is absent, the canonical `2.0.0` contract and
+its semantic test must retain `x-dependency-status: proposed-blocking-approval`; this accurately
+describes the current gate and does not constitute approval. Once both accountable owners approve
+the contract and the deployed Feature 002 path is evidenced, T073 must change the contract to the
+project-standard `approved-contract-first` status, replace its `Proposed` description with
+`Approved`, update `AuthoritativeFiscalContextContractTest` to assert the approved metadata, and
+record the approval and deployment references here. A plan-only evidence note is insufficient to
+complete that transition. Platform protected-storage evidence remains a separate part of T073, and
+T073 stays open while either evidence set is incomplete.
+
 **Schema provenance**: Exact planning bytes and hashes in `contracts/sri/invoice/1.1.0/` are
 approved input to implementation. Runtime copies must be byte-identical at
 `src/main/resources/sri/invoice/1.1.0/`; tests and readiness fail closed on any mismatch. This is a
@@ -391,7 +401,7 @@ new route; service readiness advances from Flyway V6 to V7.
 
 | Requirement/risk | Test level and environment | Planned path | Observable behavior or invariant | Failure/boundary cases |
 |------------------|----------------------------|--------------|----------------------------------|------------------------|
-| FR-024–030 / SC-009 profile evidence | Pure domain/JUnit and proposed-contract parser | `domain/fiscalpreparation/StandardInvoiceXmlProfileEvidenceTest.java`; `api/invoicexml/InvoiceXmlOpenApiContractTest.java` | Exact profile/set/rule and all 14 explicit assessments; all-no applies eligible | legacy/all-null, partial, wrong set/rule, missing, indeterminate, each APPLIES, Popular Business |
+| FR-024–030 / SC-009 profile evidence | Pure domain/JUnit and provider consumer-contract parser | `domain/fiscalpreparation/StandardInvoiceXmlProfileEvidenceTest.java`; `infrastructure/fiscalpreparation/AuthoritativeFiscalContextContractTest.java` | Exact profile/set/rule and all 14 explicit assessments; all-no applies eligible; pre-approval status remains proposed and T073 performs the evidence-gated approved-contract transition | legacy/all-null, partial, wrong set/rule, missing, indeterminate, each APPLIES, Popular Business, stale approval metadata |
 | FR-069–073 integrity/immutability | Pure domain/JUnit | `domain/invoicexml/UnsignedSriInvoiceXmlArtifactTest.java`; `XmlIntegrityEvidenceTest.java` | defensive copies; fixed schema/algorithm; exact lowercase digest/length/source identity | null/nil IDs, invalid digest/length, content mutation, lifecycle/status absence |
 | FR-031–055 mapping | Adapter/JUnit with synthetic persisted sources | `infrastructure/invoicexml/StaxSriInvoiceXmlAdapterTest.java` | Exact declaration/root/order/cardinality; every fiscal/commercial value; optional designation mapping | each optional absent/present, Large Contributor 14/15 boundary, unsupported section/signature absence |
 | FR-056–063 deterministic bytes | Adapter/golden vectors | same adapter test plus `src/test/resources/invoicexml/` | exact compact bytes, Feature 001 ordering, two/six decimal boundaries, XML escaping round-trip | locale/timezone/row-order changes, exponent, rounding, invalid code point/surrogate, double escape, trailing newline |
